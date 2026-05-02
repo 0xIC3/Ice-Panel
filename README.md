@@ -19,7 +19,7 @@ Most proxy panels (Marzban, Remnawave, x-ui) wrap everything through Xray-core. 
 
 Monorepo structure:
 
-\`\`\`
+```
 Ice-Panel/
 ├── apps/
 │   ├── panel-backend/    # API panel
@@ -31,7 +31,7 @@ Ice-Panel/
 │   ├── shared/           # Shared types & utilities
 │   └── core-adapters/    # Adapter for each proxy core
 └── docker/               # Dockerfiles
-\`\`\`
+```
 
 ## Tech Stack
 
