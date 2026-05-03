@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
 import { config } from './config.js';
-import { sql, pingDatabase } from './db.js';
+import { prisma, pingDatabase } from './prisma.js';
 
 const app = Fastify({
   logger: {
@@ -35,7 +35,7 @@ async function start() {
 async function shutdown() {
   app.log.info('Shutting down...');
   await app.close();
-  await sql.end();
+  await prisma.$disconnect();
   process.exit(0);
 }
 
