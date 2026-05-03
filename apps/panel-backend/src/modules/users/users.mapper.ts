@@ -1,0 +1,86 @@
+import type { User, UserTraffic } from '../../generated/prisma/client.js';
+
+/**
+ * Public DTO returned to admins via REST API.
+ * Strips all protocol credentials and internal lifecycle fields.
+ */
+export interface PublicUserDto {
+  id: string;
+  shortId: string;
+  username: string;
+  status: string;
+
+  // Subscription window
+  expireAt: string | null;          // ISO 8601 string
+
+  // Traffic
+  trafficLimitBytes: number | null;     // null = unlimited
+  trafficUsedBytes: number;
+  lifetimeTrafficBytes: number;
+  trafficLimitStrategy: string;
+  lastTrafficResetAt: string | null;
+
+  // Subscription URL
+  subscriptionToken: string;
+  subRevokedAt: string | null;
+
+  // Limits
+  hwidDeviceLimit: number | null;
+
+  // Metadata
+  description: string | null;
+  tag: string | null;
+  telegramId: string | null;        // BigInt → string
+  email: string | null;
+
+  // Lifecycle
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Convert Prisma User (+ optional UserTraffic) into the public-safe DTO.
+ *
+ * Rules:
+ *   - Never include: hysteriaPassword, naivePassword, xrayUuid,
+ *     amneziawgPrivateKey, amneziawgPublicKey, deletedAt
+ *   - BigInt → number (safe up to 9 PB, our quotas are way below)
+ *   - BigInt telegramId → string (full precision preserved)
+ *   - Date → ISO string
+ */
+export function mapUserToPublic(
+  user: User,
+  traffic: UserTraffic | null,
+): PublicUserDto {
+  return {
+    id: user.id,
+    shortId: user.shortId,
+    username: user.username,
+    status: user.status,
+
+    expireAt: user.expireAt ? user.expireAt.toISOString() : null,
+
+    trafficLimitBytes: user.trafficLimitBytes !== null
+      ? Number(user.trafficLimitBytes)
+      : null,
+    trafficUsedBytes: traffic ? Number(traffic.usedTrafficBytes) : 0,
+    lifetimeTrafficBytes: traffic ? Number(traffic.lifetimeTrafficBytes) : 0,
+    trafficLimitStrategy: user.trafficLimitStrategy,
+    lastTrafficResetAt: traffic?.lastTrafficResetAt
+      ? traffic.lastTrafficResetAt.toISOString()
+      : null,
+
+    subscriptionToken: user.subscriptionToken,
+    subRevokedAt: user.subRevokedAt ? user.subRevokedAt.toISOString() : null,
+
+    hwidDeviceLimit: user.hwidDeviceLimit,
+
+    description: user.description,
+    tag: user.tag,
+    telegramId: user.telegramId !== null ? user.telegramId.toString() : null,
+    email: user.email,
+
+    createdAt: user.createdAt.toISOString(),
+    updatedAt: user.updatedAt.toISOString(),
+  };
+}
