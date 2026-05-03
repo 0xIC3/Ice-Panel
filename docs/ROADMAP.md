@@ -298,16 +298,67 @@
 
 ---
 
-## Фаза 2: Multi-core (план верхнего уровня)
+## Фаза 2: Multi-core — добавляем 3 оставшихся ядра
 
-Когда фаза 1 закроется — приступим. Будут срезы:
-1. Рефакторинг `CoreAdapter` под уроки фазы 1 (что в интерфейсе оказалось не так)
-2. `AmneziaWGAdapter` — реализация второго ядра
-3. `NaiveProxyAdapter` — третьего
-4. `XrayAdapter` для legacy VLESS/Reality
-5. UI для выбора протокола в админке
-6. Generator подписок мульти-форматный (Clash YAML, Singbox JSON, AmneziaWG `.conf`, и т.д.)
-7. Subscription Response Rules (SRR) — детект формата по User-Agent
+**Цель:** валидировать абстракцию `CoreAdapter` на других протоколах. Доказать что добавить ядро = реализовать один интерфейс, остальное «бесплатно».
+
+**Финальный результат фазы:** в админке можно создать юзера, выбрать любой из 4 протоколов (Hysteria2 / AmneziaWG / NaiveProxy / Xray), нода поднимает соответствующее ядро, юзер подключается.
+
+### Срезы фазы 2 (примерный план)
+
+| # | Название | Что вводим | Сложность |
+|---|---|---|---|
+| 16 | **Refactor `CoreAdapter`** под уроки фазы 1 | Возможно меняется сигнатура методов после реальной работы с Hysteria | средне |
+| 17 | **`XrayAdapter`** (legacy VLESS/Reality/VMess/Trojan) | gRPC API через xtls-sdk, добавление user'ов через AddUser API | средне |
+| 18 | **Frontend: выбор протокола при создании юзера** | UI с чекбоксами «какие протоколы доступны юзеру» | низко |
+| 19 | **`AmneziaWGAdapter`** | `wg` CLI, генерация peer-конфигов, kernel-module setup, `wg syncconf` reload | **высоко** (нужен root, kernel-module, специфика WG) |
+| 20 | **`NaiveProxyAdapter`** | Сборка из chromium-форка (или предкомпилированный бинарник), управление через CLI-аргументы | средне |
+| 21 | **Multi-format subscription generator** | Все форматы: Clash YAML, Singbox JSON, AmneziaWG `.conf`, Naive URL, Xray JSON | средне |
+| 22 | **Subscription Response Rules (SRR)** | Детект формата по User-Agent (паттерн Remnawave) | низко |
+| 23 | **UI: graphical protocol selector + per-protocol config** | Inbound editor с UI под каждый протокол | средне |
+
+### Подробности по адаптерам
+
+#### XrayAdapter (срез 17 — первый после Hysteria, потому что самый похожий)
+- Управление через **gRPC API** Xray (есть встроенный)
+- Используем `@remnawave/xtls-sdk` (готовая TS-обёртка) или пишем свою на Go (`google.golang.org/grpc`)
+- Поддерживает **VLESS / Reality / VMess / Trojan / Shadowsocks** через один inbound
+- Креды: уже есть `xray_uuid` в users
+- Сложность: средне — gRPC API хорошо документирован
+
+#### AmneziaWGAdapter (срез 19 — самый сложный)
+- Управление через **`wg` CLI** + конфиг-файл
+- Каждый user = peer в `wg0.conf`:
+  ```
+  [Peer]
+  PublicKey = <user's amneziawg_public_key>
+  AllowedIPs = 10.0.0.X/32
+  ```
+- Применение изменений: `wg syncconf wg0 <(wg-quick strip wg0)`
+- **Не требует перезапуска** интерфейса — peer'ы добавляются hot
+- Сложность **высоко**: нужен kernel-module `amneziawg`, root-доступ, выделение IP-адресов из подсети, генерация `Endpoint` для клиента
+
+#### NaiveProxyAdapter (срез 20)
+- Запуск бинарника `naive` от klzgrad
+- Управление через CLI-аргументы при запуске:
+  ```bash
+  naive --listen=https://user:pass@0.0.0.0:443 --proxy=...
+  ```
+- Креды: `naive_password` уже в users
+- Изменение состава пользователей = **перезапуск процесса** (наследуем тот же подход что Remnawave для Xray)
+- Сложность: средне — но компиляция самого бинарника из Chromium-форка требует особой среды
+
+### Что общего у всех адаптеров (и почему это упростит работу в Phase 2)
+
+После Phase 1 у нас уже будет:
+- ✅ REST+mTLS транспорт работает
+- ✅ Очереди и event-bus работают
+- ✅ Auth, БД, миграции работают
+- ✅ CoreAdapter интерфейс отшлифован на Hysteria
+- ✅ Subscription generator готов (просто добавляем форматы)
+- ✅ Frontend существует (просто добавляем UI для новых протоколов)
+
+**Phase 2 = только "адаптер + UI per protocol"**, инфра уже есть. Поэтому каждый новый адаптер = 2-3 недели, а не месяцы.
 
 ---
 
