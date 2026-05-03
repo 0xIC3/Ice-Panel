@@ -4,18 +4,23 @@
   "private": true,
   "type": "module",
   "main": "dist/index.js",
- "scripts": {
-  "dev": "tsx watch --env-file=../../.env src/index.ts",
-  "build": "tsc",
-  "start": "node --env-file=../../.env dist/index.js"
+  "scripts": {
+    "dev": "tsx watch --env-file=../../.env src/index.ts",
+    "build": "tsc",
+    "start": "node --env-file=../../.env dist/index.js"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
     "fastify": "^5.8.5",
-    "postgres": "^3.4.9",
+    "pg": "^8.20.0",
     "zod": "^4.4.2"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
+    "@types/pg": "^8.20.0",
+    "dotenv": "^17.4.2",
+    "prisma": "^7.8.0",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3"
   }
