@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import fastifyJwt from '@fastify/jwt';
+import { registerUserEventHandlers } from './modules/users/users.events.js';
 import fastifyRateLimit from '@fastify/rate-limit';
 import { ZodError } from 'zod';
 import { config } from './config.js';
@@ -48,6 +49,8 @@ async function start() {
       process.exit(1);
     }
     app.log.info('Database connection verified');
+    registerUserEventHandlers();
+    app.log.info('Event handlers registered');
 
     // Rate limiting (in-memory, per-IP)
     await app.register(fastifyRateLimit, {
