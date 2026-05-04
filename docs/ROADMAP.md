@@ -305,6 +305,7 @@ Mihomo / Singbox / XrayJSON шаблоны — Phase 2 (Срез 21). Subscripti
 
 - `pnpm create vite apps/panel-frontend -- --template react-ts`
 - Установка: Mantine 8, TanStack Query 5, Zustand 5, Axios, React Router DOM 6
+- Backend: добавить **публичный** `GET /api/auth/status` (discovery — какие auth-методы и registration enabled). Без hook'а. Ответ: `{ authentication: { password: { enabled }, passkey: { enabled }, oauth2: { providers } }, registration: { enabled } }`. Фронт дёргает первым делом, чтобы понять — показывать «Create first admin» или «Login form»
 - Страницы:
   - `/login` — форма логина админа
   - `/users` — таблица + создание/редактирование
