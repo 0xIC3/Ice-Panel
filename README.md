@@ -6,6 +6,17 @@ Self-hosted proxy management panel with **native multi-core support**.
 
 🚧 **Early development.** Phase 1 (MVP with Hysteria2) in progress — see [docs/ROADMAP.md](./docs/ROADMAP.md) for the full 15-slice plan and progress.
 
+### What's working now
+
+- Fastify HTTP server with structured logging (Pino) and `/health` endpoint that pings PostgreSQL
+- Zod-validated environment configuration (fails fast on missing/invalid values)
+- PostgreSQL 16 + Prisma 7 with **14 tables** covering admins, users, nodes, inbounds, groups (squads), traffic, audit log, and history — full schema designed for multi-core from day one
+- REST CRUD on `/api/users` with Zod input validation, soft-delete, pagination, and search
+- Auto-generated credentials for **all four protocols** (Hysteria2 password, AmneziaWG X25519 keypair, NaiveProxy password, Xray UUID) at user creation
+- JWT authentication (bcrypt cost 12) with bootstrap-only `/register`, rate-limited `/login` (5/min), and `requireAuth` hook protecting `/api/users/*`
+- Layered architecture (routes → service → repository) with typed domain event bus
+- AGPL-3.0 license; private repo for now
+
 Not ready for production use.
 
 ## What makes it different
@@ -46,7 +57,7 @@ packages/
 | Layer | Tools |
 |---|---|
 | Backend | TypeScript, Fastify, Prisma, PostgreSQL, Zod, Pino |
-| Background jobs | Redis, BullMQ, eventemitter2 |
+| Background jobs | Redis, BullMQ, `node:events` event bus |
 | Auth | JWT (jose), bcrypt, @fastify/rate-limit |
 | Inter-service | REST over HTTPS with mutual TLS (`@peculiar/x509`) |
 | Frontend | React 19, Vite, Mantine 8, TanStack Query, Zustand |
@@ -77,6 +88,15 @@ pnpm --filter @ice-panel/panel-backend dev
 curl http://localhost:3000/health
 # → {"status":"ok","db":"ok"}
 ```
+
+## References
+
+Internal research notes compiled while designing Ice-Panel — see [docs/references/](./docs/references/):
+
+- Hysteria2, AmneziaWG, NaiveProxy, Xray-core — operational references for each upstream
+- Remnawave — competitor analysis (architecture, modules, UX)
+
+These complement the roadmap with deeper technical context for each adapter.
 
 ## License
 
