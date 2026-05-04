@@ -8,6 +8,7 @@ import { pingRedis } from './lib/redis.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
 import { usersRoutes } from './modules/users/users.routes.js';
 import { nodesRoutes } from './modules/nodes/nodes.routes.js';
+import { subscriptionRoutes } from './modules/subscription/subscription.routes.js';
 
 /**
  * Build the Fastify instance with all plugins and routes registered.
@@ -63,6 +64,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(authRoutes);
   await app.register(usersRoutes);
   await app.register(nodesRoutes);
+  await app.register(subscriptionRoutes);
 
   return app;
 }
