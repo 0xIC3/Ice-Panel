@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 // ───── Reusable atoms ─────
 
-export const TrafficLimitStrategy = z.enum(['no_reset', 'day', 'week', 'month']);
+export const TrafficLimitStrategy = z.enum(['no_reset', 'day', 'week', 'month', 'rolling']);
 
 export const UserStatus = z.enum(['active', 'disabled', 'expired', 'limited']);
 
