@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { ZodError } from 'zod';
+import { requireAuth } from '../auth/auth.hook.js';
 import {
   CreateUserSchema,
   UpdateUserSchema,
@@ -9,6 +9,8 @@ import {
 import * as usersService from './users.service.js';
 
 export async function usersRoutes(app: FastifyInstance): Promise<void> {
+  // All /api/users/* require authenticated admin
+  app.addHook('onRequest', requireAuth);
   // POST /api/users
   app.post('/api/users', async (request, reply) => {
     const input = CreateUserSchema.parse(request.body);

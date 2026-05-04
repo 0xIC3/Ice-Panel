@@ -1,7 +1,10 @@
 import Fastify from 'fastify';
+import fastifyJwt from '@fastify/jwt';
+import fastifyRateLimit from '@fastify/rate-limit';
 import { ZodError } from 'zod';
 import { config } from './config.js';
 import { prisma, pingDatabase } from './prisma.js';
+import { authRoutes } from './modules/auth/auth.routes.js';
 import { usersRoutes } from './modules/users/users.routes.js';
 
 const app = Fastify({
@@ -46,6 +49,20 @@ async function start() {
     }
     app.log.info('Database connection verified');
 
+    // Rate limiting (in-memory, per-IP)
+    await app.register(fastifyRateLimit, {
+      global: true,
+      max: 100,
+      timeWindow: '1 minute',
+      cache: 10000,
+    });
+
+    await app.register(fastifyJwt, {
+      secret: config.JWT_SECRET,
+      sign: { expiresIn: config.JWT_EXPIRES_IN },
+    });
+
+    await app.register(authRoutes);
     await app.register(usersRoutes);
 
     await app.listen({ port: config.APP_PORT, host: config.APP_HOST });
