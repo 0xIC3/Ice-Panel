@@ -91,6 +91,7 @@
 | **2. Multi-core** | AmneziaWG, NaiveProxy через `CoreAdapter`, потом Xray для legacy | Доказать что абстракция ядер действительно тривиализует добавление |
 | **3. Production-readiness** | Multi-node, метрики, бэкапы, rate-limiting, security hardening, уведомления (Telegram/webhook) | Сделать готовым к реальным пользователям |
 | **4. Public release & repo split** | Разделение монорепо на отдельные репозитории, документация, лендинг | Открыть проект миру |
+| **5. Native client (Ice-Client)** | Tauri (Rust + React + Mantine) Windows-приложение с поддержкой всех 4 протоколов и системным TUN через WinTun. Дальше macOS / Linux / Android / iOS | Полный end-to-end стек: панель → нода → ОВН клиент. Личный продукт целиком, не зависит от сторонних клиентов |
 
 ---
 
@@ -266,7 +267,12 @@
   6. Сгенерировать Hysteria2 URI: `hy2://password@server:port/?obfs=salamander&sni=example.com#NodeName`
   7. Вернуть как `text/plain` (массив URI по строке)
 - Кэширование: Redis с TTL 60s (Remnawave: 3600s — для нас 60s достаточно в MVP)
-- Минимальный вариант: только один формат (Hysteria2 native URI), без UA-detection. Расширения в фазе 2.
+
+**📌 Уточнение после изучения индустрии (2026-05-04):** в MVP делаем **2 формата**, не один:
+- **Base64-URI list** (`Accept: text/plain` или дефолт) — universal-формат, работает с Hiddify, NekoRay, v2rayN и любыми сторонними клиентами
+- **JSON структурированный** (`Accept: application/json`) — для нашего IcePath-VPN Mini-App (Go) и Ice-Client (Rust). Включает метаданные (квота, expiry, статус), парсится одной строкой через `json.Unmarshal` / `serde_json`
+
+Mihomo / Singbox / XrayJSON шаблоны — Phase 2 (Срез 21). Subscription Response Rules (UA-matching) — Срез 22.
 
 #### Срез 13: Сквозной флоу Hysteria2
 
@@ -326,26 +332,66 @@
 - Креды: уже есть `xray_uuid` в users
 - Сложность: средне — gRPC API хорошо документирован
 
+**📌 Уточнения после изучения Xray docs (см. [docs/references/xray.md](references/xray.md)):**
+- **Naming change v24.9.30:** в новых конфигах используем `network: raw` (не `tcp`), `network: xhttp` (не `splithttp`). Старые имена parse как aliases но deprecated
+- **REALITY shortIds — inbound-level, не client-level.** Менять их = `RemoveInbound + AddInbound` rebuild (рвёт все сессии). Поэтому: общий пул shortIds на inbound, идентификация юзеров через `email` поле клиента
+- **Per-user stats требуют:** `email` set on client + `policy.levels.0.statsUserUplink/Downlink: true` (по умолчанию false!) + `stats: {}` блок
+- **Vision несовместим с mux** и работает только над `network: raw` — валидируем при build-time в адаптере
+- **Best combo для VLESS:** REALITY + `xtls-rprx-vision` + uTLS fingerprint. Validate `target` через `xray tls ping`
+
 #### AmneziaWGAdapter (срез 19 — самый сложный)
-- Управление через **`wg` CLI** + конфиг-файл
-- Каждый user = peer в `wg0.conf`:
+- Управление через **`awg` CLI** (форк `wg`) + конфиг-файл
+- Каждый user = peer в `awg0.conf`:
   ```
   [Peer]
   PublicKey = <user's amneziawg_public_key>
   AllowedIPs = 10.0.0.X/32
   ```
-- Применение изменений: `wg syncconf wg0 <(wg-quick strip wg0)`
+- Применение изменений: `awg syncconf awg0 <(awg-quick strip awg0)`
 - **Не требует перезапуска** интерфейса — peer'ы добавляются hot
 - Сложность **высоко**: нужен kernel-module `amneziawg`, root-доступ, выделение IP-адресов из подсети, генерация `Endpoint` для клиента
 
+**📌 Уточнения после изучения AmneziaWG docs (см. [docs/references/amneziawg.md](references/amneziawg.md)):**
+- **Kernel module — единственный production-путь.** Замеры: 92 Mbps (kernel) vs 33 Mbps (Go userspace). Адаптер обязан уметь установить kernel module через PPA (Ubuntu/Debian) или COPR (RHEL/Fedora) при bootstrap'е ноды
+- **Конфиг-параметры обфускации `S1-S4`, `H1-H4` — interface-immutable.** Их ротация = bounce всех клиентов. Treat as constant per inbound lifetime
+- **`Jc/Jmin/Jmax/I1-I5` — могут отличаться client↔server.** Для MVP делаем interface-fixed (bivlked-style); per-client дифференциация в Phase 3 если понадобится
+- **`awg syncconf` обернуть в `timeout 10s`** + fallback на `systemctl restart awg-quick@awg0` (gotcha от bivlked installer)
+- **Recommended params для Russian TSPU:** `Jc=3..6, Jmin=40..89, S1=72, S2=56, S3=32, S4=16, H1-H4` ranged. Mobile operators: `Jc=3 fixed, Jmax narrower (70 vs 250)`
+- Опциональный fallback: `amneziawg-go` userspace для ARM-контейнеров и DKMS-failure боксов
+
 #### NaiveProxyAdapter (срез 20)
-- Запуск бинарника `naive` от klzgrad
-- Управление через CLI-аргументы при запуске:
-  ```bash
-  naive --listen=https://user:pass@0.0.0.0:443 --proxy=...
-  ```
-- Креды: `naive_password` уже в users
-- Изменение состава пользователей = **перезапуск процесса** (наследуем тот же подход что Remnawave для Xray)
+
+**📌 Полностью переосмыслен после изучения NaiveProxy docs (см. [docs/references/naiveproxy.md](references/naiveproxy.md)). Адаптер — самый жирный из 4-х.**
+
+**Почему сложно:** standalone бинарник `naive` как сервер — single-tenant. Multi-user **только** через Caddy с форком `klzgrad/forwardproxy@naive`:
+```caddyfile
+:443 example.com {
+  tls me@example.com
+  forward_proxy {
+    basic_auth user1 password1
+    basic_auth user2 password2
+    hide_ip
+    hide_via
+    probe_resistance
+  }
+  file_server { root /var/www/html }
+}
+```
+
+**Что делает адаптер:**
+1. Билдит Caddy с плагином через `xcaddy build --with github.com/caddyserver/forwardproxy=github.com/klzgrad/forwardproxy@naive` (один раз при provisioning'е ноды)
+2. Генерирует Caddyfile из БД с repeated `basic_auth` блоками
+3. Add/remove user → regenerate config → `caddy reload --config /etc/caddy/Caddyfile` (graceful, без дропа сессий)
+
+**Подводные камни:**
+- **Per-user статистики upstream нет.** Опции: (a) парсить Caddy access-logs (хрупко) или (b) форкать `forwardproxy@naive` с per-user counters (постоянная rebase-нагрузка)
+- **Force-kick невозможен** — после `caddy reload` старые сессии живут до idle/tunnel timeout
+- **Нет UDP, нет квот, нет expiry** — всё на panel-уровне через `disable user`
+- **Chromium-coupled релизы** — обновлять бинарник Naive каждые ~30 дней чтобы TLS-fingerprint оставался свежим. Stale binary = fingerprintable
+
+**Subscription URL формат:** `naive+https://user:password@host:port?padding=true#name`. Креды `naive_password` берутся из `users` (уже генерим в Срезе 4).
+
+**Время:** не «средне», как было — реалистично 4-7 дней соло работы.
 - Сложность: средне — но компиляция самого бинарника из Chromium-форка требует особой среды
 
 ### Что общего у всех адаптеров (и почему это упростит работу в Phase 2)
