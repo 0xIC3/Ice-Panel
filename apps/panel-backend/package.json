@@ -7,7 +7,9 @@
   "scripts": {
     "dev": "tsx watch --env-file=../../.env src/index.ts",
     "build": "tsc",
-    "start": "node --env-file=../../.env dist/index.js"
+    "start": "node --env-file=../../.env dist/index.js",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest --passWithNoTests"
   },
   "dependencies": {
     "@fastify/jwt": "^10.0.0",
@@ -28,6 +30,7 @@
     "dotenv": "^17.4.2",
     "prisma": "^7.8.0",
     "tsx": "^4.21.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.0.0"
   }
 }
