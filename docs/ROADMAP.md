@@ -131,8 +131,8 @@ Single-protocol модель также упрощает:
 | 9 | Panel↔Node transport: REST + mTLS + keygen | ✅ done | `@peculiar/x509`, CA, выпуск нодных сертов, encoded payload, undici mTLS-клиент |
 | 10 | Go node-agent skeleton | ✅ done | Go module, mTLS HTTPS-сервер, payload-decode, stub-хендлеры |
 | 11 | `CoreAdapter` + `HysteriaAdapter` | ✅ done | Auth-callback HTTP, in-memory user state, subprocess skeleton (real spawn в Срезе 13) |
-| 12 | 🆕 Subscription generator | ⏭️ next | Endpoint `/sub/{shortUuid}`, Hysteria2 URI, кэширование |
-| 13 | Сквозной флоу Hysteria2 (admin → user → реальный клиент) | | Real-world integration |
+| 12 | 🆕 Subscription generator | ✅ done | `/sub/:token`, Hysteria2 URI, base64 plain + JSON формат |
+| 13 | Сквозной флоу Hysteria2 (admin → user → реальный клиент) | ⏭️ next | Real-world integration |
 | 14 | Frontend skeleton (Vite + React + Mantine + TanStack Query + Zustand) | | SPA, серверный vs клиентский state |
 | 15 | Docker production build | | Multi-stage Dockerfile, оптимизация образа |
 
