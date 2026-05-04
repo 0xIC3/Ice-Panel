@@ -1,31 +1,40 @@
 import { eventBus } from '../../lib/event-bus.js';
+import { nodeUsersQueue } from './users.queue.js';
 
 /**
  * Register all user-related event handlers.
  * Called once at app bootstrap.
  *
- * Right now handlers just log. In future slices they'll:
- *   - slice 7: enqueue node-sync jobs in BullMQ
- *   - slice 9+: call mTLS endpoints on nodes
+ * Handlers translate domain events into background jobs (BullMQ).
+ * The actual node sync happens in workers (slice 9 will implement
+ * the mTLS calls). For now workers are mock log-only.
  */
 export function registerUserEventHandlers(): void {
-  eventBus.on('user.created', ({ userId, username }) => {
+  eventBus.on('user.created', async ({ userId, username }) => {
     console.log(`[event] user.created — ${username} (${userId})`);
-    // TODO slice 7: enqueue addUser to all nodes user is allowed on
+    await nodeUsersQueue.add('addUser', { userId });
   });
 
   eventBus.on('user.updated', ({ userId, changes }) => {
     console.log(`[event] user.updated — ${userId} — ${changes.join(', ')}`);
-    // TODO slice 7: re-sync changed fields to nodes if relevant
+    // No node sync needed for pure metadata updates (description, tag, email, etc.)
+    // Status changes have their own event below.
   });
 
-  eventBus.on('user.status-changed', ({ userId, from, to }) => {
+  eventBus.on('user.status-changed', async ({ userId, from, to }) => {
     console.log(`[event] user.status-changed — ${userId} — ${from} → ${to}`);
-    // TODO slice 7: if status went non-active → enqueue removeUser; if active → addUser
+    // Going non-active → remove user from nodes
+    if (to === 'disabled' || to === 'limited' || to === 'expired') {
+      await nodeUsersQueue.add('removeUser', { userId });
+    }
+    // Going back to active → re-add to nodes
+    if (to === 'active' && from !== 'active') {
+      await nodeUsersQueue.add('addUser', { userId });
+    }
   });
 
-  eventBus.on('user.deleted', ({ userId }) => {
+  eventBus.on('user.deleted', async ({ userId }) => {
     console.log(`[event] user.deleted — ${userId}`);
-    // TODO slice 7: enqueue removeUser from all nodes
+    await nodeUsersQueue.add('removeUser', { userId });
   });
 }
