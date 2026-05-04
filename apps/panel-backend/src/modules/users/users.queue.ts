@@ -1,5 +1,8 @@
 import { Queue, Worker, type Job } from 'bullmq';
+import type { AddUserRequest, RemoveUserRequest } from '@ice-panel/shared';
 import { redis } from '../../lib/redis.js';
+import { prisma } from '../../prisma.js';
+import { NodeTransport, NodeRequestError } from '../nodes/nodes.transport.js';
 
 // ───── Job data shapes ─────
 
@@ -27,7 +30,111 @@ export const nodeUsersQueue = new Queue<NodeUserJobData>(QUEUE_NAME, {
   },
 });
 
-// ───── Worker (in-process for now; can be split into worker process later) ─────
+// ───── Sync helpers ─────
+
+interface NodeRow {
+  id: string;
+  name: string;
+  address: string;
+}
+
+async function fetchActiveNodes(): Promise<NodeRow[]> {
+  return prisma.node.findMany({
+    where: { deletedAt: null, status: { not: 'disabled' } },
+    select: { id: true, name: true, address: true },
+  });
+}
+
+/**
+ * Fan-out a single addUser/removeUser call to every active node, awaiting all
+ * outcomes (allSettled) so we surface ALL failures rather than short-circuit
+ * on the first. Throws if any node failed — BullMQ retries the whole job, so
+ * `addUser`/`removeUser` MUST be idempotent on the node side (re-adding an
+ * existing user is a no-op).
+ */
+async function fanOut<T>(
+  nodes: NodeRow[],
+  call: (node: NodeRow) => Promise<T>,
+  label: string,
+): Promise<void> {
+  if (nodes.length === 0) {
+    console.log(`[worker:node-users] ${label} — no active nodes, skipping`);
+    return;
+  }
+  const results = await Promise.allSettled(
+    nodes.map(async (node) => {
+      await call(node);
+      console.log(`[worker:node-users] ${label} → ${node.name} ok`);
+    }),
+  );
+  const failures = results.flatMap((r, i) =>
+    r.status === 'rejected' ? [{ node: nodes[i]!, reason: r.reason }] : [],
+  );
+  for (const f of failures) {
+    const detail =
+      f.reason instanceof NodeRequestError
+        ? `${f.reason.status} ${f.reason.message}`
+        : String(f.reason);
+    console.log(`[worker:node-users] ${label} → ${f.node.name} FAILED: ${detail}`);
+  }
+  if (failures.length > 0) {
+    throw new AggregateError(
+      failures.map((f) => f.reason),
+      `${failures.length}/${nodes.length} nodes failed for ${label}`,
+    );
+  }
+}
+
+async function syncAddUser(userId: string): Promise<void> {
+  const user = await prisma.user.findFirst({
+    where: { id: userId, deletedAt: null },
+    select: {
+      id: true,
+      shortId: true,
+      username: true,
+      hysteriaPassword: true,
+      naivePassword: true,
+      xrayUuid: true,
+      amneziawgPublicKey: true,
+    },
+  });
+  if (!user) {
+    console.log(`[worker:node-users] addUser ${userId} — user not found, skipping`);
+    return;
+  }
+
+  const req: AddUserRequest = {
+    userId: user.id,
+    shortId: user.shortId,
+    username: user.username,
+    credentials: {
+      hysteriaPassword: user.hysteriaPassword,
+      naivePassword: user.naivePassword,
+      xrayUuid: user.xrayUuid,
+      amneziawgPublicKey: user.amneziawgPublicKey,
+    },
+  };
+
+  const nodes = await fetchActiveNodes();
+  await fanOut(
+    nodes,
+    (node) => new NodeTransport(node).addUser(req),
+    `addUser ${userId}`,
+  );
+}
+
+async function syncRemoveUser(userId: string): Promise<void> {
+  // User may be soft-deleted by now — we still want every node to drop it.
+  const req: RemoveUserRequest = { userId };
+  const nodes = await fetchActiveNodes();
+  await fanOut(
+    nodes,
+    (node) => new NodeTransport(node).removeUser(req),
+    `removeUser ${userId}`,
+  );
+}
+
+// ───── Worker ─────
 
 export function startNodeUsersWorker(): Worker<NodeUserJobData> {
   return new Worker<NodeUserJobData>(
@@ -36,14 +143,12 @@ export function startNodeUsersWorker(): Worker<NodeUserJobData> {
       switch (job.name) {
         case 'addUser': {
           const { userId } = job.data as AddUserJobData;
-          // TODO slice 9: send mTLS POST /addUser to all nodes user has access to
-          console.log(`[worker:node-users] addUser ${userId} (mock — no nodes yet)`);
+          await syncAddUser(userId);
           break;
         }
         case 'removeUser': {
           const { userId } = job.data as RemoveUserJobData;
-          // TODO slice 9: send mTLS POST /removeUser to all nodes
-          console.log(`[worker:node-users] removeUser ${userId} (mock — no nodes yet)`);
+          await syncRemoveUser(userId);
           break;
         }
         default:
