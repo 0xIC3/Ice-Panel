@@ -1,8 +1,10 @@
+import { config } from '../../config.js';
 import { prisma } from '../../prisma.js';
 import {
   buildHysteriaUri,
   buildSubscriptionJson,
   encodePlainList,
+  hostFromAddress,
   type SubscriptionEndpoint,
   type SubscriptionJsonResponse,
 } from './subscription.formats.js';
@@ -77,7 +79,8 @@ export async function generateSubscription(
     nodeName: n.name,
     uri: buildHysteriaUri({
       password: user.hysteriaPassword,
-      address: n.address,
+      host: hostFromAddress(n.address),
+      port: config.HYSTERIA_PUBLIC_PORT,
       name: n.name,
     }),
   }));

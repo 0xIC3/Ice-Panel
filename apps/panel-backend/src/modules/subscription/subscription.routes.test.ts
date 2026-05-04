@@ -85,7 +85,9 @@ describe('GET /sub/:token (default text/plain)', () => {
       expect(line).toMatch(/^hysteria2:\/\//);
       expect(line).toContain(encodeURIComponent(user.hysteriaPassword));
     }
-    expect(lines[0]).toContain('10.0.0.1:8443');
+    // Host extracted from node.address; port forced to HYSTERIA_PUBLIC_PORT (443),
+    // independent of the control-plane port baked into nodes.address.
+    expect(lines[0]).toContain('10.0.0.1:443');
     expect(lines[0]).toContain('eu-1');
   });
 

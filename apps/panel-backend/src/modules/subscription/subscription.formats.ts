@@ -2,22 +2,32 @@ import type { User, UserTraffic } from '../../generated/prisma/client.js';
 
 export interface HysteriaUriOpts {
   password: string;
-  address: string; // host[:port], no scheme — matches our nodes.address column
+  /** Host portion only — port comes separately so we can distinguish the
+   *  control-plane port (panel→node mTLS) from the client-facing UDP port. */
+  host: string;
+  /** Public Hysteria2 UDP port the client connects to. */
+  port: number;
   name: string;
 }
-
-const DEFAULT_HYSTERIA_PORT = '443';
 
 /**
  * Build a `hysteria2://` URI consumable by Hiddify, NekoRay, v2rayN, the
  * upstream `hysteria` client, and our own IcePath-VPN bot.
  *
- * Slice 12 keeps it minimal — no obfs/sni/insecure params yet. Slice 13
- * (E2E flow) will pull SNI + obfs from inbound config.
+ * Slice 13 separates the host from the port; slice 17 (inbounds CRUD) will
+ * carry SNI / obfs / insecure / pinSHA256 per inbound.
  */
 export function buildHysteriaUri(opts: HysteriaUriOpts): string {
-  const addr = opts.address.includes(':') ? opts.address : `${opts.address}:${DEFAULT_HYSTERIA_PORT}`;
-  return `hysteria2://${encodeURIComponent(opts.password)}@${addr}/?#${encodeURIComponent(opts.name)}`;
+  return `hysteria2://${encodeURIComponent(opts.password)}@${opts.host}:${opts.port}/?#${encodeURIComponent(opts.name)}`;
+}
+
+/**
+ * Strip the optional `:port` suffix from a `host[:port]` string. Returns
+ * just the host (or the original input if it has no `:`).
+ */
+export function hostFromAddress(address: string): string {
+  const idx = address.indexOf(':');
+  return idx === -1 ? address : address.slice(0, idx);
 }
 
 /**

@@ -12,6 +12,11 @@ const ConfigSchema = z.object({
   JWT_EXPIRES_IN: z.string().default('24h'),
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+
+  // Public Hysteria UDP port advertised in subscription URIs. Different from
+  // the panel↔node control-plane port stored in `nodes.address`. Slice 17
+  // (inbounds CRUD) will replace this with per-inbound config.
+  HYSTERIA_PUBLIC_PORT: z.coerce.number().int().min(1).max(65535).default(443),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
