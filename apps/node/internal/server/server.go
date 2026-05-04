@@ -1,6 +1,5 @@
-// Package server hosts the node-agent's mTLS HTTPS server. Slice 10 keeps
-// the handlers as stubs; slice 11 will dispatch them through the CoreAdapter
-// interface to drive real proxy-core processes (Hysteria first).
+// Package server hosts the node-agent's mTLS HTTPS server. It dispatches
+// `addUser` / `removeUser` / `getStats` calls to every registered CoreAdapter.
 package server
 
 import (
@@ -12,8 +11,10 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/0xIC3/Ice-Panel/apps/node/internal/core"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/dto"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/payload"
 )
@@ -23,6 +24,10 @@ type Config struct {
 	Port    string
 	Payload *payload.Payload
 	Logger  *slog.Logger
+	// Adapters is the ordered list of registered cores. The dispatcher fans
+	// AddUser / RemoveUser out to all of them and merges Stats. May be empty
+	// (callback-only mode).
+	Adapters []core.CoreAdapter
 }
 
 type Server struct {
@@ -74,7 +79,6 @@ func (s *Server) Run(ctx context.Context) error {
 	errCh := make(chan error, 1)
 	go func() {
 		s.logger.Info("listening", "addr", httpSrv.Addr)
-		// Cert+key are already in TLSConfig — pass empty paths.
 		err := httpSrv.ListenAndServeTLS("", "")
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
@@ -102,17 +106,21 @@ func (s *Server) routes() http.Handler {
 	return mux
 }
 
-// ───── Handlers (stubs — slice 11 wires them to CoreAdapter) ─────
+// ───── Handlers ─────
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "GET only")
 		return
 	}
-	writeJSON(w, http.StatusOK, dto.HealthcheckResponse{
-		Status: "ok",
-		Cores:  []dto.CoreStatus{},
-	})
+	cores := make([]dto.CoreStatus, 0, len(s.cfg.Adapters))
+	for _, adapter := range s.cfg.Adapters {
+		cores = append(cores, dto.CoreStatus{
+			Name:    dto.ProtocolName(adapter.Name()),
+			Running: true, // slice 13: probe actual subprocess state
+		})
+	}
+	writeJSON(w, http.StatusOK, dto.HealthcheckResponse{Status: "ok", Cores: cores})
 }
 
 func (s *Server) handleAddUser(w http.ResponseWriter, r *http.Request) {
@@ -125,10 +133,31 @@ func (s *Server) handleAddUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error())
 		return
 	}
-	s.logger.Info("addUser stub",
-		"userId", req.UserID, "username", req.Username,
-	)
-	// TODO slice 11: dispatch to CoreAdapter for each enabled protocol.
+
+	coreUser := core.User{
+		UserID:             req.UserID,
+		ShortID:            req.ShortID,
+		Username:           req.Username,
+		HysteriaPassword:   req.Credentials.HysteriaPassword,
+		XrayUUID:           req.Credentials.XrayUUID,
+		NaivePassword:      req.Credentials.NaivePassword,
+		AmneziaWGPublicKey: req.Credentials.AmneziaWGPublicKey,
+	}
+
+	var failed []string
+	for _, adapter := range s.cfg.Adapters {
+		if err := adapter.AddUser(coreUser); err != nil {
+			s.logger.Error("adapter addUser failed", "core", adapter.Name(), "err", err)
+			failed = append(failed, adapter.Name())
+		}
+	}
+	if len(failed) > 0 {
+		writeError(w, http.StatusInternalServerError, "ADAPTER_FAILED",
+			fmt.Sprintf("adapters failed: %s", strings.Join(failed, ", ")))
+		return
+	}
+
+	s.logger.Info("addUser ok", "userId", req.UserID, "username", req.Username)
 	writeJSON(w, http.StatusOK, dto.AddUserResponse{OK: true})
 }
 
@@ -142,7 +171,21 @@ func (s *Server) handleRemoveUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error())
 		return
 	}
-	s.logger.Info("removeUser stub", "userId", req.UserID)
+
+	var failed []string
+	for _, adapter := range s.cfg.Adapters {
+		if err := adapter.RemoveUser(req.UserID); err != nil {
+			s.logger.Error("adapter removeUser failed", "core", adapter.Name(), "err", err)
+			failed = append(failed, adapter.Name())
+		}
+	}
+	if len(failed) > 0 {
+		writeError(w, http.StatusInternalServerError, "ADAPTER_FAILED",
+			fmt.Sprintf("adapters failed: %s", strings.Join(failed, ", ")))
+		return
+	}
+
+	s.logger.Info("removeUser ok", "userId", req.UserID)
 	writeJSON(w, http.StatusOK, dto.RemoveUserResponse{OK: true})
 }
 
@@ -151,12 +194,30 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "GET only")
 		return
 	}
+	allUsers := []dto.UserStats{}
+	var totalIn, totalOut int64
+	for _, adapter := range s.cfg.Adapters {
+		stats, err := adapter.GetStats()
+		if err != nil {
+			s.logger.Error("adapter getStats failed", "core", adapter.Name(), "err", err)
+			continue
+		}
+		for _, u := range stats.Users {
+			allUsers = append(allUsers, dto.UserStats{
+				UserID:   u.UserID,
+				BytesIn:  u.BytesIn,
+				BytesOut: u.BytesOut,
+			})
+		}
+		totalIn += stats.TotalBytesIn
+		totalOut += stats.TotalBytesOut
+	}
 	uptime := int64(time.Since(s.startedAt).Seconds())
 	writeJSON(w, http.StatusOK, dto.GetStatsResponse{
-		Users:         []dto.UserStats{},
+		Users:         allUsers,
 		Uptime:        uptime,
-		TotalBytesIn:  0,
-		TotalBytesOut: 0,
+		TotalBytesIn:  totalIn,
+		TotalBytesOut: totalOut,
 	})
 }
 
