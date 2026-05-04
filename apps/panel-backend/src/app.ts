@@ -7,6 +7,7 @@ import { pingDatabase } from './prisma.js';
 import { pingRedis } from './lib/redis.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
 import { usersRoutes } from './modules/users/users.routes.js';
+import { nodesRoutes } from './modules/nodes/nodes.routes.js';
 
 /**
  * Build the Fastify instance with all plugins and routes registered.
@@ -61,6 +62,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(authRoutes);
   await app.register(usersRoutes);
+  await app.register(nodesRoutes);
 
   return app;
 }
