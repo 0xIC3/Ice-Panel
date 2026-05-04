@@ -7,7 +7,7 @@ const ConfigSchema = z.object({
   APP_HOST: z.string().default('0.0.0.0'),
 
   DATABASE_URL: z.url(),
-
+  REDIS_URL: z.url(),
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
   JWT_EXPIRES_IN: z.string().default('24h'),
 
