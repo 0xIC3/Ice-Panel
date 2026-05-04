@@ -37,6 +37,17 @@ model ApiToken {
   @@map("api_tokens")
 }
 
+// Singleton holding the panel's self-signed CA used to issue per-node mTLS
+// certificates. Always exactly one row (id = 1) — bootstrap on first start.
+model KeygenCa {
+  id            Int      @id @default(1)
+  certPem       String   @map("cert_pem")
+  privateKeyPem String   @map("private_key_pem")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("keygen_ca")
+}
+
 model Node {
   id                    String    @id @default(uuid()) @db.Uuid
   name                  String    @unique @db.VarChar(64)
