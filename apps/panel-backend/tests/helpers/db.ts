@@ -15,6 +15,7 @@ const TABLES = [
   'inbounds',
   'nodes',
   'api_tokens',
+  'keygen_ca',
   'admin_users',
 ];
 
