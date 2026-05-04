@@ -103,11 +103,11 @@
 | # | Название | Статус | Что вводим нового |
 |---|---|---|---|
 | 1 | Fastify + `GET /health` | ✅ done | TS, ESM, async/await, monorepo, Fastify, Pino |
-| 2 | Postgres + `.env` + Zod config validation | ⏭️ next | Docker, env-vars, конфигурация через Zod |
-| 3 | Prisma + полная схема БД | | Prisma schema, миграции, все таблицы из data model |
-| 4 | CRUD users + Zod + auto-gen creds | | REST-эндпоинты, валидация, генерация кредов под все протоколы |
-| 5 | JWT auth + rate-limiting + bcrypt | | Passport-альтернатива на Fastify, защита от брутфорса |
-| 6 | Слои + event bus | | routes/services/repositories, eventemitter2 |
+| 2 | Postgres + `.env` + Zod config validation | ✅ done | Docker, env-vars, конфигурация через Zod |
+| 3 | Prisma + полная схема БД | ✅ done | Prisma schema, миграции, все таблицы из data model |
+| 4 | CRUD users + Zod + auto-gen creds | ✅ done | REST-эндпоинты, валидация, генерация кредов под все протоколы |
+| 5 | JWT auth + rate-limiting + bcrypt | ✅ done | Passport-альтернатива на Fastify, защита от брутфорса |
+| 6 | Слои + event bus | ⏭️ next | routes/services/repositories, eventemitter2 |
 | 7 | **🆕 Redis + BullMQ + scheduler** | | Очереди, фоновые задачи, cron-расписание (4 reset-job'а) |
 | 8 | Тесты на Vitest | | Unit + integration, фикстуры, моки |
 | 9 | Panel↔Node transport: REST + mTLS + keygen | | `@peculiar/x509`, CA, выпуск нодных сертов, encoded payload |
