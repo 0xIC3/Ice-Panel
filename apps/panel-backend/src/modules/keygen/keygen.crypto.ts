@@ -1,3 +1,6 @@
+// `@peculiar/x509@2` pulls in tsyringe, which requires this polyfill.
+// Must be imported before x509.
+import 'reflect-metadata';
 import * as x509 from '@peculiar/x509';
 import { webcrypto } from 'node:crypto';
 
@@ -46,7 +49,11 @@ function privateKeyDerToPem(der: ArrayBuffer): string {
 
 function pemToDer(pem: string): ArrayBuffer {
   const cleaned = pem.replace(/-----[^-]+-----/g, '').replace(/\s+/g, '');
-  return Buffer.from(cleaned, 'base64').buffer;
+  const buf = Buffer.from(cleaned, 'base64');
+  // Node's Buffer.from may return a slice into a shared internal pool — `.buffer`
+  // would expose the whole pool, not just our bytes. Copy into a standalone
+  // ArrayBuffer so webcrypto.subtle.importKey sees only our DER blob.
+  return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
 }
 
 async function importPrivateKey(pem: string): Promise<Key> {
@@ -93,8 +100,15 @@ export async function generateCa(): Promise<CertBundle> {
     signingKey: keys.privateKey,
     extensions: [
       new x509.BasicConstraintsExtension(true, 0, true),
+      // `digitalSignature` is included so the CA cert itself can serve as the
+      // panel's TLS client cert (slice 9 simplification — see nodes.transport).
+      // No EKU on the CA: per RFC 5280, an absent EKU means "no purpose
+      // restriction", so the CA can sign certs for both serverAuth and
+      // clientAuth and can also be presented as a leaf cert during handshake.
       new x509.KeyUsagesExtension(
-        x509.KeyUsageFlags.keyCertSign | x509.KeyUsageFlags.cRLSign,
+        x509.KeyUsageFlags.keyCertSign |
+          x509.KeyUsageFlags.cRLSign |
+          x509.KeyUsageFlags.digitalSignature,
         true,
       ),
     ],
