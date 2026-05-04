@@ -14,5 +14,8 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/*.test.ts', 'tests/**/*.test.ts'],
     env: envFromFile,
+    // Integration tests share a single test Postgres — serialize across files
+    // to avoid collisions on cleanDatabase() / unique constraints.
+    fileParallelism: false,
   },
 });
