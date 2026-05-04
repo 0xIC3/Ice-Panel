@@ -128,8 +128,8 @@ Single-protocol модель также упрощает:
 | 6 | Слои + event bus | ✅ done | routes/services/repositories, node:events |
 | 7 | 🆕 Redis + BullMQ + scheduler | ✅ done | Очереди, фоновые задачи, cron-расписание (4 reset-job'а + 2 review-job'а) |
 | 8 | Тесты на Vitest | ✅ done | Unit + integration, отдельный test-postgres, fastify.inject() |
-| 9 | Panel↔Node transport: REST + mTLS + keygen | ⏭️ next | `@peculiar/x509`, CA, выпуск нодных сертов, encoded payload |
-| 10 | Go node-agent skeleton | | Go basics, mTLS HTTPS-сервер, регистрация |
+| 9 | Panel↔Node transport: REST + mTLS + keygen | ✅ done | `@peculiar/x509`, CA, выпуск нодных сертов, encoded payload, undici mTLS-клиент |
+| 10 | Go node-agent skeleton | ⏭️ next | Go basics, mTLS HTTPS-сервер, регистрация |
 | 11 | `CoreAdapter` + `HysteriaAdapter` | | Auth-callback (не restart), управление Hysteria2-процессом |
 | 12 | **🆕 Subscription generator** | | Endpoint `/sub/{shortUuid}`, Hysteria2 URI, кэширование |
 | 13 | Сквозной флоу Hysteria2 (admin → user → реальный клиент) | | Real-world integration |
