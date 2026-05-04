@@ -93,6 +93,23 @@
 | **4. Public release & repo split** | Разделение монорепо на отдельные репозитории, документация, лендинг | Открыть проект миру |
 | **5. Native client (Ice-Client)** | Tauri (Rust + React + Mantine) Windows-приложение с поддержкой всех 4 протоколов и системным TUN через WinTun. Дальше macOS / Linux / Android / iOS | Полный end-to-end стек: панель → нода → ОВН клиент. Личный продукт целиком, не зависит от сторонних клиентов |
 
+## Модель деплоя — рекомендуемая практика
+
+**Single-protocol-per-node** — рекомендуем размещать **один прокси-протокол на одну ноду VPS**:
+
+- Ресурсная изоляция: Hysteria2-трафик не конкурирует с Xray
+- Падение одного протокола (например, Xray crash) не валит остальные
+- Обновление бинарника одного ядра не трогает другие ноды
+- Конфликты портов исключены (две ноды могут обе слушать `:443` на разных IP)
+- Минимальная конфигурация ноды: `1 vCPU / 1 GB RAM / 20 GB SSD` ($3-5/мес VPS) даже для production
+- Каждая нода предсказуема по cost/profiling — «Xray-нода ест 200 MB» без гадания
+
+**Архитектура поддерживает и multi-protocol-per-node** через `CoreAdapter` (можно зарегистрировать несколько адаптеров на одном `node-agent`). Это валидно для домашних/dev-стендов, но в production single-protocol предпочтителен.
+
+Single-protocol модель также упрощает:
+- `nginx` для фронтинга нужен **только** на Xray-нодах (VLESS+TLS с decoy-сайтом). Hysteria/AmneziaWG/Naive обходятся без nginx.
+- `node-agent` управляет одним адаптером, проще debug.
+
 ---
 
 ## Фаза 1: MVP Hysteria2 (детально)
@@ -410,14 +427,77 @@ Mihomo / Singbox / XrayJSON шаблоны — Phase 2 (Срез 21). Subscripti
 
 ## Фаза 3: Production-readiness
 
-1. Multi-node (несколько серверов под одной панелью с группами)
-2. Метрики Prometheus + дашборд Grafana
-3. Backup/restore БД
-4. Уведомления через Telegram (`grammy`) и webhooks
-5. Security audit (npm audit, проверка зависимостей)
-6. CI/CD через GitHub Actions
-7. Документация по деплою
-8. Bull-board UI для observability очередей
+**Цель:** довести MVP до production-grade — multi-node, advanced routing (cascade, balancer), наблюдаемость, security, авто-деплой.
+
+**Финальный результат:** реальные пользователи могут пользоваться панелью с >1 нодой, есть auto-failover, метрики, бэкапы, Telegram-уведомления.
+
+### Срезы Phase 3 (11 + 1 опциональный)
+
+| # | Название | Что вводим | Сложность |
+|---|---|---|---|
+| 24 | **Multi-node management UI** | Регионы, capacity per node, sticky user-to-node assignment, health-status dashboard | средне |
+| 25 | **Server-side smart node selection** | GeoIP (MaxMind GeoLite2) + load-aware subscription generation. Панель отдаёт юзеру топ-3 лучших ноды per his geo + текущая нагрузка | средне |
+| 26 | **Subscription `url-test` groups** | Generate `url-test` (Mihomo/Singbox), `burstObservatory + balancer` (Xray) во всех форматах. Client-side auto-failover поверх server-side selection | низко |
+| 27 | **Cascade routing — first-class feature** | `inbound.config.cascade` поле + поддержка в HysteriaAdapter/XrayAdapter/NaiveProxyAdapter. **Без service-user хаков** как у Remnawave — inter-node secrets через keygen | **высоко** |
+| 28 | **Cross-protocol cascade** | Hysteria→Xray, Xray→Hysteria, любая комбинация через socks5/http outbound. Преимущество multi-core архитектуры | средне (после 27) |
+| 29 | **Telegram bot + Webhook notifications** | grammy для бота, generic webhook фреймворк. События: user.expired, user.limited, node.unreachable, traffic.threshold | средне |
+| 30 | **Prometheus metrics + Grafana dashboards** | Экспортим: per-user traffic, per-node bandwidth, queue stats, request latency. Готовые JSON-дашборды в репо | средне |
+| 31 | **Backup/restore + recovery** | CLI-tool `ice-panel-backup`: dump БД + Redis AOF + .env шифрованно. Restore one-shot. Cron автобэкап на S3-compatible (опционально) | низко |
+| 32 | **Security hardening** | npm audit в CI, advanced rate-limit (per-route customization), CSP refinement, input fuzzing tests, OWASP проверка | средне |
+| 33 | **CI/CD via GitHub Actions** | Auto build Docker images на push в main, auto-publish в ghcr.io, deploy-документация для VPS | низко |
+| 34 | **Bull-board + admin observability** | UI на `/admin/queues` для просмотра BullMQ jobs, dashboard со статистикой системы | низко |
+| 35 | **(опц.) AmneziaWG cascade via iptables** | Полноценный multi-hop через WG через `MASQUERADE` rules. Сложнее остальных — отдельный slice если будет спрос | **высоко** (deferred) |
+
+### Подробности по ключевым срезам
+
+#### Срез 24: Multi-node management UI
+- В админке: страница `/nodes` с фильтрами (по region, status, protocol)
+- Карточка ноды: utilization (current_users / max_users), throughput last 24h, error rate
+- Регионы как отдельная сущность (`regions` таблица): EU, ASIA, US — для группировки
+- Sticky assignment: при создании юзера автоматически выбирается best node в его регионе
+
+#### Срез 25: Server-side smart node selection
+- При запросе `GET /sub/{token}` — определяем GeoIP юзера по `request.ip` (Cloudflare/X-Forwarded-For aware)
+- Из доступных юзеру нод (через group → group_inbounds) берём:
+  1. Те что в same region
+  2. Сортируем по `currentUsers / maxUsers` ascending
+  3. Топ-3
+- В подписке отдаём именно их, не все
+- Кэш 60s — повторные запросы за минуту получают ту же подборку
+
+#### Срез 27: Cascade routing
+- В таблицу `inbounds` поле `cascade_config JSONB` (nullable):
+  ```json
+  {
+    "via_node_id": "uuid-of-NL-node",
+    "rules": [
+      { "match": "geoip:ru", "action": "direct" },
+      { "match": "geosite:bittorrent", "action": "block" },
+      { "match": "*", "action": "via" }
+    ]
+  }
+  ```
+- При sync ноды (`POST /sync` от панели), node-agent читает `cascade_config` и **сам генерирует**:
+  - Outbound config своего ядра (Hysteria YAML / Xray JSON / Caddyfile + naive)
+  - Routing rules
+- **Inter-node credentials** генерятся keygen-модулем (Срез 9), хранятся в `node_peer_secrets` таблице — НЕ как фейк-юзеры
+- Multi-hop поддерживается естественно: A→B→C значит на A в config указан `via: B`, на B указан `via: C`. Каждая нода видит только свой следующий hop
+
+#### Срез 28: Cross-protocol cascade
+- Допустим Hysteria-RU → Xray-DE → интернет
+- Hysteria's `outbound.type: socks5` поднимает соединение к Xray-DE через локальный adapter в Xray (Xray слушает socks5 inbound на 127.0.0.1)
+- Адаптеры договариваются через `node_peer_secrets`:
+  - HysteriaAdapter знает: «outbound socks5 → 10.x.x.x:1080 user=service_h2x pass=...»
+  - XrayAdapter на DE-ноде имеет inbound socks5 на :1080 с этими credentials, делает freedom outbound → интернет
+- Прозрачно для админа — он просто выбирает "via NL-Xray" в UI
+
+#### Срез 29: Telegram + Webhook notifications
+- Grammy бот регится через `@BotFather` (как в Remnawave)
+- Events list: `user.created`, `user.expired`, `user.limited`, `subscription.requested`, `node.unreachable`, `traffic.threshold_reached`
+- Webhook: HMAC-SHA256 signature header (как Remnawave паттерн)
+- Per-event subscription: разные chat_id для разных событий (`TELEGRAM_NOTIFY_USERS`, `TELEGRAM_NOTIFY_NODES` — паттерн из их docs)
+
+---
 
 ---
 
