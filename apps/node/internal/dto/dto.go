@@ -17,6 +17,11 @@ type ProtocolCredentials struct {
 	XrayUUID           string `json:"xrayUuid,omitempty"`
 	NaivePassword      string `json:"naivePassword,omitempty"`
 	AmneziaWGPublicKey string `json:"amneziawgPublicKey,omitempty"`
+	// AmneziaWGAllowedIP is the IP the panel allocated for this user inside
+	// the inbound's subnet (e.g. "10.0.0.42"). The adapter writes it into
+	// the peer block as `<ip>/32`. Only present when the user has access to
+	// an amneziawg inbound.
+	AmneziaWGAllowedIP string `json:"amneziawgAllowedIp,omitempty"`
 }
 
 // ───── POST /addUser ─────

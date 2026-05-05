@@ -151,6 +151,7 @@ func (s *Server) handleAddUser(w http.ResponseWriter, r *http.Request) {
 		XrayUUID:           req.Credentials.XrayUUID,
 		NaivePassword:      req.Credentials.NaivePassword,
 		AmneziaWGPublicKey: req.Credentials.AmneziaWGPublicKey,
+		AmneziaWGAllowedIP: req.Credentials.AmneziaWGAllowedIP,
 	}
 
 	var failed []string

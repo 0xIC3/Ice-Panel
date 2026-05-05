@@ -16,6 +16,13 @@ export interface ProtocolCredentials {
   xrayUuid?: string;
   naivePassword?: string;
   amneziawgPublicKey?: string;
+  /**
+   * IP allocated to this user inside the AmneziaWG inbound's subnet
+   * (e.g. "10.0.0.42"). Panel-backend assigns it via the IP allocator
+   * service before issuing the addUser request; node-agent writes it
+   * straight into the [Peer] AllowedIPs field as `<ip>/32`.
+   */
+  amneziawgAllowedIp?: string;
 }
 
 // ───── POST /addUser ─────

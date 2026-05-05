@@ -14,6 +14,7 @@ type User struct {
 	XrayUUID           string
 	NaivePassword      string
 	AmneziaWGPublicKey string
+	AmneziaWGAllowedIP string
 }
 
 // UserStats are per-user traffic counters reported by a single core.
