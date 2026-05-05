@@ -36,4 +36,13 @@ type CoreAdapter interface {
 
 	// GetStats returns the latest traffic counters known to the core.
 	GetStats() (*Stats, error)
+
+	// Healthy reports whether the adapter is in a state where it can serve
+	// traffic. Implementations should return true after Start() has fully
+	// initialised local resources (callback servers, subprocesses, etc) and
+	// false before Start() / after Stop() / when a subprocess has crashed.
+	//
+	// Used by the panel's healthcheck fan-out and the node-agent /healthz
+	// endpoint to derive overall node status.
+	Healthy() bool
 }

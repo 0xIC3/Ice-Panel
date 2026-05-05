@@ -114,13 +114,22 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cores := make([]dto.CoreStatus, 0, len(s.cfg.Adapters))
+	allHealthy := true
 	for _, adapter := range s.cfg.Adapters {
+		running := adapter.Healthy()
+		if !running {
+			allHealthy = false
+		}
 		cores = append(cores, dto.CoreStatus{
 			Name:    dto.ProtocolName(adapter.Name()),
-			Running: true, // slice 13: probe actual subprocess state
+			Running: running,
 		})
 	}
-	writeJSON(w, http.StatusOK, dto.HealthcheckResponse{Status: "ok", Cores: cores})
+	status := "ok"
+	if !allHealthy {
+		status = "degraded"
+	}
+	writeJSON(w, http.StatusOK, dto.HealthcheckResponse{Status: status, Cores: cores})
 }
 
 func (s *Server) handleAddUser(w http.ResponseWriter, r *http.Request) {

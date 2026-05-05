@@ -175,6 +175,28 @@ func (a *Adapter) GetStats() (*core.Stats, error) {
 	return &core.Stats{Users: users}, nil
 }
 
+// Healthy reports whether the adapter is ready to serve traffic.
+// In callback-only mode (no BinaryPath), only the auth-callback server
+// must be up. With BinaryPath set, the hysteria subprocess must also
+// be running (not nil and not exited).
+func (a *Adapter) Healthy() bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if a.callbackSrv == nil {
+		return false
+	}
+	if a.cfg.BinaryPath != "" {
+		if a.cmd == nil || a.cmd.Process == nil {
+			return false
+		}
+		// cmd.ProcessState is set after the process has exited.
+		if a.cmd.ProcessState != nil {
+			return false
+		}
+	}
+	return true
+}
+
 // LookupByPassword consults the in-memory state for a given password.
 // Used by the local /auth callback handler.
 func (a *Adapter) LookupByPassword(password string) (userID string, ok bool) {

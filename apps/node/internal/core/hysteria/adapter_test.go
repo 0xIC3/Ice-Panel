@@ -3,6 +3,7 @@ package hysteria
 import (
 	"io"
 	"log/slog"
+	"net/http"
 	"testing"
 
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core"
@@ -114,5 +115,21 @@ func TestNameMatchesProtocol(t *testing.T) {
 	a := newTestAdapter(t)
 	if a.Name() != Name {
 		t.Errorf("Name: got %q want %q", a.Name(), Name)
+	}
+}
+
+func TestHealthyBeforeStart(t *testing.T) {
+	a := newTestAdapter(t)
+	if a.Healthy() {
+		t.Errorf("Healthy: expected false before Start (callback server is nil)")
+	}
+}
+
+func TestHealthyAfterCallbackStart(t *testing.T) {
+	a := newTestAdapter(t)
+	// Simulate a started callback server without a subprocess (BinaryPath="").
+	a.callbackSrv = &http.Server{}
+	if !a.Healthy() {
+		t.Errorf("Healthy: expected true with callback up and no subprocess configured")
 	}
 }

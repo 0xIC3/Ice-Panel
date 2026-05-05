@@ -29,6 +29,7 @@ type fakeAdapter struct {
 func (f *fakeAdapter) Name() string                       { return f.name }
 func (f *fakeAdapter) Start(_ context.Context) error      { return nil }
 func (f *fakeAdapter) Stop(_ context.Context) error       { return nil }
+func (f *fakeAdapter) Healthy() bool                      { return !f.failOnStats /* flag re-used to simulate unhealthy */ }
 func (f *fakeAdapter) AddUser(u core.User) error {
 	f.added = append(f.added, u)
 	if f.failOnAdd {
