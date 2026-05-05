@@ -332,8 +332,8 @@ Mihomo / Singbox / XrayJSON шаблоны — Phase 2 (Срез 21). Subscripti
 
 | # | Название | Что вводим | Сложность |
 |---|---|---|---|
-| 16 | **Refactor `CoreAdapter`** под уроки фазы 1 | Возможно меняется сигнатура методов после реальной работы с Hysteria | средне |
-| 17 | **`XrayAdapter`** (legacy VLESS/Reality/VMess/Trojan) | gRPC API через xtls-sdk, добавление user'ов через AddUser API | средне |
+| 16 | Refactor `CoreAdapter` под уроки фазы 1 | ✅ done | `Healthy()` метод, общий `subprocess` пакет, panel-side `core-adapters/` структура |
+| 17 | **`XrayAdapter`** (legacy VLESS/Reality/VMess/Trojan) | ⏭️ next | gRPC API через xtls-sdk, добавление user'ов через AddUser API |
 | 18 | **Frontend: выбор протокола при создании юзера** | UI с чекбоксами «какие протоколы доступны юзеру» | низко |
 | 19 | **`AmneziaWGAdapter`** | `wg` CLI, генерация peer-конфигов, kernel-module setup, `wg syncconf` reload | **высоко** (нужен root, kernel-module, специфика WG) |
 | 20 | **`NaiveProxyAdapter`** | Сборка из chromium-форка (или предкомпилированный бинарник), управление через CLI-аргументы | средне |
