@@ -54,8 +54,36 @@ done
 
 case "$PROTOCOL" in
   hysteria|xray|amneziawg|naive) ;;
-  "") fail "Pass --protocol hysteria|xray|amneziawg|naive" ;;
-  *)  fail "Unknown protocol: $PROTOCOL" ;;
+  "")
+    cat >&2 <<'EOF'
+Pick one protocol for this node — pass --protocol <name>:
+
+  --protocol hysteria    Hysteria 2 (UDP/443, QUIC, Brutal CC)
+                         Single ~1 GB VPS handles ~200 concurrent users.
+
+  --protocol xray        Xray VLESS+REALITY+Vision (TCP/443, 4 transports:
+                         raw / xhttp / ws / gRPC). Works on Cloudflare-friendly
+                         CDN setups when paired with ws+TLS.
+
+  --protocol amneziawg   AmneziaWG — DPI-resistant WireGuard fork. Needs the
+                         `amneziawg` kernel module (auto-installed via PPA on
+                         Ubuntu/Debian; userspace fallback if DKMS fails).
+                         Best throughput of the four when kernel-module works.
+
+  --protocol naive       NaiveProxy via klzgrad/forwardproxy@naive Caddy fork.
+                         Needs ≥2 GB RAM for the xcaddy build. No per-user
+                         stats from upstream.
+
+Recommended pattern: ONE protocol per VPS (resource isolation, no port
+conflicts, simpler firewall). For two protocols on one host you'd need to
+provision two separate Node records in the panel and run this script twice.
+
+Also need: --payload "<base64-blob>" — copy it from the Nodes → Create
+modal in the panel UI.
+EOF
+    exit 1
+    ;;
+  *)  fail "Unknown protocol: $PROTOCOL (valid: hysteria|xray|amneziawg|naive)" ;;
 esac
 
 # ───── 1. Distro ─────
