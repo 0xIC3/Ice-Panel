@@ -39,7 +39,11 @@ export function NodesPage() {
   const qc = useQueryClient();
   const [createOpen, { open: openCreate, close: closeCreate }] = useDisclosure(false);
   const [editing, setEditing] = useState<Node | null>(null);
-  const [payload, setPayload] = useState<{ name: string; payload: string } | null>(null);
+  const [payload, setPayload] = useState<{
+    name: string;
+    payload: string;
+    bootstrap?: { token: string; expiresAt: string; command: string };
+  } | null>(null);
 
   const nodesQuery = useQuery({
     queryKey: ['nodes'],
@@ -51,8 +55,13 @@ export function NodesPage() {
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['nodes'] });
       notifications.show({ color: 'green', message: 'Node created' });
-      // Surface the one-time payload — the panel won't return it again.
-      setPayload({ name: data.name, payload: data.payload });
+      // Surface the one-time payload + bootstrap token — neither is shown
+      // by the panel on subsequent reads.
+      setPayload({
+        name: data.name,
+        payload: data.payload,
+        bootstrap: data.bootstrap,
+      });
     },
     onError: (err) =>
       notifications.show({
@@ -212,6 +221,7 @@ export function NodesPage() {
           onClose={() => setPayload(null)}
           nodeName={payload.name}
           payload={payload.payload}
+          bootstrap={payload.bootstrap}
         />
       )}
     </Stack>

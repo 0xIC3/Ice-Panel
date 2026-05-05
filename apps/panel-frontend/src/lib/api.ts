@@ -167,9 +167,24 @@ export interface Node {
   updatedAt: string;
 }
 
-/** The create response carries an extra `payload` field — a one-time secret. */
+export interface BootstrapInfo {
+  /** Single-use token (URL-safe, ~32 chars). Survives the 4 KB TTY paste limit. */
+  token: string;
+  /** ISO timestamp when the token stops being redeemable. */
+  expiresAt: string;
+  /** Pre-rendered single-line install command, ready to copy-paste on the node. */
+  command: string;
+}
+
+/** The create response carries the one-time payload + a bootstrap token. */
 export interface NodeWithPayload extends Node {
   payload: string;
+  bootstrap: BootstrapInfo;
+}
+
+export async function refreshNodeBootstrap(id: string): Promise<BootstrapInfo> {
+  const { data } = await api.post<BootstrapInfo>(`/api/nodes/${id}/bootstrap`);
+  return data;
 }
 
 export interface NodesListResponse {

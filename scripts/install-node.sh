@@ -14,24 +14,34 @@
 #   6. Writes /etc/ice-panel-node/env with NODE_PAYLOAD + protocol env
 #   7. Enables + starts the service, waits for /healthz
 #
-# Usage (as root):
-#   bash <(curl -fsSL .../install-node.sh)                        # interactive
+# Usage (as root). RECOMMENDED — bootstrap-token flow (single command, no
+# manual file transfer needed):
+#
+#   bash <(curl -fsSL .../install-node.sh) \
+#     --panel-url https://panel.example.com \
+#     --bootstrap bs_AbC123dEf456 \
+#     --protocol xray
+#
+# Get the bootstrap token + ready-made command by clicking "Create node"
+# in the panel UI — the modal shows a copy-pastable single-liner. Token is
+# valid 15 min, single-use; if it expires, click "Refresh bootstrap" in
+# the panel UI to mint a new one.
+#
+# Alternative flows (file-based — for air-gapped or self-hosted gist setups):
 #   bash <(curl -fsSL .../install-node.sh) --protocol xray --payload-file /tmp/payload.b64
 #   bash <(curl -fsSL .../install-node.sh) --protocol xray --payload "@/tmp/payload.b64"
-#   bash <(curl -fsSL .../install-node.sh) --protocol xray --payload "<short-base64>"
 #
-# Get the payload by creating a Node in the panel UI — copy the one-time blob
-# shown in the modal. Real payloads are ~6-7 KB; Linux TTY canonical-mode
-# truncates pastes at 4096 bytes, so anything pasted directly through the
-# terminal (interactive prompt or shell command line) loses the tail.
-# **Always use `--payload-file` (or `@/path` syntax) for the real flow.**
-# Save the payload to a file via:
-#   * the "Save as file" button in the panel modal (one click),
-#   * scp from your laptop after pasting into a real text editor,
-#   * `curl > /tmp/payload.b64` from a private gist, etc.
+# Or interactive:
+#   bash <(curl -fsSL .../install-node.sh)
+# (asks for protocol, then payload — accepts `@/path/to/file` syntax).
+#
+# **Don't paste the raw payload string into the terminal directly.** Linux
+# TTY canonical-mode truncates pastes at 4096 bytes; real payloads are ~6-7
+# KB, so the tail gets silently dropped and the node fails with a confusing
+# `json unmarshal: unexpected end of JSON input`.
 #
 # Re-runnable. Existing /etc/ice-panel-node/env is preserved unless --payload
-# (or --payload-file) is given again.
+# (or --payload-file or --bootstrap) is given again.
 
 set -euo pipefail
 
@@ -49,6 +59,8 @@ NODE_PORT=${NODE_PORT:-8443}
 
 PROTOCOL=""
 PAYLOAD=""
+PANEL_URL=""
+BOOTSTRAP_TOKEN=""
 
 # Resolve a payload value: if it starts with "@", treat the rest as a path
 # and read the file content. Otherwise return as-is. Mirrors curl's `-d @file`
@@ -73,6 +85,8 @@ while [[ $# -gt 0 ]]; do
     --protocol)      PROTOCOL="$2"; shift 2 ;;
     --payload)       PAYLOAD=$(resolve_payload "$2"); shift 2 ;;
     --payload-file)  PAYLOAD=$(resolve_payload "@$2"); shift 2 ;;
+    --panel-url)     PANEL_URL="${2%/}"; shift 2 ;;
+    --bootstrap)     BOOTSTRAP_TOKEN="$2"; shift 2 ;;
     --port)          NODE_PORT="$2"; shift 2 ;;
     -h|--help)
       grep '^#' "$0" | sed 's/^# \?//'
@@ -81,6 +95,27 @@ while [[ $# -gt 0 ]]; do
     *) fail "Unknown arg: $1" ;;
   esac
 done
+
+# If both --panel-url and --bootstrap given, redeem the bootstrap token to
+# fetch the full payload from panel over HTTP. This is the recommended flow
+# — it sidesteps the 4 KB TTY paste limit because the long payload travels
+# over a plain HTTP body, not through the user's shell.
+if [[ -n "$BOOTSTRAP_TOKEN" && -n "$PANEL_URL" ]]; then
+  log "Redeeming bootstrap token at $PANEL_URL"
+  TMP_PAYLOAD=$(mktemp)
+  HTTP_CODE=$(curl -fsSL -o "$TMP_PAYLOAD" -w '%{http_code}' \
+    "$PANEL_URL/api/internal/bootstrap/$BOOTSTRAP_TOKEN" || echo "000")
+  case "$HTTP_CODE" in
+    200) PAYLOAD=$(tr -d '\n\r \t' < "$TMP_PAYLOAD"); rm -f "$TMP_PAYLOAD" ;;
+    404) rm -f "$TMP_PAYLOAD"; fail "Bootstrap token not found at $PANEL_URL — typo or expired+purged" ;;
+    410) rm -f "$TMP_PAYLOAD"; fail "Bootstrap token already consumed or expired — issue a fresh one in the panel UI" ;;
+    000) rm -f "$TMP_PAYLOAD"; fail "Cannot reach panel at $PANEL_URL — check the URL, TLS cert, firewall" ;;
+    *)   rm -f "$TMP_PAYLOAD"; fail "Unexpected HTTP $HTTP_CODE from panel — see panel logs" ;;
+  esac
+  log "Bootstrap successful — fetched ${#PAYLOAD} bytes of payload"
+elif [[ -n "$BOOTSTRAP_TOKEN" || -n "$PANEL_URL" ]]; then
+  fail "--panel-url and --bootstrap must be passed TOGETHER (got only one)"
+fi
 
 prompt_protocol() {
   cat <<'EOF'

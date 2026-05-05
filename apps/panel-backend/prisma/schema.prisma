@@ -72,6 +72,7 @@ model Node {
   connectedUsers  UserTraffic[]
   userUsageHistory NodeUserUsageHistory[]
   usageHistory     NodeUsageHistory[]
+  bootstrapTokens NodeBootstrapToken[]
 
   @@index([status])
   @@index([deletedAt])
@@ -240,6 +241,32 @@ model SubscriptionEvent {
   @@index([userId, createdAt(sort: Desc)])
   @@index([eventType])
   @@map("subscription_events")
+}
+
+// One-time bootstrap token a node-installer redeems to fetch its mTLS
+// payload over HTTP at install time. Payload (cert + key + CA) is generated
+// on-redeem via keygen, NOT stored here — the token is just a short
+// identifier the node hands back, plus expiry/single-use machinery.
+//
+// Why this exists: the raw payload is ~6-7 KB base64. Linux TTY canonical
+// mode truncates pasted strings at 4096 bytes, so admins can't reliably
+// paste the whole payload through SSH. A short token (~22 chars) sails
+// through TTY without issue, then the node-side curl fetches the full
+// payload on a clean HTTP body without any TTY in between.
+model NodeBootstrapToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  nodeId     String    @map("node_id") @db.Uuid
+  // URL-safe random, 22+ chars. Single-use; consumedAt set on redeem.
+  token      String    @unique @db.VarChar(64)
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
+  consumedAt DateTime? @map("consumed_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  node Node @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@index([nodeId])
+  @@index([expiresAt])
+  @@map("node_bootstrap_tokens")
 }
 
 // Subscription Response Rules — User-Agent → format auto-selection.

@@ -1,10 +1,12 @@
 import { issueNodeCert, encodeNodePayload } from '../keygen/keygen.service.js';
 import * as repo from './nodes.repository.js';
+import { issueBootstrapToken } from './bootstrap.service.js';
 import {
   mapNodeToPublic,
   mapNodeWithPayload,
   type PublicNodeDto,
   type CreateNodeResponseDto,
+  type BootstrapInfo,
 } from './nodes.mapper.js';
 import type { CreateNodeInput, UpdateNodeInput, ListNodesQuery } from './nodes.schemas.js';
 
@@ -35,7 +37,16 @@ function buildSans(address: string): { type: 'dns' | 'ip'; value: string }[] {
 
 // ───── Service methods ─────
 
-export async function createNode(input: CreateNodeInput): Promise<CreateNodeResponseDto> {
+export interface CreateNodeContext {
+  /** Public URL of the panel as seen by the admin browser (used to render
+   *  the bootstrap install command — node will hit this URL to fetch payload). */
+  panelUrl: string;
+}
+
+export async function createNode(
+  input: CreateNodeInput,
+  ctx: CreateNodeContext,
+): Promise<CreateNodeResponseDto> {
   // App-level checks against active (non-soft-deleted) rows.
   const byName = await repo.findActiveByName(input.name);
   if (byName) throw new NodeAlreadyExistsError('name', input.name);
@@ -75,7 +86,23 @@ export async function createNode(input: CreateNodeInput): Promise<CreateNodeResp
   });
   const payload = encodeNodePayload(cert);
 
-  return mapNodeWithPayload(node, payload);
+  const tokenInfo = await issueBootstrapToken(node.id);
+  const bootstrap: BootstrapInfo = {
+    token: tokenInfo.token,
+    expiresAt: tokenInfo.expiresAt.toISOString(),
+    command: renderBootstrapCommand(ctx.panelUrl, tokenInfo.token),
+  };
+
+  return mapNodeWithPayload(node, payload, bootstrap);
+}
+
+function renderBootstrapCommand(panelUrl: string, token: string): string {
+  return [
+    'bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \\',
+    `  --panel-url ${panelUrl} \\`,
+    `  --bootstrap ${token} \\`,
+    '  --protocol <xray|hysteria|amneziawg|naive>',
+  ].join('\n');
 }
 
 function isUniqueViolation(err: unknown): boolean {

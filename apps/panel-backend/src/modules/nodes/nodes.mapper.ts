@@ -32,15 +32,35 @@ export function mapNodeToPublic(node: Node): PublicNodeDto {
   };
 }
 
+export interface BootstrapInfo {
+  /** Short single-use token (URL-safe). Survives 4 KB TTY paste limit. */
+  token: string;
+  /** ISO timestamp when the token stops being redeemable. */
+  expiresAt: string;
+  /** Pre-rendered single-line install command, ready for copy-paste. */
+  command: string;
+}
+
 export interface CreateNodeResponseDto extends PublicNodeDto {
   /**
    * Base64url-encoded one-time payload containing the node's mTLS cert+key
-   * and the panel CA. This is the ONLY moment the key is exposed — admin
-   * must hand it to the node-agent at first boot and store securely.
+   * and the panel CA. Kept for the manual / air-gapped flow (Download +
+   * scp + `--payload-file`) — most admins should use the bootstrap-token
+   * flow below instead.
    */
   payload: string;
+  /**
+   * Bootstrap info for the network-fetch flow: admin pastes a short
+   * command on the node, the install-script curls the panel for the full
+   * payload over HTTP. No 4096-byte TTY paste limit, single command.
+   */
+  bootstrap: BootstrapInfo;
 }
 
-export function mapNodeWithPayload(node: Node, payload: string): CreateNodeResponseDto {
-  return { ...mapNodeToPublic(node), payload };
+export function mapNodeWithPayload(
+  node: Node,
+  payload: string,
+  bootstrap: BootstrapInfo,
+): CreateNodeResponseDto {
+  return { ...mapNodeToPublic(node), payload, bootstrap };
 }
