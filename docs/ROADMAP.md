@@ -336,8 +336,8 @@ Mihomo / Singbox / XrayJSON шаблоны — Phase 2 (Срез 21). Subscripti
 | 17 | `XrayAdapter` (VLESS+REALITY+Vision) | ✅ done | Config-restart pattern (gRPC AlterInbound оптимизация → Phase 3) |
 | 18 | **Frontend: выбор протокола при создании юзера** | ✅ done | `users.enabledProtocols` JSON-колонка, subscription fan-out, Mantine MultiSelect + Badge-чипы |
 | 19 | **`AmneziaWGAdapter`** | ✅ done | `amneziawg_peers` table + IP allocator, bootstrap script, config gen + obfuscation params, peer add/remove via `awg syncconf` with systemctl fallback, client wg-quick builder, mocked-CLI tests |
-| 20 | **`NaiveProxyAdapter`** | ⏭️ next | Caddy fork (`xcaddy + forwardproxy@naive`), Caddyfile templating, `caddy reload`. **средне** (нет per-user stats, force-kick) |
-| 21 | **Multi-format subscription generator** | Все форматы: Clash YAML, Singbox JSON, AmneziaWG `.conf`, Naive URL, Xray JSON | средне |
+| 20 | **`NaiveProxyAdapter`** | ✅ done | bootstrap (xcaddy+forwardproxy@naive), Caddyfile generator, `caddy reload` pipeline with timeout, panel-side URI builder, mocked-CLI tests |
+| 21 | **Multi-format subscription generator** | ⏭️ next | Все форматы: Clash YAML, Singbox JSON, AmneziaWG `.conf`, Naive URL, Xray JSON — средне |
 | 22 | **Subscription Response Rules (SRR)** | Детект формата по User-Agent (паттерн Remnawave) | низко |
 | 23 | **UI: graphical protocol selector + per-protocol config** | Inbound editor с UI под каждый протокол | средне |
 
