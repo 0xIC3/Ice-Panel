@@ -3,7 +3,6 @@ import {
   ActionIcon,
   Badge,
   Button,
-  CopyButton,
   Group,
   Stack,
   Table,
@@ -11,6 +10,7 @@ import {
   Title,
   Tooltip,
 } from '@mantine/core';
+import { copyToClipboard } from '../lib/clipboard';
 import { useDisclosure } from '@mantine/hooks';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
@@ -34,6 +34,30 @@ import {
   type User,
 } from '../lib/api';
 import { UserFormModal } from '../components/UserFormModal';
+
+function SubscriptionCopyIcon({ url }: { url: string }) {
+  const [copied, setCopied] = useState(false);
+  async function handleCopy() {
+    try {
+      await copyToClipboard(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch (err) {
+      notifications.show({
+        color: 'red',
+        title: 'Copy failed',
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  return (
+    <Tooltip label={copied ? 'Copied' : 'Copy subscription URL'}>
+      <ActionIcon variant="subtle" color={copied ? 'green' : undefined} onClick={handleCopy}>
+        {copied ? <IconCheck size={16} /> : <IconCopy size={16} />}
+      </ActionIcon>
+    </Tooltip>
+  );
+}
 
 const STATUS_COLORS: Record<string, string> = {
   active: 'green',
@@ -201,19 +225,7 @@ export function UsersPage() {
                 <Table.Td>{u.tag ?? '—'}</Table.Td>
                 <Table.Td>
                   <Group gap={4} wrap="nowrap">
-                    <CopyButton value={subscriptionUrl(u.subscriptionToken)} timeout={1500}>
-                      {({ copied, copy }) => (
-                        <Tooltip label={copied ? 'Copied' : 'Copy subscription URL'}>
-                          <ActionIcon
-                            variant="subtle"
-                            color={copied ? 'green' : undefined}
-                            onClick={copy}
-                          >
-                            {copied ? <IconCheck size={16} /> : <IconCopy size={16} />}
-                          </ActionIcon>
-                        </Tooltip>
-                      )}
-                    </CopyButton>
+                    <SubscriptionCopyIcon url={subscriptionUrl(u.subscriptionToken)} />
                     <Tooltip label="Edit">
                       <ActionIcon variant="subtle" onClick={() => setEditing(u)}>
                         <IconEdit size={16} />
