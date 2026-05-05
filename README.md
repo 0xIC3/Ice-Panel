@@ -1,5 +1,7 @@
 # Ice-Panel
 
+🌍 **English** · [Русский](./README.ru.md)
+
 Self-hosted proxy management panel with **native multi-core architecture**.
 
 Where competitors (Marzban, Remnawave, x-ui) wrap everything through Xray-core, Ice-Panel runs the **real upstream binary** for each protocol — Hysteria2 server, Xray-core, AmneziaWG kernel module, NaiveProxy fork of Caddy — under a unified `CoreAdapter` abstraction.
