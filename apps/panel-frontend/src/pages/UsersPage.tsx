@@ -42,6 +42,13 @@ const STATUS_COLORS: Record<string, string> = {
   limited: 'yellow',
 };
 
+const PROTOCOL_COLORS: Record<string, string> = {
+  hysteria: 'blue',
+  xray: 'violet',
+  amneziawg: 'teal',
+  naive: 'orange',
+};
+
 const GB = 1_073_741_824;
 
 function formatTraffic(used: number, limit: number | null): string {
@@ -150,6 +157,7 @@ export function UsersPage() {
               <Table.Th>Status</Table.Th>
               <Table.Th>Traffic</Table.Th>
               <Table.Th>Strategy</Table.Th>
+              <Table.Th>Protocols</Table.Th>
               <Table.Th>Expires</Table.Th>
               <Table.Th>Tag</Table.Th>
               <Table.Th style={{ width: 1 }}>Actions</Table.Th>
@@ -158,7 +166,7 @@ export function UsersPage() {
           <Table.Tbody>
             {usersQuery.data?.users.length === 0 && (
               <Table.Tr>
-                <Table.Td colSpan={7}>
+                <Table.Td colSpan={8}>
                   <Text c="dimmed" ta="center" py="md">
                     No users yet. Click "Create user".
                   </Text>
@@ -180,6 +188,15 @@ export function UsersPage() {
                 </Table.Td>
                 <Table.Td>{formatTraffic(u.trafficUsedBytes, u.trafficLimitBytes)}</Table.Td>
                 <Table.Td>{u.trafficLimitStrategy}</Table.Td>
+                <Table.Td>
+                  <Group gap={4} wrap="wrap">
+                    {u.enabledProtocols.map((p) => (
+                      <Badge key={p} color={PROTOCOL_COLORS[p] ?? 'gray'} variant="light" size="sm">
+                        {p}
+                      </Badge>
+                    ))}
+                  </Group>
+                </Table.Td>
                 <Table.Td>{formatExpire(u.expireAt)}</Table.Td>
                 <Table.Td>{u.tag ?? '—'}</Table.Td>
                 <Table.Td>

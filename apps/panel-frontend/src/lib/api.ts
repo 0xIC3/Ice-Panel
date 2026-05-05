@@ -69,6 +69,8 @@ export async function register(username: string, password: string): Promise<Regi
 
 export type TrafficLimitStrategy = 'no_reset' | 'day' | 'week' | 'month' | 'rolling';
 
+export type ProtocolName = 'hysteria' | 'xray' | 'amneziawg' | 'naive';
+
 export interface User {
   id: string;
   shortId: string;
@@ -87,6 +89,7 @@ export interface User {
   tag: string | null;
   telegramId: string | null;
   email: string | null;
+  enabledProtocols: ProtocolName[];
   createdAt: string;
   updatedAt: string;
 }
@@ -106,6 +109,7 @@ export interface CreateUserInput {
   description?: string | null;
   tag?: string | null;
   email?: string | null;
+  enabledProtocols?: ProtocolName[];
 }
 
 export interface UpdateUserInput {
@@ -116,6 +120,7 @@ export interface UpdateUserInput {
   description?: string | null;
   tag?: string | null;
   email?: string | null;
+  enabledProtocols?: ProtocolName[];
 }
 
 export async function listUsers(params?: {

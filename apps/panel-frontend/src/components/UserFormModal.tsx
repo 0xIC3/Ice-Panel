@@ -1,7 +1,17 @@
-import { Button, Modal, NumberInput, Select, Stack, TextInput, Textarea } from '@mantine/core';
+import {
+  Button,
+  Modal,
+  MultiSelect,
+  NumberInput,
+  Select,
+  Stack,
+  TextInput,
+  Textarea,
+} from '@mantine/core';
 import { useForm } from '@mantine/form';
 import {
   type CreateUserInput,
+  type ProtocolName,
   type TrafficLimitStrategy,
   type UpdateUserInput,
   type User,
@@ -15,6 +25,13 @@ const STRATEGY_OPTIONS: { value: TrafficLimitStrategy; label: string }[] = [
   { value: 'rolling', label: 'Rolling 30 days' },
 ];
 
+const PROTOCOL_OPTIONS: { value: ProtocolName; label: string }[] = [
+  { value: 'hysteria', label: 'Hysteria2' },
+  { value: 'xray', label: 'Xray (VLESS+REALITY)' },
+  { value: 'amneziawg', label: 'AmneziaWG' },
+  { value: 'naive', label: 'NaiveProxy' },
+];
+
 interface FormValues {
   username: string;
   trafficLimitGb: number | '';
@@ -24,6 +41,7 @@ interface FormValues {
   description: string;
   tag: string;
   email: string;
+  enabledProtocols: ProtocolName[];
 }
 
 function defaultValues(user: User | null): FormValues {
@@ -37,6 +55,7 @@ function defaultValues(user: User | null): FormValues {
     description: user?.description ?? '',
     tag: user?.tag ?? '',
     email: user?.email ?? '',
+    enabledProtocols: user?.enabledProtocols ?? ['hysteria'],
   };
 }
 
@@ -61,6 +80,7 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
         return null;
       },
       email: (v) => (v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? 'Invalid email' : null),
+      enabledProtocols: (v) => (v.length === 0 ? 'Pick at least one protocol' : null),
     },
   });
 
@@ -78,6 +98,7 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
         description: values.description || null,
         tag: values.tag || null,
         email: values.email || null,
+        enabledProtocols: values.enabledProtocols,
       };
       await onSubmit(input);
     } else {
@@ -89,6 +110,7 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
         description: values.description || null,
         tag: values.tag || null,
         email: values.email || null,
+        enabledProtocols: values.enabledProtocols,
       };
       await onSubmit(input);
     }
@@ -140,6 +162,14 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
             label="Traffic reset strategy"
             data={STRATEGY_OPTIONS}
             {...form.getInputProps('trafficLimitStrategy')}
+          />
+
+          <MultiSelect
+            label="Enabled protocols"
+            description="Which protocols this user's subscription will include"
+            data={PROTOCOL_OPTIONS}
+            withCheckIcon
+            {...form.getInputProps('enabledProtocols')}
           />
 
           {!isEdit && (
