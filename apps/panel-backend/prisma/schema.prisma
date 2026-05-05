@@ -50,8 +50,14 @@ model KeygenCa {
 
 model Node {
   id                    String    @id @default(uuid()) @db.Uuid
-  name                  String    @unique @db.VarChar(64)
-  address               String    @unique @db.VarChar(255)
+  // `name` and `address` are unique only among ACTIVE rows — see the
+  // partial unique indexes `nodes_name_active_key` / `nodes_address_active_key`
+  // applied via raw migration. Without that, soft-deleted rows would block
+  // re-using the same name/address. App-level checks in nodes.service.ts
+  // mirror the partial index semantics; createNode also catches P2002 from
+  // the DB layer as a defense-in-depth.
+  name                  String    @db.VarChar(64)
+  address               String    @db.VarChar(255)
   publicKey             Bytes?    @map("public_key")
   countryCode           String?   @map("country_code") @db.Char(2)
   status                String    @default("unknown") @db.VarChar(16)

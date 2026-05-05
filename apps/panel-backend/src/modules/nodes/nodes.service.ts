@@ -36,18 +36,38 @@ function buildSans(address: string): { type: 'dns' | 'ip'; value: string }[] {
 // ───── Service methods ─────
 
 export async function createNode(input: CreateNodeInput): Promise<CreateNodeResponseDto> {
+  // App-level checks against active (non-soft-deleted) rows.
   const byName = await repo.findActiveByName(input.name);
   if (byName) throw new NodeAlreadyExistsError('name', input.name);
 
   const byAddress = await repo.findActiveByAddress(input.address);
   if (byAddress) throw new NodeAlreadyExistsError('address', input.address);
 
-  const node = await repo.create({
-    name: input.name,
-    address: input.address,
-    countryCode: input.countryCode ?? null,
-    consumptionMultiplier: BigInt(input.consumptionMultiplier),
-  });
+  let node;
+  try {
+    node = await repo.create({
+      name: input.name,
+      address: input.address,
+      countryCode: input.countryCode ?? null,
+      consumptionMultiplier: BigInt(input.consumptionMultiplier),
+    });
+  } catch (err) {
+    // Catch DB-level UNIQUE violation. Soft-deleted rows still hold the
+    // unique value at the DB level — the app-level checks above only see
+    // active rows, so a soft-deleted node with the same name/address
+    // surfaces here as P2002. Slice 24 will replace these with partial
+    // unique indexes (`WHERE deleted_at IS NULL`); until then we map the
+    // raw error to a friendly 409.
+    if (isUniqueViolation(err)) {
+      const target = ((err as { meta?: { target?: string[] | string } }).meta?.target ?? '') as
+        | string
+        | string[];
+      const flat = Array.isArray(target) ? target.join(',') : target;
+      const field: 'name' | 'address' = flat.includes('address') ? 'address' : 'name';
+      throw new NodeAlreadyExistsError(field, field === 'address' ? input.address : input.name);
+    }
+    throw err;
+  }
 
   const cert = await issueNodeCert({
     commonName: input.name,
@@ -56,6 +76,15 @@ export async function createNode(input: CreateNodeInput): Promise<CreateNodeResp
   const payload = encodeNodePayload(cert);
 
   return mapNodeWithPayload(node, payload);
+}
+
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'code' in err &&
+    (err as { code?: string }).code === 'P2002'
+  );
 }
 
 export async function listNodes(query: ListNodesQuery): Promise<{
