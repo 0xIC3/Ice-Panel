@@ -72,6 +72,8 @@ export async function createUser(input: CreateUserInput): Promise<PublicUserDto>
     telegramId:      toBigIntOrNull(input.telegramId),
     email:           input.email ?? null,
 
+    enabledProtocols: input.enabledProtocols,
+
     traffic: { create: {} },
     groupMembers: {
       create: input.groupIds.map((groupId) => ({ groupId })),
@@ -163,6 +165,10 @@ export async function updateUser(
       create: input.groupIds.map((groupId) => ({ groupId })),
     };
     changedFields.push('groupIds');
+  }
+  if (input.enabledProtocols !== undefined) {
+    data.enabledProtocols = input.enabledProtocols;
+    changedFields.push('enabledProtocols');
   }
 
   const updated = await repo.updateById(id, data);

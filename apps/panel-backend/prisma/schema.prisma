@@ -142,6 +142,11 @@ model User {
   naivePassword       String @map("naive_password") @db.VarChar(64)
   xrayUuid            String @map("xray_uuid") @db.Uuid
 
+  // Per-user enabled protocols (subset of {hysteria, xray, amneziawg, naive}).
+  // Subscription generator filters endpoints by this; default keeps existing
+  // users on hysteria-only and admins explicitly opt in to others.
+  enabledProtocols Json @default("[\"hysteria\"]") @map("enabled_protocols")
+
   // Limits
   hwidDeviceLimit Int? @map("hwid_device_limit")
 

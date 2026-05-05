@@ -6,6 +6,9 @@ export const TrafficLimitStrategy = z.enum(['no_reset', 'day', 'week', 'month', 
 
 export const UserStatus = z.enum(['active', 'disabled', 'expired', 'limited']);
 
+export const ProtocolName = z.enum(['hysteria', 'xray', 'amneziawg', 'naive']);
+export type ProtocolNameT = z.infer<typeof ProtocolName>;
+
 const UsernameSchema = z
   .string()
   .min(3, 'Username must be at least 3 characters')
@@ -28,6 +31,7 @@ export const CreateUserSchema = z.object({
   ]).nullish(),
   email: z.email().max(255).nullish(),
   groupIds: z.array(z.uuid()).default([]),
+  enabledProtocols: z.array(ProtocolName).min(1).default(['hysteria']),
 });
 export type CreateUserInput = z.infer<typeof CreateUserSchema>;
 
@@ -47,6 +51,7 @@ export const UpdateUserSchema = z.object({
   ]).nullish(),
   email: z.email().max(255).nullish(),
   groupIds: z.array(z.uuid()).optional(),
+  enabledProtocols: z.array(ProtocolName).min(1).optional(),
 });
 export type UpdateUserInput = z.infer<typeof UpdateUserSchema>;
 

@@ -33,6 +33,9 @@ export interface PublicUserDto {
   telegramId: string | null;        // BigInt → string
   email: string | null;
 
+  // Per-user enabled protocols (subset of {hysteria,xray,amneziawg,naive})
+  enabledProtocols: string[];
+
   // Lifecycle
   createdAt: string;
   updatedAt: string;
@@ -80,7 +83,19 @@ export function mapUserToPublic(
     telegramId: user.telegramId !== null ? user.telegramId.toString() : null,
     email: user.email,
 
+    enabledProtocols: parseEnabledProtocols(user.enabledProtocols),
+
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt.toISOString(),
   };
+}
+
+/**
+ * Prisma `Json` field returns `unknown` — narrow to a string[] of valid
+ * protocol names. Falls back to ['hysteria'] if the stored shape is
+ * unexpected (defensive — should not happen with our schema validation).
+ */
+function parseEnabledProtocols(value: unknown): string[] {
+  if (!Array.isArray(value)) return ['hysteria'];
+  return value.filter((v): v is string => typeof v === 'string');
 }
