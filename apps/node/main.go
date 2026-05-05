@@ -6,11 +6,13 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core/hysteria"
+	"github.com/0xIC3/Ice-Panel/apps/node/internal/core/xray"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/payload"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/server"
 )
@@ -19,6 +21,10 @@ const (
 	defaultPort                = "8443"
 	defaultHost                = "0.0.0.0"
 	defaultAuthCallbackPort    = 9000
+	defaultXrayPort            = 443
+	defaultXrayConfigPath      = "/etc/xray/config.json"
+	defaultXrayRealityDest     = "www.cloudflare.com:443"
+	defaultXrayRealitySNI      = "www.cloudflare.com"
 	adapterStopShutdownTimeout = 10 * time.Second
 )
 
@@ -73,13 +79,59 @@ func main() {
 }
 
 func buildAdapters(logger *slog.Logger) []core.CoreAdapter {
-	hys := hysteria.New(hysteria.Config{
-		AuthCallbackHost: getenv("HYSTERIA_AUTH_HOST", "127.0.0.1"),
-		AuthCallbackPort: getenvInt("HYSTERIA_AUTH_PORT", defaultAuthCallbackPort),
-		BinaryPath:       os.Getenv("HYSTERIA_BINARY"),
-		ConfigPath:       os.Getenv("HYSTERIA_CONFIG"),
-	}, logger)
-	return []core.CoreAdapter{hys}
+	adapters := []core.CoreAdapter{
+		hysteria.New(hysteria.Config{
+			AuthCallbackHost: getenv("HYSTERIA_AUTH_HOST", "127.0.0.1"),
+			AuthCallbackPort: getenvInt("HYSTERIA_AUTH_PORT", defaultAuthCallbackPort),
+			BinaryPath:       os.Getenv("HYSTERIA_BINARY"),
+			ConfigPath:       os.Getenv("HYSTERIA_CONFIG"),
+		}, logger),
+	}
+
+	// Xray adapter is opt-in: registered only when XRAY_REALITY_PRIVATE_KEY
+	// is set. Without REALITY private key the inbound config is invalid, so
+	// the adapter would fail to Start anyway — better to skip cleanly.
+	if cfg, ok := buildXrayConfig(); ok {
+		adapters = append(adapters, xray.New(cfg, logger))
+		logger.Info("xray adapter enabled")
+	}
+
+	return adapters
+}
+
+func buildXrayConfig() (xray.Config, bool) {
+	privateKey := os.Getenv("XRAY_REALITY_PRIVATE_KEY")
+	if privateKey == "" {
+		return xray.Config{}, false
+	}
+	shortIDs := splitCSV(os.Getenv("XRAY_REALITY_SHORT_IDS"))
+	serverNames := splitCSV(getenv("XRAY_REALITY_SERVER_NAMES", defaultXrayRealitySNI))
+
+	return xray.Config{
+		BinaryPath: os.Getenv("XRAY_BINARY"),
+		ConfigPath: getenv("XRAY_CONFIG", defaultXrayConfigPath),
+		Inbound: xray.InboundConfig{
+			ListenPort:         getenvInt("XRAY_PORT", defaultXrayPort),
+			RealityDest:        getenv("XRAY_REALITY_DEST", defaultXrayRealityDest),
+			RealityServerNames: serverNames,
+			RealityPrivateKey:  privateKey,
+			RealityShortIDs:    shortIDs,
+		},
+	}, true
+}
+
+func splitCSV(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if t := strings.TrimSpace(p); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 func stopAdapters(adapters []core.CoreAdapter, logger *slog.Logger) {
