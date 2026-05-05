@@ -15,17 +15,13 @@ package hysteria
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
-	"os/exec"
 	"sync"
-	"syscall"
-	"time"
 
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core"
+	"github.com/0xIC3/Ice-Panel/apps/node/internal/core/subprocess"
 )
 
 const Name = "hysteria"
@@ -57,7 +53,7 @@ type Adapter struct {
 	users map[string]userEntry // key: HysteriaPassword
 
 	callbackSrv *http.Server
-	cmd         *exec.Cmd // hysteria subprocess; nil before Start / when BinaryPath is empty
+	proc        *subprocess.Subprocess // hysteria subprocess; nil when BinaryPath is empty
 }
 
 type userEntry struct {
@@ -83,7 +79,7 @@ func New(cfg Config, logger *slog.Logger) *Adapter {
 func (a *Adapter) Name() string { return Name }
 
 // Start brings up the auth-callback server, then optionally spawns the
-// hysteria subprocess. Subprocess lifecycle bound to ctx via CommandContext.
+// hysteria subprocess via the shared subprocess package.
 func (a *Adapter) Start(ctx context.Context) error {
 	if err := a.startAuthCallback(); err != nil {
 		return fmt.Errorf("start auth callback: %w", err)
@@ -94,45 +90,37 @@ func (a *Adapter) Start(ctx context.Context) error {
 		return nil
 	}
 
-	cmd := exec.CommandContext(ctx, a.cfg.BinaryPath, "server", "-c", a.cfg.ConfigPath)
-	cmd.Stdout = newLogWriter(a.logger, slog.LevelInfo, "hysteria")
-	cmd.Stderr = newLogWriter(a.logger, slog.LevelError, "hysteria")
-	if err := cmd.Start(); err != nil {
+	proc := subprocess.New(subprocess.Config{
+		Name:   Name,
+		Binary: a.cfg.BinaryPath,
+		Args:   []string{"server", "-c", a.cfg.ConfigPath},
+		Logger: a.logger,
+	})
+	if err := proc.Start(ctx); err != nil {
 		// Best-effort: tear down the auth callback we just started.
 		_ = a.stopAuthCallback(context.Background())
-		return fmt.Errorf("spawn hysteria: %w", err)
+		return err
 	}
-	a.cmd = cmd
-	a.logger.Info("hysteria subprocess started", "pid", cmd.Process.Pid)
+	a.mu.Lock()
+	a.proc = proc
+	a.mu.Unlock()
 	return nil
 }
 
 // Stop gracefully shuts down the subprocess (if any) and then the callback
 // server, with a 5s deadline before SIGKILL.
 func (a *Adapter) Stop(ctx context.Context) error {
+	a.mu.Lock()
+	proc := a.proc
+	a.proc = nil
+	a.mu.Unlock()
+
 	var firstErr error
-
-	if a.cmd != nil && a.cmd.Process != nil {
-		if err := a.cmd.Process.Signal(syscall.SIGTERM); err != nil {
-			a.logger.Warn("sigterm hysteria failed", "err", err)
+	if proc != nil {
+		if err := proc.Stop(ctx); err != nil {
+			firstErr = err
 		}
-
-		done := make(chan error, 1)
-		go func() { done <- a.cmd.Wait() }()
-
-		select {
-		case <-done:
-			// graceful exit
-		case <-time.After(5 * time.Second):
-			_ = a.cmd.Process.Kill()
-			firstErr = errors.New("hysteria did not stop in time, killed")
-		case <-ctx.Done():
-			_ = a.cmd.Process.Kill()
-			firstErr = ctx.Err()
-		}
-		a.cmd = nil
 	}
-
 	if err := a.stopAuthCallback(ctx); err != nil && firstErr == nil {
 		firstErr = err
 	}
@@ -178,7 +166,7 @@ func (a *Adapter) GetStats() (*core.Stats, error) {
 // Healthy reports whether the adapter is ready to serve traffic.
 // In callback-only mode (no BinaryPath), only the auth-callback server
 // must be up. With BinaryPath set, the hysteria subprocess must also
-// be running (not nil and not exited).
+// be running.
 func (a *Adapter) Healthy() bool {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
@@ -186,11 +174,7 @@ func (a *Adapter) Healthy() bool {
 		return false
 	}
 	if a.cfg.BinaryPath != "" {
-		if a.cmd == nil || a.cmd.Process == nil {
-			return false
-		}
-		// cmd.ProcessState is set after the process has exited.
-		if a.cmd.ProcessState != nil {
+		if a.proc == nil || !a.proc.Running() {
 			return false
 		}
 	}
@@ -207,42 +191,4 @@ func (a *Adapter) LookupByPassword(password string) (userID string, ok bool) {
 		return "", false
 	}
 	return entry.UserID, true
-}
-
-// ───── log writer adapter ─────
-
-// newLogWriter returns an io.Writer that splits on newlines and forwards each
-// line to slog at the given level. Used to capture hysteria's stdout/stderr.
-func newLogWriter(logger *slog.Logger, level slog.Level, source string) io.Writer {
-	return &logWriter{logger: logger, level: level, source: source}
-}
-
-type logWriter struct {
-	logger *slog.Logger
-	level  slog.Level
-	source string
-	buf    []byte
-}
-
-func (w *logWriter) Write(p []byte) (int, error) {
-	w.buf = append(w.buf, p...)
-	for {
-		idx := indexNewline(w.buf)
-		if idx < 0 {
-			break
-		}
-		line := string(w.buf[:idx])
-		w.buf = w.buf[idx+1:]
-		w.logger.Log(context.Background(), w.level, line, "source", w.source)
-	}
-	return len(p), nil
-}
-
-func indexNewline(b []byte) int {
-	for i, c := range b {
-		if c == '\n' {
-			return i
-		}
-	}
-	return -1
 }
