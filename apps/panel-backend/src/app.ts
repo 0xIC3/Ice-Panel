@@ -55,6 +55,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(fastifyCors, {
     origin: config.CORS_ORIGIN.split(',').map((s) => s.trim()),
     credentials: true,
+    // Explicit methods — `@fastify/cors` defaults to GET/HEAD/POST only,
+    // which silently breaks DELETE/PUT mutations from the SPA (browser
+    // CORS preflight rejects them). Caught the first time admin tried to
+    // delete a user via the UI.
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
 
   await app.register(fastifyRateLimit, {
