@@ -146,3 +146,67 @@ export async function deleteUser(id: string): Promise<void> {
 export function subscriptionUrl(token: string): string {
   return `${API_BASE_URL}/sub/${token}`;
 }
+
+// ───── Nodes ─────
+
+export interface Node {
+  id: string;
+  name: string;
+  address: string;
+  countryCode: string | null;
+  status: string;
+  lastStatusChange: string | null;
+  lastStatusMessage: string | null;
+  consumptionMultiplier: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** The create response carries an extra `payload` field — a one-time secret. */
+export interface NodeWithPayload extends Node {
+  payload: string;
+}
+
+export interface NodesListResponse {
+  nodes: Node[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface CreateNodeInput {
+  name: string;
+  address: string;
+  countryCode?: string | null;
+  consumptionMultiplier?: number;
+}
+
+export interface UpdateNodeInput {
+  name?: string;
+  address?: string;
+  countryCode?: string | null;
+  consumptionMultiplier?: number;
+}
+
+export async function listNodes(params?: {
+  page?: number;
+  limit?: number;
+  status?: string;
+}): Promise<NodesListResponse> {
+  const { data } = await api.get<NodesListResponse>('/api/nodes', { params });
+  return data;
+}
+
+export async function createNode(input: CreateNodeInput): Promise<NodeWithPayload> {
+  const { data } = await api.post<NodeWithPayload>('/api/nodes', input);
+  return data;
+}
+
+export async function updateNode(id: string, input: UpdateNodeInput): Promise<Node> {
+  const { data } = await api.put<Node>(`/api/nodes/${id}`, input);
+  return data;
+}
+
+export async function deleteNode(id: string): Promise<void> {
+  await api.delete(`/api/nodes/${id}`);
+}
