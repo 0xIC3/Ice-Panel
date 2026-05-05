@@ -66,9 +66,20 @@ case "${ID:-}" in
 esac
 log "Detected $PRETTY_NAME, protocol=$PROTOCOL"
 
-# ───── 2. Prereqs ─────
+# ───── 2a. OS upgrade ─────
+# Pull pending security + package updates before laying down node-agent.
+# Skip with SKIP_OS_UPGRADE=1 on a freshly-built image.
+if [[ "${SKIP_OS_UPGRADE:-0}" != "1" ]]; then
+  log "Upgrading OS packages (apt-get update + dist-upgrade)"
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -y
+  apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" \
+          dist-upgrade -y
+  apt-get autoremove -y
+fi
+
+# ───── 2b. Prereqs ─────
 log "Installing apt prereqs"
-apt-get update -y
 apt-get install -y git curl ca-certificates ufw
 
 # ───── 3. Go ─────
@@ -198,16 +209,34 @@ else
   log "$ENV_FILE exists — keeping current payload (pass --payload to overwrite)"
 fi
 
-# ───── 8. Firewall ─────
-log "Opening firewall ports (ufw): SSH, panel-mTLS=$NODE_PORT/tcp, protocol-specific"
-ufw allow 22/tcp >/dev/null 2>&1 || true
-ufw allow "${NODE_PORT}/tcp" >/dev/null 2>&1 || true
-case "$PROTOCOL" in
-  hysteria)  ufw allow 443/udp  >/dev/null 2>&1 || true ;;
-  xray)      ufw allow 443/tcp  >/dev/null 2>&1 || true ;;
-  amneziawg) ufw allow 51820/udp >/dev/null 2>&1 || true ;;
-  naive)     ufw allow 443/tcp 80/tcp >/dev/null 2>&1 || true ;;
-esac
+# ───── 8. Firewall — allow exactly what's needed, deny the rest ─────
+# Allow SSH FIRST so enabling ufw can't lock us out, then per-protocol ports,
+# then flip defaults to deny + enable. Skip with SKIP_FIREWALL=1.
+if [[ "${SKIP_FIREWALL:-0}" != "1" ]]; then
+  log "Configuring firewall (ufw): SSH + panel-mTLS:$NODE_PORT + protocol-specific"
+  ufw allow 22/tcp                       >/dev/null 2>&1 || true
+  ufw allow "${NODE_PORT}/tcp"           >/dev/null 2>&1 || true
+  case "$PROTOCOL" in
+    hysteria)
+      ufw allow 443/udp                  >/dev/null 2>&1 || true
+      ufw allow 80/tcp                   >/dev/null 2>&1 || true  # ACME HTTP-01 (one-time)
+      ;;
+    xray)
+      ufw allow 443/tcp                  >/dev/null 2>&1 || true
+      ;;
+    amneziawg)
+      ufw allow 51820/udp                >/dev/null 2>&1 || true
+      ;;
+    naive)
+      ufw allow 443/tcp                  >/dev/null 2>&1 || true
+      ufw allow 80/tcp                   >/dev/null 2>&1 || true  # Caddy ACME
+      ;;
+  esac
+  ufw default deny incoming  >/dev/null
+  ufw default allow outgoing >/dev/null
+  ufw --force enable         >/dev/null
+  log "ufw status: $(ufw status | head -1)"
+fi
 
 # ───── 9. systemd unit ─────
 UNIT=/etc/systemd/system/ice-panel-node.service

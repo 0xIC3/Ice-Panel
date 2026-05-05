@@ -48,7 +48,39 @@ case "${ID:-}" in
 esac
 log "Detected $PRETTY_NAME"
 
-# ───── 2. Docker ─────
+# ───── 2a. OS upgrade (idempotent) ─────
+# Apply pending security + package updates before installing anything heavy.
+# Skip with SKIP_OS_UPGRADE=1 if you've just rebuilt the image.
+if [[ "${SKIP_OS_UPGRADE:-0}" != "1" ]]; then
+  log "Upgrading OS packages (apt-get update + dist-upgrade)"
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -y
+  apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" \
+          dist-upgrade -y
+  apt-get autoremove -y
+fi
+
+# ───── 2b. Firewall — open the bare minimum, then enable ─────
+# Order matters: allow SSH FIRST so we don't lock ourselves out, only then
+# flip the defaults to deny + enable.
+if [[ "${SKIP_FIREWALL:-0}" != "1" ]]; then
+  if ! command -v ufw >/dev/null; then
+    apt-get install -y ufw
+  fi
+  log "Configuring firewall (ufw): allow SSH + ${FRONTEND_PORT}/tcp, deny everything else inbound"
+  ufw allow 22/tcp                       >/dev/null 2>&1 || true
+  ufw allow "${FRONTEND_PORT}/tcp"       >/dev/null 2>&1 || true
+  # If admin will front with Caddy/Traefik on this same VPS, keep 80+443 open
+  # for HTTP-01 / TLS-ALPN-01 ACME challenges:
+  ufw allow 80/tcp                       >/dev/null 2>&1 || true
+  ufw allow 443/tcp                      >/dev/null 2>&1 || true
+  ufw default deny incoming  >/dev/null
+  ufw default allow outgoing >/dev/null
+  ufw --force enable         >/dev/null
+  log "ufw status: $(ufw status | head -1)"
+fi
+
+# ───── 2c. Docker ─────
 if ! command -v docker >/dev/null; then
   log "Installing Docker (official repo)"
   apt-get update -y
