@@ -3,6 +3,7 @@ import { prisma } from '../../src/prisma.js';
 // Listed in the order they need truncating. CASCADE handles FKs but explicit
 // listing is documentation. Anything that references another table comes first.
 const TABLES = [
+  'amneziawg_peers',
   'subscription_events',
   'subscription_request_history',
   'node_user_usage_history',

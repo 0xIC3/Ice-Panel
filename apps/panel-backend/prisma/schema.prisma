@@ -84,7 +84,8 @@ model Inbound {
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   node Node @relation(fields: [nodeId], references: [id], onDelete: Restrict)
-  groupInbounds GroupInbound[] 
+  groupInbounds GroupInbound[]
+  amneziawgPeers AmneziawgPeer[]
 
   @@unique([nodeId, port])
   @@index([nodeId])
@@ -164,9 +165,10 @@ model User {
   // Relations
   traffic      UserTraffic?
   groupMembers GroupMember[]
-  events               SubscriptionEvent[]         
+  events               SubscriptionEvent[]
   subscriptionRequests SubscriptionRequestHistory[]
   nodeUsageHistory     NodeUserUsageHistory[]
+  amneziawgPeers       AmneziawgPeer[]
 
   @@index([username])
   @@index([status])
@@ -232,6 +234,26 @@ model SubscriptionEvent {
   @@index([userId, createdAt(sort: Desc)])
   @@index([eventType])
   @@map("subscription_events")
+}
+
+// Per-user IP allocation for AmneziaWG inbounds. One row per (inboundId, userId);
+// allocator picks the first free IP from the inbound's subnet (default 10.0.0.0/24).
+// Persisted so the same user keeps a stable IP across restarts and so we can detect
+// IP exhaustion before mutating the awg config.
+model AmneziawgPeer {
+  id        String   @id @default(uuid()) @db.Uuid
+  inboundId String   @map("inbound_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  ip        String   @db.VarChar(45)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  inbound Inbound @relation(fields: [inboundId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([inboundId, ip])
+  @@unique([inboundId, userId])
+  @@index([userId])
+  @@map("amneziawg_peers")
 }
 
 model SubscriptionRequestHistory {
