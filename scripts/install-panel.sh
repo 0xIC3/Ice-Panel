@@ -82,17 +82,13 @@ fi
 
 # ───── 2c. Docker ─────
 if ! command -v docker >/dev/null; then
-  log "Installing Docker (official repo)"
-  apt-get update -y
-  apt-get install -y ca-certificates curl gnupg
-  install -m 0755 -d /etc/apt/keyrings
-  curl -fsSL https://download.docker.com/linux/${ID}/gpg \
-    | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-  chmod a+r /etc/apt/keyrings/docker.gpg
-  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/${ID} ${VERSION_CODENAME} stable" \
-    > /etc/apt/sources.list.d/docker.list
-  apt-get update -y
-  apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  log "Installing Docker (official get.docker.com installer)"
+  curl -fsSL https://get.docker.com | sh
+fi
+# Compose plugin is bundled with modern Docker, but the convenience-script
+# image used by some clouds may ship without it.
+if ! docker compose version >/dev/null 2>&1; then
+  apt-get install -y docker-compose-plugin
 fi
 log "Docker: $(docker --version)"
 log "Compose: $(docker compose version)"
@@ -115,9 +111,10 @@ ENV_FILE="$ICE_PANEL_DIR/.env.production"
 if [[ -f "$ENV_FILE" ]]; then
   log ".env.production already exists; keeping current secrets"
 else
-  log "Generating .env.production with fresh secrets"
-  PG_PASSWORD=$(head -c 24 /dev/urandom | base64 | tr -d '+/=' | head -c 32)
-  JWT_SECRET=$(head -c 48 /dev/urandom | base64 | tr -d '+/=' | head -c 64)
+  log "Generating .env.production with fresh secrets (openssl rand -hex)"
+  apt-get install -y openssl >/dev/null 2>&1 || true
+  PG_PASSWORD=$(openssl rand -hex 24)
+  JWT_SECRET=$(openssl rand -hex 32)
   PUBLIC_IP=$(curl -fsSL https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')
   CORS_ORIGIN_VAL=${CORS_ORIGIN:-http://${PUBLIC_IP}:${FRONTEND_PORT}}
   cat > "$ENV_FILE" <<EOF
@@ -177,12 +174,26 @@ echo "  Install dir: ${ICE_PANEL_DIR}"
 echo "  .env file:   ${ENV_FILE}  (chmod 600 — keep it secret)"
 echo
 echo "Next steps:"
-echo "  1. Open the SPA — you'll see the 'Create first admin' form."
-echo "  2. Front this with Caddy/Traefik for HTTPS before exposing publicly."
-echo "  3. Provision a node:  bash <(curl -fsSL .../install-node.sh)"
+echo "  1. Open the SPA in a browser — you'll see 'Create first admin'."
+echo "  2. Provision a node from the Nodes tab → install-node.sh on the proxy VPS."
+echo
+echo "⚠ Production deployments MUST front the panel with TLS before exposing"
+echo "   publicly. Plain HTTP on :${FRONTEND_PORT} is fine for testing only."
+echo
+echo "Quick TLS setup with Caddy (one machine, one Caddyfile):"
+echo "    apt-get install -y caddy"
+echo "    cat > /etc/caddy/Caddyfile <<EOF"
+echo "    panel.yourdomain.com {"
+echo "      reverse_proxy 127.0.0.1:${FRONTEND_PORT}"
+echo "    }"
+echo "    EOF"
+echo "    systemctl reload caddy"
+echo
+echo "Then re-run the installer with CORS_ORIGIN=https://panel.yourdomain.com"
+echo "so the backend whitelists the new origin."
 echo
 echo "Common ops:"
 echo "  cd ${ICE_PANEL_DIR}"
-echo "  docker compose -f docker-compose.prod.yml --env-file .env.production logs -f"
+echo "  docker compose -f docker-compose.prod.yml --env-file .env.production logs -f -t"
 echo "  docker compose -f docker-compose.prod.yml --env-file .env.production restart backend"
 echo "  git pull && docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build"
