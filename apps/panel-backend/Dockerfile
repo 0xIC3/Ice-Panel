@@ -9,7 +9,8 @@ ARG NODE_VERSION=22-alpine
 
 # ───── Build stage ─────
 FROM node:${NODE_VERSION} AS builder
-ENV CI=true
+ENV CI=true \
+    COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 RUN corepack enable
 WORKDIR /repo
 
@@ -38,8 +39,14 @@ RUN --mount=type=cache,id=pnpm,target=/root/.pnpm-store \
 
 # ───── Runtime stage ─────
 FROM node:${NODE_VERSION} AS runtime
-ENV NODE_ENV=production
+ENV NODE_ENV=production \
+    COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 RUN corepack enable
+# Pre-fetch pnpm so the migrate one-shot doesn't trigger an interactive
+# Corepack download prompt at runtime (was hanging `pnpm exec prisma migrate
+# deploy` until killed). The version comes from package.json's
+# `packageManager` field.
+RUN corepack prepare pnpm@10.33.2 --activate
 WORKDIR /app
 
 # Copy the trimmed workspace from the builder.
