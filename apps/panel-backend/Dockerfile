@@ -39,6 +39,7 @@ RUN --mount=type=cache,id=pnpm,target=/root/.pnpm-store \
 # ───── Runtime stage ─────
 FROM node:${NODE_VERSION} AS runtime
 ENV NODE_ENV=production
+RUN corepack enable
 WORKDIR /app
 
 # Copy the trimmed workspace from the builder.

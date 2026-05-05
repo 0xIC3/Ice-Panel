@@ -1,0 +1,107 @@
+# Production compose for the Ice-Panel control-plane (panel + DB + Redis).
+# Node-agents live on remote VPS hosts and are NOT part of this file —
+# provision them per `docs/deploy/hysteria-node.md`.
+#
+# Usage:
+#   cp .env.production.example .env.production
+#   # edit values (set JWT_SECRET, POSTGRES_PASSWORD, etc.)
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+#
+# First-time DB setup (and after any new migration):
+#   docker compose -f docker-compose.prod.yml --env-file .env.production \
+#     run --rm migrate
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: icepanel-prod-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: icepanel-prod-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_prod_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # One-shot service: applies any pending Prisma migrations and exits.
+  # Run explicitly via `docker compose run --rm migrate` before starting
+  # the backend for the first time and after every deploy.
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/panel-backend/Dockerfile
+    image: ice-panel-backend:latest
+    container_name: icepanel-prod-migrate
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["pnpm", "exec", "prisma", "migrate", "deploy"]
+    restart: "no"
+
+  backend:
+    build:
+      context: .
+      dockerfile: apps/panel-backend/Dockerfile
+    image: ice-panel-backend:latest
+    container_name: icepanel-prod-backend
+    environment:
+      NODE_ENV: production
+      APP_HOST: 0.0.0.0
+      APP_PORT: "3000"
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      HYSTERIA_PUBLIC_PORT: ${HYSTERIA_PUBLIC_PORT:-443}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose:
+      - "3000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/panel-frontend/Dockerfile
+      args:
+        # Empty → Vite issues same-origin requests, which the frontend's
+        # own nginx layer reverse-proxies to the backend service.
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+    image: ice-panel-frontend:latest
+    container_name: icepanel-prod-frontend
+    depends_on:
+      - backend
+    ports:
+      # Front the panel with your own reverse proxy (Traefik / Caddy / nginx)
+      # to terminate TLS and bind to :443. Default exposes only :8080.
+      - "${FRONTEND_PORT:-8080}:80"
+    restart: unless-stopped
+
+volumes:
+  postgres_prod_data:
+  redis_prod_data:
