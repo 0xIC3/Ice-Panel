@@ -6,6 +6,7 @@ const TABLES = [
   'amneziawg_peers',
   'subscription_events',
   'subscription_request_history',
+  'subscription_response_rules',
   'node_user_usage_history',
   'node_usage_history',
   'group_members',

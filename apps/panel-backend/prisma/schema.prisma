@@ -236,6 +236,30 @@ model SubscriptionEvent {
   @@map("subscription_events")
 }
 
+// Subscription Response Rules — User-Agent → format auto-selection.
+// Slice 22 ships this for /sub/:token: when the client doesn't pass
+// `?format=` we walk the rules in `priority ASC` order and serve the
+// first whose `uaPattern` regex matches `User-Agent`. Default catch-all
+// rule (highest priority value) maps unknown UAs to `plain`.
+model SubscriptionResponseRule {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique @db.VarChar(64)
+  // Regex applied against the full User-Agent header. Match is case-
+  // sensitive — patterns include their own (?i) when needed. Length is
+  // bounded by the route handler before regex execution to defang ReDoS.
+  uaPattern String   @map("ua_pattern")
+  // Must match the FormatEnum in subscription.routes.ts.
+  format    String   @db.VarChar(16)
+  // Lower priority = evaluated first. Drag-and-drop UI mutates this.
+  priority  Int      @default(100)
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([priority])
+  @@map("subscription_response_rules")
+}
+
 // Per-user IP allocation for AmneziaWG inbounds. One row per (inboundId, userId);
 // allocator picks the first free IP from the inbound's subnet (default 10.0.0.0/24).
 // Persisted so the same user keeps a stable IP across restarts and so we can detect
