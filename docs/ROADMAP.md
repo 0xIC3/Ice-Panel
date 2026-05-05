@@ -334,8 +334,8 @@ Mihomo / Singbox / XrayJSON шаблоны — Phase 2 (Срез 21). Subscripti
 |---|---|---|---|
 | 16 | Refactor `CoreAdapter` под уроки фазы 1 | ✅ done | `Healthy()` метод, общий `subprocess` пакет, panel-side `core-adapters/` структура |
 | 17 | `XrayAdapter` (VLESS+REALITY+Vision) | ✅ done | Config-restart pattern (gRPC AlterInbound оптимизация → Phase 3) |
-| 18 | **Frontend: выбор протокола при создании юзера** | ⏭️ next | UI с чекбоксами «какие протоколы доступны юзеру» |
-| 19 | **`AmneziaWGAdapter`** | `wg` CLI, генерация peer-конфигов, kernel-module setup, `wg syncconf` reload | **высоко** (нужен root, kernel-module, специфика WG) |
+| 18 | **Frontend: выбор протокола при создании юзера** | ✅ done | `users.enabledProtocols` JSON-колонка, subscription fan-out, Mantine MultiSelect + Badge-чипы |
+| 19 | **`AmneziaWGAdapter`** | ⏭️ next | `wg` CLI, генерация peer-конфигов, kernel-module setup, `wg syncconf` reload — **высоко** (root, kernel-module, специфика WG) |
 | 20 | **`NaiveProxyAdapter`** | Сборка из chromium-форка (или предкомпилированный бинарник), управление через CLI-аргументы | средне |
 | 21 | **Multi-format subscription generator** | Все форматы: Clash YAML, Singbox JSON, AmneziaWG `.conf`, Naive URL, Xray JSON | средне |
 | 22 | **Subscription Response Rules (SRR)** | Детект формата по User-Agent (паттерн Remnawave) | низко |
