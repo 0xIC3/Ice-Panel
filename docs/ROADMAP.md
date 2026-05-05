@@ -338,8 +338,8 @@ Mihomo / Singbox / XrayJSON шаблоны — Phase 2 (Срез 21). Subscripti
 | 19 | **`AmneziaWGAdapter`** | ✅ done | `amneziawg_peers` table + IP allocator, bootstrap script, config gen + obfuscation params, peer add/remove via `awg syncconf` with systemctl fallback, client wg-quick builder, mocked-CLI tests |
 | 20 | **`NaiveProxyAdapter`** | ✅ done | bootstrap (xcaddy+forwardproxy@naive), Caddyfile generator, `caddy reload` pipeline with timeout, panel-side URI builder, mocked-CLI tests |
 | 21 | **Multi-format subscription generator** | ✅ done | Clash YAML / Sing-box JSON / wg-quick conf / Xray JSON formatters + `?format=` query routing on `/sub/:token`; structured per-protocol endpoint shapes |
-| 22 | **Subscription Response Rules (SRR)** | ⏭️ next | Детект формата по User-Agent (паттерн Remnawave) — низко |
-| 23 | **UI: graphical protocol selector + per-protocol config** | Inbound editor с UI под каждый протокол | средне |
+| 22 | **Subscription Response Rules (SRR)** | ✅ done | DB table + 7 seed rules, UA matcher with `(?i)` inline-flag support, CRUD endpoints, `/api/srr/test` preview, frontend `/srr` page with rule table + UA tester |
+| 23 | **UI: graphical protocol selector + per-protocol config** | ⏭️ next | Inbound editor с UI под каждый протокол — closes Phase 2 (средне) |
 
 ### Подробности по срезам
 
