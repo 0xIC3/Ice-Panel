@@ -339,7 +339,14 @@ Mihomo / Singbox / XrayJSON шаблоны — Phase 2 (Срез 21). Subscripti
 | 20 | **`NaiveProxyAdapter`** | ✅ done | bootstrap (xcaddy+forwardproxy@naive), Caddyfile generator, `caddy reload` pipeline with timeout, panel-side URI builder, mocked-CLI tests |
 | 21 | **Multi-format subscription generator** | ✅ done | Clash YAML / Sing-box JSON / wg-quick conf / Xray JSON formatters + `?format=` query routing on `/sub/:token`; structured per-protocol endpoint shapes |
 | 22 | **Subscription Response Rules (SRR)** | ✅ done | DB table + 7 seed rules, UA matcher with `(?i)` inline-flag support, CRUD endpoints, `/api/srr/test` preview, frontend `/srr` page with rule table + UA tester |
-| 23 | **UI: graphical protocol selector + per-protocol config** | ⏭️ next | Inbound editor с UI под каждый протокол — closes Phase 2 (средне) |
+| 23 | **UI: graphical inbound editor** | ✅ done | inbounds CRUD with discriminated config schemas, subscription emission driven from inbounds (replaces env-driven Xray), per-protocol form Modal (Hysteria/Xray/AmneziaWG/Naive), Xray network selector (raw/xhttp/ws/grpc), x25519 keypair generator endpoint + Generate-button UX, CORS DELETE/PUT fix |
+
+### 🎉 Phase 2 closed — `Phase 3` next
+
+**Carried over from slice 23 (deferred to Phase 3 slices below):**
+- Group ↔ inbound assignment UI (`group_inbounds` schema exists since slice 3 but is dormant — subscription fan-out doesn't filter by user's groups). Lift to slice 26.
+- HTTPUpgrade + KCP transports for Xray. Lift to slice 24.
+- Trojan + Shadowsocks subprotocols. Lift to slice 24.
 
 ### Подробности по срезам
 
@@ -664,22 +671,26 @@ Mihomo / Singbox / XrayJSON шаблоны — Phase 2 (Срез 21). Subscripti
 
 **Финальный результат:** реальные пользователи могут пользоваться панелью с >1 нодой, есть auto-failover, метрики, бэкапы, Telegram-уведомления.
 
-### Срезы Phase 3 (11 + 1 опциональный)
+### Срезы Phase 3 (renumbered after Remnawave gap-analysis 2026-05-05)
 
 | # | Название | Что вводим | Сложность |
 |---|---|---|---|
-| 24 | **Multi-node management UI** | Регионы, capacity per node, sticky user-to-node assignment, health-status dashboard | средне |
-| 25 | **Server-side smart node selection** | GeoIP (MaxMind GeoLite2) + load-aware subscription generation. Панель отдаёт юзеру топ-3 лучших ноды per his geo + текущая нагрузка | средне |
-| 26 | **Subscription `url-test` groups** | Generate `url-test` (Mihomo/Singbox), `burstObservatory + balancer` (Xray) во всех форматах. Client-side auto-failover поверх server-side selection | низко |
-| 27 | **Cascade routing — first-class feature** | `inbound.config.cascade` поле + поддержка в HysteriaAdapter/XrayAdapter/NaiveProxyAdapter. **Без service-user хаков** как у Remnawave — inter-node secrets через keygen | **высоко** |
-| 28 | **Cross-protocol cascade** | Hysteria→Xray, Xray→Hysteria, любая комбинация через socks5/http outbound. Преимущество multi-core архитектуры | средне (после 27) |
-| 29 | **Telegram bot + Webhook notifications** | grammy для бота, generic webhook фреймворк. События: user.expired, user.limited, node.unreachable, traffic.threshold | средне |
-| 30 | **Prometheus metrics + Grafana dashboards** | Экспортим: per-user traffic, per-node bandwidth, queue stats, request latency. Готовые JSON-дашборды в репо | средне |
-| 31 | **Backup/restore + recovery** | CLI-tool `ice-panel-backup`: dump БД + Redis AOF + .env шифрованно. Restore one-shot. Cron автобэкап на S3-compatible (опционально) | низко |
-| 32 | **Security hardening** | npm audit в CI, advanced rate-limit (per-route customization), CSP refinement, input fuzzing tests, OWASP проверка | средне |
-| 33 | **CI/CD via GitHub Actions** | Auto build Docker images на push в main, auto-publish в ghcr.io, deploy-документация для VPS | низко |
-| 34 | **Bull-board + admin observability** | UI на `/admin/queues` для просмотра BullMQ jobs, dashboard со статистикой системы | низко |
-| 35 | **(опц.) AmneziaWG cascade via iptables** | Полноценный multi-hop через WG через `MASQUERADE` rules. Сложнее остальных — отдельный slice если будет спрос | **высоко** (deferred) |
+| 24 | **Xray defaults uplift + protocol/transport expansion** | XrayAdapter Go-side: `sniffing` for routing-by-protocol, `sockopt` (BBR/TFO/noDelay), `policy.levels.0.statsUserOnline/Uplink/Downlink` + `stats: {}` for **per-user stats** (currently zero counters!), `DNS-OUT` outbound + DNS-leak rule, BLOCK rules (`geoip:private`, port 25, `protocol: bittorrent` via sniffing). Plus: HTTPUpgrade + KCP transports, Trojan + Shadowsocks subprotocols (cipher selector). Carried from slice 23 deferral. | средне |
+| 25 | **Hosts abstraction (inspired by Remnawave split)** | New `inbound_hosts (id, inbound_id, host, port_override?, sni?, path?, host_header?, name)` table. One inbound → many client-facing hosts. Subscription emits one URI per host, not per inbound. Enables cascade (one inbound, multiple node-fronts), CDN-fronting (ws+CDN host vs direct host on same Xray inbound), per-region hostname overrides. Frontend: tab inside Inbound editor for hosts. | средне |
+| 26 | **Squad ACL — wire up dormant `group_inbounds`** | Schema exists from slice 3 but unused. `subscription.service.ts` filters inbounds by user's groups → `group_inbounds`. Frontend: groups CRUD page, drag-and-drop group↔inbound assignment, group multi-select on user form. Migration adds default "All" group with all-inbounds membership for existing users (zero-downtime). | низко |
+| 27 | **Multi-node management UI** | Регионы, capacity per node, sticky user-to-node assignment, health-status dashboard | средне |
+| 28 | **Server-side smart node selection** | GeoIP (MaxMind GeoLite2) + load-aware subscription generation. Панель отдаёт юзеру топ-3 лучших ноды per his geo + текущая нагрузка | средне |
+| 29 | **Subscription `url-test` groups** | Generate `url-test` (Mihomo/Singbox), `burstObservatory + balancer` (Xray) во всех форматах. Client-side auto-failover поверх server-side selection | низко |
+| 30 | **Cascade routing — first-class feature** | `inbound.config.cascade` поле + поддержка в HysteriaAdapter/XrayAdapter/NaiveProxyAdapter. **Без service-user хаков** как у Remnawave — inter-node secrets через keygen. Builds on Hosts (slice 25). | **высоко** |
+| 31 | **Cross-protocol cascade** | Hysteria→Xray, Xray→Hysteria, любая комбинация через socks5/http outbound. Преимущество multi-core архитектуры | средне (после 30) |
+| 32 | **Telegram bot + Webhook notifications** | grammy для бота, generic webhook фреймворк. События: user.expired, user.limited, node.unreachable, traffic.threshold | средне |
+| 33 | **Prometheus metrics + Grafana dashboards** | Экспортим: per-user traffic, per-node bandwidth, queue stats, request latency. Готовые JSON-дашборды в репо | средне |
+| 34 | **Backup/restore + recovery** | CLI-tool `ice-panel-backup`: dump БД + Redis AOF + .env шифрованно. Restore one-shot. Cron автобэкап на S3-compatible (опционально) | низко |
+| 35 | **Security hardening** | npm audit в CI, advanced rate-limit (per-route customization), CSP refinement, input fuzzing tests, OWASP проверка | средне |
+| 36 | **CI/CD via GitHub Actions** | Auto build Docker images на push в main, auto-publish в ghcr.io, deploy-документация для VPS | низко |
+| 37 | **Bull-board + admin observability** | UI на `/admin/queues` для просмотра BullMQ jobs, dashboard со статистикой системы | низко |
+| 38 | **(опц.) AmneziaWG cascade via iptables** | Полноценный multi-hop через WG через `MASQUERADE` rules. Сложнее остальных — отдельный slice если будет спрос | **высоко** (deferred) |
+| 39 | **(опц.) External squads — presentation overrides** | Per-user-bucket branding (custom `Profile-Title`, host-overrides for VIPs, sub-page theming). Inspired by Remnawave external squads. Solves real but narrow VIP-tier UX. | низко (deferred) |
 
 ### Подробности по ключевым срезам
 
