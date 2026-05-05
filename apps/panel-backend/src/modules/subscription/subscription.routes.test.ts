@@ -152,6 +152,66 @@ describe('GET /sub/:token (JSON format)', () => {
   });
 });
 
+describe('GET /sub/:token — SRR auto-format (slice 22)', () => {
+  it('selects format from a UA rule when no ?format= is given', async () => {
+    const user = await createUser('alice');
+    await createNode('eu-1', '10.0.0.1:8443');
+
+    await prisma.subscriptionResponseRule.create({
+      data: {
+        name: 'Hiddify',
+        uaPattern: 'Hiddify',
+        format: 'singbox',
+        priority: 10,
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/sub/${user.subscriptionToken}`,
+      headers: { 'user-agent': 'Hiddify/2.5.0' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('application/json');
+    const cfg = JSON.parse(res.body);
+    // singbox shape, not the simpler /sub JSON shape
+    expect(cfg.outbounds).toBeDefined();
+    expect(cfg.route).toBeDefined();
+  });
+
+  it('explicit ?format= still wins over a matching SRR rule', async () => {
+    const user = await createUser('alice');
+    await createNode('eu-1', '10.0.0.1:8443');
+    await prisma.subscriptionResponseRule.create({
+      data: { name: 'Hiddify', uaPattern: 'Hiddify', format: 'singbox', priority: 10 },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/sub/${user.subscriptionToken}?format=clash`,
+      headers: { 'user-agent': 'Hiddify/2.5.0' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('text/yaml');
+  });
+
+  it('falls back to plain when UA does not match any rule', async () => {
+    const user = await createUser('alice');
+    await createNode('eu-1', '10.0.0.1:8443');
+    await prisma.subscriptionResponseRule.create({
+      data: { name: 'Hiddify', uaPattern: 'Hiddify', format: 'singbox', priority: 10 },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/sub/${user.subscriptionToken}`,
+      headers: { 'user-agent': 'curl/8.0' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('text/plain');
+  });
+});
+
 describe('GET /sub/:token — multi-format (slice 21)', () => {
   it('returns Clash YAML when ?format=clash', async () => {
     const user = await createUser('alice');
