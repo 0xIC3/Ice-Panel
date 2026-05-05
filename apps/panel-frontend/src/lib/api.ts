@@ -281,6 +281,8 @@ export interface HysteriaInboundConfig {
   brutalDownMbps?: number;
 }
 
+export type XrayNetwork = 'raw' | 'xhttp' | 'ws' | 'grpc';
+
 export interface XrayInboundConfig {
   realityDest: string;
   realityServerNames: string[];
@@ -289,6 +291,10 @@ export interface XrayInboundConfig {
   realityPublicKey: string;
   flow?: string;
   fingerprint?: string;
+  network?: XrayNetwork;
+  path?: string;
+  host?: string;
+  serviceName?: string;
 }
 
 export interface AmneziawgObfuscation {

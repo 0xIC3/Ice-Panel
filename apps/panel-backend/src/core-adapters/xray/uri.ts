@@ -19,37 +19,55 @@
  * the inbounds table per-instance.
  */
 
+export type VlessNetwork = 'raw' | 'xhttp' | 'ws' | 'grpc';
+
 export interface VlessRealityUriOpts {
-  /** User's `xrayUuid` (matches the `id` field in the server's clients[] entry). */
   uuid: string;
-  /** Public hostname the client connects to (no port). */
   host: string;
-  /** Public TCP port the Xray inbound listens on. */
   port: number;
-  /** REALITY public key — paired with the server's privateKey. */
   publicKey: string;
-  /** One of the inbound's REALITY shortIds (typically a small hex string). */
   shortId: string;
-  /** Target serverName the client claims via SNI. */
   sni: string;
-  /** Vision flow control. Default: `xtls-rprx-vision`. */
   flow?: string;
-  /** TLS fingerprint. Default: `chrome`. */
   fingerprint?: string;
-  /** URL fragment shown by the client (typically the node name). */
   name: string;
+  /** Stream transport. Default `raw` (canonical REALITY+Vision). */
+  network?: VlessNetwork;
+  /** Path for ws / xhttp. Ignored for raw / grpc. */
+  path?: string;
+  /** Host-header override for ws / xhttp. */
+  hostHeader?: string;
+  /** gRPC serviceName. Required when network=grpc. */
+  serviceName?: string;
 }
 
 export function buildVlessRealityUri(opts: VlessRealityUriOpts): string {
+  const network: VlessNetwork = opts.network ?? 'raw';
+  const flow = opts.flow ?? 'xtls-rprx-vision';
+
   const params = new URLSearchParams({
-    type: 'raw',
+    type: network,
     security: 'reality',
     encryption: 'none',
     pbk: opts.publicKey,
     sid: opts.shortId,
     sni: opts.sni,
     fp: opts.fingerprint ?? 'chrome',
-    flow: opts.flow ?? 'xtls-rprx-vision',
   });
+
+  // Vision is only meaningful with raw/xhttp. ws/grpc don't accept it — most
+  // clients ignore it, but a few (Xray itself when strict) reject the URI.
+  if (flow && (network === 'raw' || network === 'xhttp')) {
+    params.set('flow', flow);
+  }
+
+  if (network === 'ws' || network === 'xhttp') {
+    if (opts.path) params.set('path', opts.path);
+    if (opts.hostHeader) params.set('host', opts.hostHeader);
+  }
+  if (network === 'grpc' && opts.serviceName) {
+    params.set('serviceName', opts.serviceName);
+  }
+
   return `vless://${opts.uuid}@${opts.host}:${opts.port}?${params.toString()}#${encodeURIComponent(opts.name)}`;
 }

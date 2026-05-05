@@ -53,6 +53,10 @@ export interface XraySubscriptionEndpoint extends SubscriptionEndpointBase {
   sni: string;
   flow: string;
   fingerprint: string;
+  network: 'raw' | 'xhttp' | 'ws' | 'grpc';
+  path?: string;
+  hostHeader?: string;
+  serviceName?: string;
 }
 
 export interface AmneziawgSubscriptionEndpoint extends SubscriptionEndpointBase {

@@ -57,4 +57,35 @@ describe('buildVlessRealityUri', () => {
     const uri = buildVlessRealityUri({ ...baseOpts, sni: 'a&b' });
     expect(uri).toContain('sni=a%26b');
   });
+
+  it('emits network=ws + path + host header when network=ws', () => {
+    const uri = buildVlessRealityUri({
+      ...baseOpts,
+      network: 'ws',
+      path: '/api',
+      hostHeader: 'cdn.example.com',
+    });
+    expect(uri).toContain('type=ws');
+    expect(uri).toContain('path=%2Fapi');
+    expect(uri).toContain('host=cdn.example.com');
+    // Vision is incompatible with ws — must not be emitted.
+    expect(uri).not.toContain('flow=');
+  });
+
+  it('emits serviceName when network=grpc', () => {
+    const uri = buildVlessRealityUri({
+      ...baseOpts,
+      network: 'grpc',
+      serviceName: 'GunService',
+    });
+    expect(uri).toContain('type=grpc');
+    expect(uri).toContain('serviceName=GunService');
+    expect(uri).not.toContain('flow=');
+  });
+
+  it('keeps flow on network=xhttp (Vision-compatible)', () => {
+    const uri = buildVlessRealityUri({ ...baseOpts, network: 'xhttp' });
+    expect(uri).toContain('type=xhttp');
+    expect(uri).toContain('flow=xtls-rprx-vision');
+  });
 });

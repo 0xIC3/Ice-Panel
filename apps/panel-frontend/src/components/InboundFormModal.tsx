@@ -47,6 +47,10 @@ interface FormValues {
   xrayPublicKey: string;
   xrayFlow: string;
   xrayFingerprint: string;
+  xrayNetwork: 'raw' | 'xhttp' | 'ws' | 'grpc';
+  xrayPath: string;
+  xrayHostHeader: string;
+  xrayServiceName: string;
 
   // AmneziaWG
   awgSubnet: string;
@@ -94,6 +98,10 @@ function defaults(rule: Inbound | null, defaultNodeId: string): FormValues {
     xrayPublicKey: '',
     xrayFlow: 'xtls-rprx-vision',
     xrayFingerprint: 'chrome',
+    xrayNetwork: 'raw',
+    xrayPath: '',
+    xrayHostHeader: '',
+    xrayServiceName: '',
 
     awgSubnet: '10.0.0.0/24',
     awgServerPriv: '',
@@ -138,6 +146,10 @@ function defaults(rule: Inbound | null, defaultNodeId: string): FormValues {
         xrayPublicKey: (cfg.realityPublicKey as string) ?? '',
         xrayFlow: (cfg.flow as string) ?? base.xrayFlow,
         xrayFingerprint: (cfg.fingerprint as string) ?? base.xrayFingerprint,
+        xrayNetwork: ((cfg.network as 'raw' | 'xhttp' | 'ws' | 'grpc') ?? 'raw'),
+        xrayPath: (cfg.path as string) ?? '',
+        xrayHostHeader: (cfg.host as string) ?? '',
+        xrayServiceName: (cfg.serviceName as string) ?? '',
       };
     case 'amneziawg': {
       const obf = (cfg.obfuscation as Record<string, number> | undefined) ?? {};
@@ -232,6 +244,10 @@ export function InboundFormModal({ opened, onClose, inbound, nodes, onSubmit, lo
           realityPublicKey: values.xrayPublicKey,
           flow: values.xrayFlow,
           fingerprint: values.xrayFingerprint,
+          network: values.xrayNetwork,
+          ...(values.xrayPath ? { path: values.xrayPath } : {}),
+          ...(values.xrayHostHeader ? { host: values.xrayHostHeader } : {}),
+          ...(values.xrayServiceName ? { serviceName: values.xrayServiceName } : {}),
         };
         break;
       case 'amneziawg':
@@ -413,6 +429,43 @@ export function InboundFormModal({ opened, onClose, inbound, nodes, onSubmit, lo
                   {...form.getInputProps('xrayFingerprint')}
                 />
               </Group>
+              <Select
+                label="Network (transport)"
+                description="raw = canonical REALITY+Vision. ws/grpc/xhttp work but Vision only pairs with raw/xhttp."
+                data={[
+                  { value: 'raw', label: 'raw (TCP, was `tcp` pre-v24.9.30)' },
+                  { value: 'xhttp', label: 'xhttp (HTTP/2 chunked, was `splithttp`)' },
+                  { value: 'ws', label: 'ws (WebSocket)' },
+                  { value: 'grpc', label: 'gRPC' },
+                ]}
+                allowDeselect={false}
+                {...form.getInputProps('xrayNetwork')}
+              />
+              {(form.values.xrayNetwork === 'ws' || form.values.xrayNetwork === 'xhttp') && (
+                <Group grow>
+                  <TextInput
+                    label="Path"
+                    placeholder="/"
+                    description="HTTP path the client sends (default `/`)"
+                    {...form.getInputProps('xrayPath')}
+                  />
+                  <TextInput
+                    label="Host header"
+                    placeholder="cdn.example.com"
+                    description="Optional Host: header override (CDN fronting)"
+                    {...form.getInputProps('xrayHostHeader')}
+                  />
+                </Group>
+              )}
+              {form.values.xrayNetwork === 'grpc' && (
+                <TextInput
+                  label="gRPC serviceName"
+                  placeholder="GunService"
+                  description="Required for gRPC transport"
+                  required
+                  {...form.getInputProps('xrayServiceName')}
+                />
+              )}
             </Stack>
           )}
 

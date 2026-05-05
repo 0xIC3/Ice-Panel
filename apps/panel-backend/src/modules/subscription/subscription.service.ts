@@ -49,6 +49,10 @@ interface XrayInboundConfig {
   realityPublicKey: string;
   flow: string;
   fingerprint: string;
+  network: 'raw' | 'xhttp' | 'ws' | 'grpc';
+  path?: string;
+  host?: string;
+  serviceName?: string;
 }
 
 interface AmneziawgObfuscation {
@@ -153,6 +157,7 @@ export async function generateSubscription(
       const cfg = ib.config as unknown as XrayInboundConfig;
       const sni = cfg.realityServerNames[0] ?? '';
       const shortId = cfg.realityShortIds[0] ?? '';
+      const network = cfg.network ?? 'raw';
       endpoints.push({
         protocol: 'xray',
         nodeName,
@@ -164,6 +169,10 @@ export async function generateSubscription(
         sni,
         flow: cfg.flow,
         fingerprint: cfg.fingerprint,
+        network,
+        path: cfg.path,
+        hostHeader: cfg.host,
+        serviceName: cfg.serviceName,
         uri: buildVlessRealityUri({
           uuid: user.xrayUuid,
           host,
@@ -173,6 +182,10 @@ export async function generateSubscription(
           sni,
           flow: cfg.flow,
           fingerprint: cfg.fingerprint,
+          network,
+          path: cfg.path,
+          hostHeader: cfg.host,
+          serviceName: cfg.serviceName,
           name: nodeName,
         }),
       });

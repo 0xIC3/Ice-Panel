@@ -38,6 +38,19 @@ export const XrayConfigSchema = z.object({
   realityPublicKey: z.string().min(1).max(128),
   flow: z.string().max(64).default('xtls-rprx-vision'),
   fingerprint: z.string().max(32).default('chrome'),
+  /**
+   * Stream transport. v24.9.30 names: `raw` (was `tcp`), `xhttp` (was
+   * `splithttp`). REALITY+Vision canonical is `raw`. `ws`/`grpc`/`xhttp` work
+   * but Vision is incompatible with `ws`/`grpc` — the adapter doesn't enforce
+   * this at write time, the operator must align flow + network themselves.
+   */
+  network: z.enum(['raw', 'xhttp', 'ws', 'grpc']).default('raw'),
+  /** Path for `ws` and `xhttp`. Default `/`. Ignored for `raw`/`grpc`. */
+  path: z.string().max(255).optional(),
+  /** Host header override for `ws`/`xhttp`. Empty → use connect host. */
+  host: z.string().max(255).optional(),
+  /** gRPC serviceName. Required when network=grpc. */
+  serviceName: z.string().max(64).optional(),
 });
 
 const ObfuscationSchema = z.object({
