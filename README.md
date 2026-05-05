@@ -4,6 +4,55 @@ Self-hosted proxy management panel with **native multi-core architecture**.
 
 Where competitors (Marzban, Remnawave, x-ui) wrap everything through Xray-core, Ice-Panel runs the **real upstream binary** for each protocol — Hysteria2 server, Xray-core, AmneziaWG kernel module, NaiveProxy fork of Caddy — under a unified `CoreAdapter` abstraction.
 
+## 🚀 One-command install
+
+> Both scripts target Ubuntu 22.04+ / Debian 12+. Require root. Idempotent (safe to re-run).
+
+### Panel — install on the admin's VPS
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-panel.sh)
+```
+
+Builds the Docker images locally, generates random secrets, runs the
+Postgres + Redis + backend + frontend stack, and prints the URL where you
+bootstrap the first admin. Takes ~5–10 minutes on the first run.
+
+### Node — install on each proxy VPS
+
+In the panel UI: **Nodes → Create node** → copy the one-time base64 payload from the modal. Then on the VPS:
+
+```bash
+# Hysteria 2
+bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
+  --protocol hysteria \
+  --payload "<base64-blob-from-panel>"
+
+# Xray (VLESS + REALITY + Vision)
+bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
+  --protocol xray \
+  --payload "<base64-blob-from-panel>"
+
+# AmneziaWG (kernel module + amneziawg-tools via PPA)
+bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
+  --protocol amneziawg \
+  --payload "<base64-blob-from-panel>"
+
+# NaiveProxy (compiles Caddy with forwardproxy@naive — needs ≥2 GB RAM)
+bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
+  --protocol naive \
+  --payload "<base64-blob-from-panel>"
+```
+
+The node installer chains the protocol's official install (`get.hy2.sh`,
+XTLS install-script, AmneziaWG PPA, xcaddy build), drops a `systemd` unit,
+opens `ufw` ports, and waits until `/healthz` answers.
+
+Full deploy guide with troubleshooting / TLS-fronting / update workflow:
+**[docs/deploy/install.md](./docs/deploy/install.md)**.
+
+---
+
 ## Status
 
 🎉 **Phase 2 complete** (2026-05-05). MVP ready for self-hosted VPS testing. All four protocol adapters built and end-to-end through the admin UI; subscription generator supports six formats with UA-driven auto-selection; full inbound + SRR editor.
@@ -35,30 +84,6 @@ See [docs/ROADMAP.md](./docs/ROADMAP.md) for the slice-by-slice progress plan an
 - One-command installers for both panel and node — see [docs/deploy/install.md](./docs/deploy/install.md)
 - Production `docker-compose.prod.yml` with Postgres + Redis + backend + frontend
 - 193 backend integration tests, 60+ Go tests, all green
-
-## Quick install
-
-### Panel (admin's VPS)
-
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-panel.sh)
-```
-
-Generates random secrets, builds Docker images, runs migrations, starts the stack. Open `http://<vps-ip>:8080` and bootstrap the first admin.
-
-### Node (each proxy VPS)
-
-After creating a Node in the panel UI you get a one-time payload blob. Then on the VPS:
-
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
-  --protocol hysteria \
-  --payload "<base64-blob-from-panel>"
-```
-
-Replace `--protocol` with `xray` / `amneziawg` / `naive` as needed. The script chains the protocol-specific bootstrap (kernel module install for AmneziaWG, xcaddy build for Naive, official `get.hy2.sh` / XTLS install-script for Hysteria / Xray) and drops a systemd unit.
-
-Full deploy guide: [docs/deploy/install.md](./docs/deploy/install.md).
 
 ## Architecture
 
