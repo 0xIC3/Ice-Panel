@@ -152,6 +152,94 @@ describe('GET /sub/:token (JSON format)', () => {
   });
 });
 
+describe('GET /sub/:token — multi-format (slice 21)', () => {
+  it('returns Clash YAML when ?format=clash', async () => {
+    const user = await createUser('alice');
+    await createNode('eu-1', '10.0.0.1:8443');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/sub/${user.subscriptionToken}?format=clash`,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('text/yaml');
+    expect(res.body).toContain('proxies:');
+    expect(res.body).toContain('type: hysteria2');
+    expect(res.body).toContain('eu-1-hysteria');
+    expect(res.body).toContain('- MATCH,Auto');
+  });
+
+  it('returns Sing-box JSON when ?format=singbox', async () => {
+    const user = await createUser('alice');
+    await createNode('eu-1', '10.0.0.1:8443');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/sub/${user.subscriptionToken}?format=singbox`,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('application/json');
+    const cfg = JSON.parse(res.body);
+    expect(cfg.outbounds.find((o: { type: string }) => o.type === 'hysteria2')).toBeDefined();
+    expect(cfg.outbounds.find((o: { tag: string }) => o.tag === 'Auto')).toBeDefined();
+    expect(cfg.route.final).toBe('Auto');
+  });
+
+  it('returns Xray JSON when ?format=xrayjson', async () => {
+    const user = await createUser('alice', ['hysteria', 'xray']);
+    await createNode('eu-1', '10.0.0.1:8443');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/sub/${user.subscriptionToken}?format=xrayjson`,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('application/json');
+    const cfg = JSON.parse(res.body);
+    expect(cfg.inbounds[0].protocol).toBe('socks');
+    const v = cfg.outbounds.find((o: { protocol: string }) => o.protocol === 'vless');
+    expect(v.tag).toBe('eu-1-xray');
+    expect(v.streamSettings.network).toBe('raw');
+  });
+
+  it('returns empty wgconf body when user has no AmneziaWG endpoint', async () => {
+    const user = await createUser('alice');
+    await createNode('eu-1', '10.0.0.1:8443');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/sub/${user.subscriptionToken}?format=wgconf`,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('text/plain');
+    expect(res.body).toBe('');
+  });
+
+  it('rejects unknown ?format value with 400', async () => {
+    const user = await createUser('alice');
+    const res = await app.inject({
+      method: 'GET',
+      url: `/sub/${user.subscriptionToken}?format=bogus`,
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('explicit ?format=plain wins over Accept: application/json', async () => {
+    const user = await createUser('alice');
+    await createNode('eu-1', '10.0.0.1:8443');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/sub/${user.subscriptionToken}?format=plain`,
+      headers: { accept: 'application/json' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('text/plain');
+    // body is base64, not JSON
+    expect(() => JSON.parse(res.body)).toThrow();
+  });
+});
+
 describe('GET /sub/:token — error cases', () => {
   it('returns 404 for unknown token', async () => {
     const res = await app.inject({

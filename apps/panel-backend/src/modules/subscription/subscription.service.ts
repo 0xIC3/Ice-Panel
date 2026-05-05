@@ -33,7 +33,11 @@ export interface RequestContext {
 }
 
 export interface SubscriptionResult {
+  /** Raw endpoint list — feed into format-specific builders. */
+  endpoints: SubscriptionEndpoint[];
+  /** Base64 plain-list (universal client format). */
   textPlain: string;
+  /** Structured JSON for IcePath-VPN bot / Ice-Client. */
   json: SubscriptionJsonResponse;
 }
 
@@ -177,6 +181,7 @@ export async function generateSubscription(
   }
 
   return {
+    endpoints,
     textPlain: encodePlainList(endpoints.map((e) => e.uri)),
     json: buildSubscriptionJson(user, endpoints),
   };
