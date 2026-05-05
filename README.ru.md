@@ -20,36 +20,44 @@ bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts
 
 ### Нода — устанавливается на каждой proxy-VPS
 
-В админке: **Nodes → Create node** → скопируй одноразовый base64 payload из модального окна. Затем на VPS:
+В админке: **Nodes → Create node** → скопируй одноразовый base64 payload из модального окна. Затем на VPS — запусти установщик **без флагов**, он спросит интерактивно:
 
 ```bash
-# Hysteria 2
-bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
-  --protocol hysteria \
-  --payload "<base64-blob-from-panel>"
+bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh)
+```
 
-# Xray (VLESS + REALITY + Vision)
+Скрипт сам выведет меню:
+
+```
+Pick a protocol for this node:
+
+  1) Xray         VLESS+REALITY+Vision (TCP/443, transports raw/xhttp/ws/grpc)
+  2) Hysteria 2   UDP/443, QUIC, Brutal CC — лучший throughput на lossy-каналах
+  3) AmneziaWG    DPI-устойчивый WireGuard fork (нужен kernel module)
+  4) NaiveProxy   Caddy fork с klzgrad/forwardproxy@naive (≥2 GB RAM на сборку)
+
+Select [1-4]:
+```
+
+…потом спросит base64 payload, и доедет до конца сам.
+
+**Либо передать выбор флагами** (для автоматизации / повторных запусков):
+
+```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
   --protocol xray \
   --payload "<base64-blob-from-panel>"
-
-# AmneziaWG (kernel module + amneziawg-tools через PPA)
-bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
-  --protocol amneziawg \
-  --payload "<base64-blob-from-panel>"
-
-# NaiveProxy (компилирует Caddy с forwardproxy@naive — нужно ≥2 GB RAM)
-bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
-  --protocol naive \
-  --payload "<base64-blob-from-panel>"
 ```
 
-Скрипт ноды сам цепочкой запускает официальные установщики протоколов
-(`get.hy2.sh`, XTLS install-script, AmneziaWG PPA, xcaddy build), кладёт
-`systemd`-юнит, открывает порты в `ufw` и ждёт пока ответит `/healthz`.
+Допустимые значения `--protocol`: `xray`, `hysteria`, `amneziawg`, `naive`.
 
-Полный гайд по деплою (troubleshooting / TLS-фронтинг / обновление):
-**[docs/deploy/install.md](./docs/deploy/install.md)**.
+Скрипт цепочкой запускает официальные установщики
+(`get.hy2.sh`, XTLS install-script, AmneziaWG PPA + проверка kernel module,
+xcaddy build для Naive), кладёт `systemd`-юнит, открывает порты в `ufw` и
+ждёт пока ответит `/healthz`.
+
+Полный гайд по деплою (troubleshooting / TLS-фронтинг / обновление / почему
+single-protocol-per-node): **[docs/deploy/install.md](./docs/deploy/install.md)**.
 
 ---
 

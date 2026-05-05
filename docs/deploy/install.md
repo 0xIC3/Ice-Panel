@@ -78,7 +78,31 @@ copy the **base64 payload** from the modal (one-time, panel won't show it again)
 
 ### 2.2 Install on the VPS
 
-Pick the protocol you want this node to serve:
+The simplest path — **run with no flags**, the script will prompt interactively:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh)
+```
+
+Two questions:
+
+```
+Pick a protocol for this node:
+  1) Xray         VLESS+REALITY+Vision  (TCP/443, transports raw/xhttp/ws/grpc)
+  2) Hysteria 2   UDP/443, QUIC, Brutal CC
+  3) AmneziaWG    DPI-resistant WireGuard fork  (needs kernel module)
+  4) NaiveProxy   Caddy fork with klzgrad/forwardproxy@naive  (≥2 GB RAM)
+
+Select [1-4]: ▌
+```
+
+```
+Payload: ▌  ← paste the base64 blob from the panel modal here
+```
+
+#### Or pass flags directly
+
+For automation, re-runs, or skipping the menu:
 
 ```bash
 # Hysteria 2
@@ -86,15 +110,18 @@ bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts
   --protocol hysteria \
   --payload "<base64-blob-from-panel>"
 
-# Xray (VLESS+REALITY+Vision)
+# Xray
 bash <(curl -fsSL .../install-node.sh) --protocol xray --payload "..."
 
-# AmneziaWG (kernel module + amneziawg-tools via PPA)
+# AmneziaWG
 bash <(curl -fsSL .../install-node.sh) --protocol amneziawg --payload "..."
 
-# NaiveProxy (compiles xcaddy + forwardproxy@naive — needs ≥2 GB RAM)
+# NaiveProxy
 bash <(curl -fsSL .../install-node.sh) --protocol naive --payload "..."
 ```
+
+Either way the result is identical — the menu is just sugar for filling
+`--protocol` and `--payload` from a TTY.
 
 What it does in each case:
 

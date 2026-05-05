@@ -22,36 +22,44 @@ bootstrap the first admin. Takes ~5–10 minutes on the first run.
 
 ### Node — install on each proxy VPS
 
-In the panel UI: **Nodes → Create node** → copy the one-time base64 payload from the modal. Then on the VPS:
+In the panel UI: **Nodes → Create node** → copy the one-time base64 payload from the modal. Then on the VPS — run the installer **with no flags** for an interactive menu:
 
 ```bash
-# Hysteria 2
-bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
-  --protocol hysteria \
-  --payload "<base64-blob-from-panel>"
+bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh)
+```
 
-# Xray (VLESS + REALITY + Vision)
+The script will prompt:
+
+```
+Pick a protocol for this node:
+
+  1) Xray         VLESS+REALITY+Vision (TCP/443, transports raw/xhttp/ws/grpc)
+  2) Hysteria 2   UDP/443, QUIC, Brutal CC — best throughput on lossy links
+  3) AmneziaWG    DPI-resistant WireGuard fork (needs kernel module)
+  4) NaiveProxy   Caddy fork with klzgrad/forwardproxy@naive (≥2 GB RAM)
+
+Select [1-4]:
+```
+
+…then ask for the base64 payload, and proceed end-to-end.
+
+**Or pass the choice as flags** (useful for automation / re-runs):
+
+```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
   --protocol xray \
   --payload "<base64-blob-from-panel>"
-
-# AmneziaWG (kernel module + amneziawg-tools via PPA)
-bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
-  --protocol amneziawg \
-  --payload "<base64-blob-from-panel>"
-
-# NaiveProxy (compiles Caddy with forwardproxy@naive — needs ≥2 GB RAM)
-bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
-  --protocol naive \
-  --payload "<base64-blob-from-panel>"
 ```
 
-The node installer chains the protocol's official install (`get.hy2.sh`,
-XTLS install-script, AmneziaWG PPA, xcaddy build), drops a `systemd` unit,
-opens `ufw` ports, and waits until `/healthz` answers.
+Valid `--protocol` values: `xray`, `hysteria`, `amneziawg`, `naive`.
 
-Full deploy guide with troubleshooting / TLS-fronting / update workflow:
-**[docs/deploy/install.md](./docs/deploy/install.md)**.
+The installer chains the protocol's official bootstrap (`get.hy2.sh`,
+XTLS install-script, AmneziaWG PPA + kernel-module probe, xcaddy build for
+Naive), drops a `systemd` unit, opens `ufw` ports, and waits until `/healthz`
+answers.
+
+Full deploy guide (troubleshooting / TLS-fronting / update workflow / why
+single-protocol-per-node): **[docs/deploy/install.md](./docs/deploy/install.md)**.
 
 ---
 
