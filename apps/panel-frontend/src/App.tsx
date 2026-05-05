@@ -5,6 +5,7 @@ import { LoginPage } from './pages/LoginPage';
 import { UsersPage } from './pages/UsersPage';
 import { NodesPage } from './pages/NodesPage';
 import { SrrPage } from './pages/SrrPage';
+import { InboundsPage } from './pages/InboundsPage';
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
           <Route path="/" element={<Navigate to="/users" replace />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/nodes" element={<NodesPage />} />
+          <Route path="/inbounds" element={<InboundsPage />} />
           <Route path="/srr" element={<SrrPage />} />
         </Route>
       </Route>

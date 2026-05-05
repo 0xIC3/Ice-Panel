@@ -272,6 +272,105 @@ export async function deleteSrrRule(id: string): Promise<void> {
   await api.delete(`/api/srr/${id}`);
 }
 
+// ───── Inbounds ─────
+
+export interface HysteriaInboundConfig {
+  obfsPassword?: string;
+  masqueradeUrl?: string;
+  brutalUpMbps?: number;
+  brutalDownMbps?: number;
+}
+
+export interface XrayInboundConfig {
+  realityDest: string;
+  realityServerNames: string[];
+  realityShortIds: string[];
+  realityPrivateKey: string;
+  realityPublicKey: string;
+  flow?: string;
+  fingerprint?: string;
+}
+
+export interface AmneziawgObfuscation {
+  jc: number;
+  jmin: number;
+  jmax: number;
+  s1: number;
+  s2: number;
+  s3: number;
+  s4: number;
+  h1: number;
+  h2: number;
+  h3: number;
+  h4: number;
+}
+
+export interface AmneziawgInboundConfig {
+  subnet: string;
+  serverPrivateKey: string;
+  serverPublicKey: string;
+  obfuscation: AmneziawgObfuscation;
+}
+
+export interface NaiveInboundConfig {
+  hostname: string;
+  tlsEmail: string;
+  masqueradeRoot: string;
+}
+
+export type InboundConfig =
+  | HysteriaInboundConfig
+  | XrayInboundConfig
+  | AmneziawgInboundConfig
+  | NaiveInboundConfig;
+
+export interface Inbound {
+  id: string;
+  nodeId: string;
+  protocol: ProtocolName;
+  name: string;
+  port: number;
+  config: InboundConfig;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateInboundInput {
+  nodeId: string;
+  protocol: ProtocolName;
+  name: string;
+  port: number;
+  enabled?: boolean;
+  config: InboundConfig;
+}
+
+export interface UpdateInboundInput {
+  name?: string;
+  port?: number;
+  enabled?: boolean;
+  config?: InboundConfig;
+}
+
+export async function listInbounds(): Promise<{ inbounds: Inbound[] }> {
+  const { data } = await api.get<{ inbounds: Inbound[] }>('/api/inbounds');
+  return data;
+}
+
+export async function createInbound(input: CreateInboundInput): Promise<Inbound> {
+  const { data } = await api.post<Inbound>('/api/inbounds', input);
+  return data;
+}
+
+export async function updateInbound(id: string, input: UpdateInboundInput): Promise<Inbound> {
+  const { data } = await api.put<Inbound>(`/api/inbounds/${id}`, input);
+  return data;
+}
+
+export async function deleteInbound(id: string): Promise<void> {
+  await api.delete(`/api/inbounds/${id}`);
+}
+
 export async function testSrrRule(userAgent: string): Promise<TestSrrResponse> {
   const { data } = await api.post<TestSrrResponse>('/api/srr/test', { userAgent });
   return data;
