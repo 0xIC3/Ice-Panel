@@ -1,8 +1,13 @@
-# Deploying a Hysteria 2 Node
+# Deploying a Hysteria 2 Node (manual / Phase 1 era)
+
+> **For most cases use the one-command installer instead — see [install.md](./install.md).**
+> This runbook is the manual step-by-step that the installer encapsulates.
+> Useful if you want to understand exactly what gets installed, or if you're
+> debugging a failed install.
 
 Runbook for provisioning a single VPS as an Ice-Panel proxy node running
 Hysteria 2. Validated on Ubuntu 24.04 (AEZA, Hetzner) with a 1 vCPU / 1-4 GB
-RAM box. Phase 1 minimum.
+RAM box.
 
 ## What you need before starting
 

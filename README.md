@@ -1,103 +1,189 @@
 # Ice-Panel
 
-Self-hosted proxy management panel with **native multi-core support**.
+Self-hosted proxy management panel with **native multi-core architecture**.
+
+Where competitors (Marzban, Remnawave, x-ui) wrap everything through Xray-core, Ice-Panel runs the **real upstream binary** for each protocol — Hysteria2 server, Xray-core, AmneziaWG kernel module, NaiveProxy fork of Caddy — under a unified `CoreAdapter` abstraction.
 
 ## Status
 
-🚧 **Early development.** Phase 1 (MVP with Hysteria2) in progress — see [docs/ROADMAP.md](./docs/ROADMAP.md) for the full 15-slice plan and progress.
+🎉 **Phase 2 complete** (2026-05-05). MVP ready for self-hosted VPS testing. All four protocol adapters built and end-to-end through the admin UI; subscription generator supports six formats with UA-driven auto-selection; full inbound + SRR editor.
 
-### What's working now
+See [docs/ROADMAP.md](./docs/ROADMAP.md) for the slice-by-slice progress plan and Phase 3 priorities.
 
-- Fastify HTTP server with structured logging (Pino) and `/health` endpoint that pings PostgreSQL
-- Zod-validated environment configuration (fails fast on missing/invalid values)
-- PostgreSQL 16 + Prisma 7 with **14 tables** covering admins, users, nodes, inbounds, groups (squads), traffic, audit log, and history — full schema designed for multi-core from day one
-- REST CRUD on `/api/users` with Zod input validation, soft-delete, pagination, and search
-- Auto-generated credentials for **all four protocols** (Hysteria2 password, AmneziaWG X25519 keypair, NaiveProxy password, Xray UUID) at user creation
-- JWT authentication (bcrypt cost 12) with bootstrap-only `/register`, rate-limited `/login` (5/min), and `requireAuth` hook protecting `/api/users/*`
-- Layered architecture (routes → service → repository) with typed domain event bus
-- AGPL-3.0 license; private repo for now
+## What's working
 
-Not ready for production use.
+### Protocols
+| Protocol | What runs on the node | Native or Xray-emulated |
+|---|---|---|
+| Hysteria2 | Real `hysteria server` (apernet/hysteria) with auth-callback + Brutal CC | native |
+| Xray-core | Real `xray run` with VLESS + REALITY + Vision; transports: raw / xhttp / ws / gRPC | native |
+| AmneziaWG | Real kernel module `amneziawg` + `awg syncconf` hot-reload (no restart on user mutation) | native |
+| NaiveProxy | Real Caddy fork (`klzgrad/forwardproxy@naive` via xcaddy) | native |
 
-## What makes it different
+### Subscription generator
+- 6 wire formats: `plain` (base64 URI list), `json` (Ice-Panel structured), `clash` (Clash Meta YAML), `singbox` (Sing-box JSON), `wgconf` (wg-quick `.conf`), `xrayjson` (Xray client JSON)
+- `?format=` query param explicit choice; otherwise auto-selected by **Subscription Response Rules** (regex on `User-Agent`) — 7 default rules cover Hiddify / Clash / NekoBox / sing-box / v2rayN / AmneziaVPN / `.*` fallback
+- Stable per-user IP allocation for AmneziaWG (separate `amneziawg_peers` table)
 
-Most proxy panels (Marzban, Remnawave, x-ui) wrap everything through Xray-core. Ice-Panel uses **native protocol implementations** — running real upstream binaries for each protocol:
+### Admin UI
+- **Users** — CRUD, traffic limits + reset strategies (no_reset / day / week / month / rolling), per-user `enabledProtocols` MultiSelect, soft-delete
+- **Nodes** — CRUD with one-time mTLS payload modal at create
+- **Inbounds** — per-protocol form (Hysteria / Xray REALITY / AmneziaWG with TSPU/Mobile/Custom obfuscation presets / Naive). x25519 keypair generator button — one click, no SSH to VPS
+- **SRR** — UA-rule manager + "Test against UA" preview
 
-- **Hysteria2** — real Hysteria2 server with Brutal congestion control and salamander obfuscation
-- **AmneziaWG** — DPI-resistant WireGuard fork
-- **NaiveProxy** — HTTP/2 over Chromium network stack
-- **Xray-core** — for VLESS/Reality/VMess/Trojan (legacy support)
+### Operations
+- One-command installers for both panel and node — see [docs/deploy/install.md](./docs/deploy/install.md)
+- Production `docker-compose.prod.yml` with Postgres + Redis + backend + frontend
+- 193 backend integration tests, 60+ Go tests, all green
 
-The architectural bet is the `CoreAdapter` interface — adding a new core means implementing one interface, no other changes.
+## Quick install
+
+### Panel (admin's VPS)
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-panel.sh)
+```
+
+Generates random secrets, builds Docker images, runs migrations, starts the stack. Open `http://<vps-ip>:8080` and bootstrap the first admin.
+
+### Node (each proxy VPS)
+
+After creating a Node in the panel UI you get a one-time payload blob. Then on the VPS:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
+  --protocol hysteria \
+  --payload "<base64-blob-from-panel>"
+```
+
+Replace `--protocol` with `xray` / `amneziawg` / `naive` as needed. The script chains the protocol-specific bootstrap (kernel module install for AmneziaWG, xcaddy build for Naive, official `get.hy2.sh` / XTLS install-script for Hysteria / Xray) and drops a systemd unit.
+
+Full deploy guide: [docs/deploy/install.md](./docs/deploy/install.md).
 
 ## Architecture
 
-Monorepo (pnpm workspaces) with three services:
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Panel (admin's VPS)                                        │
+│                                                              │
+│   ┌──────────────┐   ┌──────────────┐   ┌──────────────┐    │
+│   │ panel-backend│   │  panel-      │   │  Postgres +  │    │
+│   │  (Fastify TS)│   │  frontend    │   │  Redis       │    │
+│   │              │   │  (React/Vite)│   │  (BullMQ)    │    │
+│   └──────┬───────┘   └──────────────┘   └──────────────┘    │
+└──────────┼──────────────────────────────────────────────────┘
+           │ REST over mTLS (panel issues per-node certs)
+           ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Node (proxy VPS) — one per protocol recommended            │
+│                                                              │
+│   ┌──────────────┐                                          │
+│   │ node-agent   │  spawn / signal /                        │
+│   │ (Go static)  │ ─ syncconf / reload  ──┐                 │
+│   └──────┬───────┘                        │                 │
+│          │ HTTP auth-callback             ▼                 │
+│          │ (Hysteria only)        ┌───────────────┐         │
+│          └───────────────────────►│ hysteria  /   │         │
+│                                   │ xray      /   │         │
+│                                   │ amneziawg /   │         │
+│                                   │ caddy-naive   │         │
+│                                   └───────────────┘         │
+│                                          │                   │
+│                                          ▼ proxy traffic    │
+│                                       Internet               │
+└─────────────────────────────────────────────────────────────┘
+```
 
-- **Panel backend** — API, admin database, business logic
-- **Node agent** — runs on each VPS, manages proxy core processes
-- **Frontend** — admin SPA
+The transport between panel and node is plain **REST over HTTPS with mutual TLS** — not gRPC. Panel acts as its own CA, issues per-node certificates encoded as a one-time base64 payload, the node-agent decodes it on first start.
 
-Communication: REST over HTTPS with mutual TLS between panel and nodes (no gRPC). Background jobs and scheduled tasks via Redis + BullMQ.
+### Repository layout
 
 ```
 apps/
-├── panel-backend/   API panel (TypeScript/Fastify)
-├── panel-frontend/  Admin UI (React/Vite/Mantine)
-├── node/            Node agent (Go, single static binary)
-└── subscription/    Subscription URL generator
+├── panel-backend/        Fastify API (TypeScript) — admin DB, business logic
+│   └── src/
+│       ├── modules/      one folder per domain (auth, users, nodes,
+│       │                  inbounds, subscription, srr, amneziawg, ...)
+│       └── core-adapters/  panel-side URI / config builders per protocol
+├── panel-frontend/       Admin SPA (React 19 + Mantine 8 + TanStack Query)
+└── node/                 Node-agent (Go 1.22+, single static binary)
+    └── internal/core/
+        ├── hysteria/     auth-callback + subprocess
+        ├── xray/         config-restart pattern; gRPC AlterInbound deferred
+        ├── amneziawg/    awg syncconf with systemctl restart fallback
+        └── naive/        Caddyfile gen + caddy reload
 
 packages/
-├── shared/          Shared TypeScript types & API contracts
-└── core-adapters/   One adapter per proxy core (Hysteria, AmneziaWG, Naive, Xray)
+└── shared/               Wire-format DTOs (TS source-of-truth; Go mirrors)
+
+docs/
+├── ROADMAP.md            Slice plan and tech-stack rationale
+├── deploy/
+│   ├── install.md        One-command install scripts (panel + node)
+│   └── hysteria-node.md  Hysteria-specific deploy runbook (slice 13 era)
+└── references/           Per-upstream protocol research notes
+
+scripts/
+├── install-panel.sh      Docker-based panel installer (one-liner)
+└── install-node.sh       systemd-based node installer (one-liner per protocol)
 ```
 
-## Tech Stack
+## Tech stack
 
 | Layer | Tools |
 |---|---|
-| Backend | TypeScript, Fastify, Prisma, PostgreSQL, Zod, Pino |
-| Background jobs | Redis, BullMQ, `node:events` event bus |
-| Auth | JWT (jose), bcrypt, @fastify/rate-limit |
-| Inter-service | REST over HTTPS with mutual TLS (`@peculiar/x509`) |
-| Frontend | React 19, Vite, Mantine 8, TanStack Query, Zustand |
-| Node agent | Go 1.22+, native `crypto/tls` |
-| Tests | Vitest |
-| Infra | Docker, Docker Compose |
+| Panel API | TypeScript, Fastify 5, Prisma 7, PostgreSQL 16, Zod, Pino |
+| Background jobs | Redis 7, BullMQ, `node:events` event bus |
+| Auth | JWT (jose), bcrypt, `@fastify/rate-limit` |
+| Inter-service | REST + mutual TLS via `@peculiar/x509`, undici client |
+| Frontend | React 19, Vite 8, Mantine 8, TanStack Query 5, Zustand 5 |
+| Node-agent | Go 1.22+, native `crypto/tls`, `slog`, no gRPC |
+| Tests | Vitest (panel), Go testing (node) |
+| Infra | Docker, Docker Compose; one-shot install scripts |
 
-See [docs/ROADMAP.md](./docs/ROADMAP.md) for detailed rationale and slice-by-slice plan.
+## Develop
 
-## Development
-
-Requirements: Node 22+, pnpm 10+, Docker.
+Requirements: Node 22+, pnpm 10+, Go 1.22+, Docker. Tested on Ubuntu (WSL).
 
 ```bash
-# 1. Install dependencies
+# 1. Install JS deps
 pnpm install
 
-# 2. Start PostgreSQL in Docker
-docker compose up -d postgres
+# 2. Start Postgres + Redis (dev compose)
+docker compose up -d postgres redis postgres-test
 
-# 3. Create local environment file
-cp .env.example .env
+# 3. Apply migrations to dev DB
+pnpm --filter @ice-panel/panel-backend exec prisma migrate dev
 
-# 4. Run the panel backend
+# 4. Start backend (auto-reloads on save)
 pnpm --filter @ice-panel/panel-backend dev
 
-# 5. Verify
-curl http://localhost:3000/health
-# → {"status":"ok","db":"ok"}
+# 5. In a second terminal — start the SPA
+pnpm --filter @ice-panel/panel-frontend dev
+
+# 6. Open the SPA
+open http://localhost:5173
+```
+
+The backend serves on `:3000`, the SPA on `:5173`, and the SPA proxies `/api`+`/sub` to the backend. Bootstrap the first admin via the SPA's "Create first admin" form.
+
+### Tests
+
+```bash
+# Panel-backend integration tests (requires postgres-test on :5433)
+pnpm --filter @ice-panel/panel-backend test
+
+# Node-agent Go tests (no external services needed)
+cd apps/node && go test ./...
+
+# Frontend type-check
+pnpm --filter @ice-panel/panel-frontend exec tsc --noEmit
 ```
 
 ## References
 
-Internal research notes compiled while designing Ice-Panel — see [docs/references/](./docs/references/):
-
-- Hysteria2, AmneziaWG, NaiveProxy, Xray-core — operational references for each upstream
-- Remnawave — competitor analysis (architecture, modules, UX)
-
-These complement the roadmap with deeper technical context for each adapter.
+Internal protocol research compiled while building Ice-Panel — see [docs/references/](./docs/references/). Hysteria2, AmneziaWG, NaiveProxy, Xray-core operational references plus a deep-dive on Remnawave (architecture / modules / install UX) used as design oracle.
 
 ## License
 
-[AGPL-3.0](./LICENSE)
+[AGPL-3.0](./LICENSE) — copyleft, network use included. If you run a modified Ice-Panel as a service, you must offer the source to your users.
