@@ -52,36 +52,58 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+prompt_protocol() {
+  cat <<'EOF'
+
+Pick a protocol for this node (one protocol per VPS is the recommended
+pattern — resource isolation, simpler firewall):
+
+  1) Xray         VLESS+REALITY+Vision (TCP/443, transports raw/xhttp/ws/grpc)
+  2) Hysteria 2   UDP/443, QUIC, Brutal CC — best throughput on lossy links
+  3) AmneziaWG    DPI-resistant WireGuard fork (needs kernel module, best
+                  throughput when DKMS works)
+  4) NaiveProxy   Caddy fork with klzgrad/forwardproxy@naive (needs ≥2 GB RAM
+                  for the xcaddy build; no per-user stats)
+
+EOF
+  local choice
+  while true; do
+    read -rp "Select [1-4]: " choice </dev/tty || fail "no /dev/tty — pass --protocol explicitly"
+    case "$choice" in
+      1) PROTOCOL=xray;       break ;;
+      2) PROTOCOL=hysteria;   break ;;
+      3) PROTOCOL=amneziawg;  break ;;
+      4) PROTOCOL=naive;      break ;;
+      *) echo "  → invalid choice '$choice'; enter 1-4." ;;
+    esac
+  done
+  log "Selected protocol: $PROTOCOL"
+}
+
+prompt_payload() {
+  cat <<'EOF'
+
+The panel issued a one-time base64 payload when you created this Node — it
+contains the mTLS keypair. Find it in the panel UI: Nodes → Create node →
+the modal that pops up after submit. Paste it now (single line, no quotes):
+
+EOF
+  local input
+  read -rp "Payload: " input </dev/tty || fail "no /dev/tty — pass --payload explicitly"
+  PAYLOAD="$input"
+  if [[ -z "$PAYLOAD" ]]; then
+    fail "empty payload"
+  fi
+}
+
 case "$PROTOCOL" in
   hysteria|xray|amneziawg|naive) ;;
   "")
-    cat >&2 <<'EOF'
-Pick one protocol for this node — pass --protocol <name>:
-
-  --protocol hysteria    Hysteria 2 (UDP/443, QUIC, Brutal CC)
-                         Single ~1 GB VPS handles ~200 concurrent users.
-
-  --protocol xray        Xray VLESS+REALITY+Vision (TCP/443, 4 transports:
-                         raw / xhttp / ws / gRPC). Works on Cloudflare-friendly
-                         CDN setups when paired with ws+TLS.
-
-  --protocol amneziawg   AmneziaWG — DPI-resistant WireGuard fork. Needs the
-                         `amneziawg` kernel module (auto-installed via PPA on
-                         Ubuntu/Debian; userspace fallback if DKMS fails).
-                         Best throughput of the four when kernel-module works.
-
-  --protocol naive       NaiveProxy via klzgrad/forwardproxy@naive Caddy fork.
-                         Needs ≥2 GB RAM for the xcaddy build. No per-user
-                         stats from upstream.
-
-Recommended pattern: ONE protocol per VPS (resource isolation, no port
-conflicts, simpler firewall). For two protocols on one host you'd need to
-provision two separate Node records in the panel and run this script twice.
-
-Also need: --payload "<base64-blob>" — copy it from the Nodes → Create
-modal in the panel UI.
-EOF
-    exit 1
+    if [[ -e /dev/tty ]]; then
+      prompt_protocol
+    else
+      fail "Pass --protocol hysteria|xray|amneziawg|naive (no /dev/tty for interactive menu)"
+    fi
     ;;
   *)  fail "Unknown protocol: $PROTOCOL (valid: hysteria|xray|amneziawg|naive)" ;;
 esac
@@ -196,7 +218,11 @@ ENV_FILE="$ENV_DIR/env"
 # Honour --payload only if the env file doesn't exist OR the user passed one.
 if [[ -n "$PAYLOAD" || ! -f "$ENV_FILE" ]]; then
   if [[ -z "$PAYLOAD" ]]; then
-    fail "First-time install needs --payload <base64-blob> from panel"
+    if [[ -e /dev/tty ]]; then
+      prompt_payload
+    else
+      fail "First-time install needs --payload <base64-blob> from panel (no /dev/tty for interactive prompt)"
+    fi
   fi
   log "Writing $ENV_FILE"
   cat > "$ENV_FILE" <<EOF
