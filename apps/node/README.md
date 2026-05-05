@@ -39,6 +39,23 @@ skipped cleanly so single-protocol nodes don't pay for Xray.
 | `XRAY_BINARY` | (none) | Path to `xray` executable. Empty → config-only mode (writes `config.json` but doesn't spawn xray). |
 | `XRAY_CONFIG` | `/etc/xray/config.json` | Path the adapter writes the generated config to. |
 
+### AmneziaWG adapter (slice 19, in progress)
+
+Before the agent can manage AmneziaWG inbounds, the host must have the
+`amneziawg` kernel module + `awg`/`awg-quick` userspace tools installed.
+Run the bootstrap script as root once per VPS:
+
+```bash
+sudo bash apps/node/scripts/bootstrap-amneziawg.sh
+```
+
+It installs the upstream PPA (Ubuntu/Debian only for now), pulls
+`amneziawg`+`amneziawg-tools`+`amneziawg-dkms`, and verifies the kernel
+module loads. On DKMS failure (ARM containers, custom kernels) the script
+prints the userspace `amneziawg-go` fallback path; throughput drops from
+kernel-native (~92 Mbps) to userspace (~33 Mbps) but the inbound still
+works.
+
 ## Build
 
 ```bash
