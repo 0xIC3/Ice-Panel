@@ -311,7 +311,7 @@ LimitNOFILE=1048576
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/log /etc/hysteria /etc/xray /etc/amneziawg /etc/caddy
+ReadWritePaths=-/var/log -/etc/hysteria -/etc/xray -/etc/amneziawg -/etc/caddy
 PrivateTmp=true
 
 # Journald log limits — without these a node running for months can balloon
