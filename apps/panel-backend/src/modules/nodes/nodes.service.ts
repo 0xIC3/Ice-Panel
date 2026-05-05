@@ -100,8 +100,8 @@ function renderBootstrapCommand(panelUrl: string, token: string): string {
   return [
     'bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \\',
     `  --panel-url ${panelUrl} \\`,
-    `  --bootstrap ${token} \\`,
-    '  --protocol <xray|hysteria|amneziawg|naive>',
+    `  --bootstrap ${token}`,
+    '# Tip: append `--protocol xray` (or hysteria | amneziawg | naive) to skip the interactive prompt',
   ].join('\n');
 }
 

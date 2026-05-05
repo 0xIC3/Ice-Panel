@@ -100,8 +100,9 @@ export function NodePayloadModal({ opened, onClose, nodeName, payload, bootstrap
             <Stack gap={4}>
               <Text fw={600}>Run on the node</Text>
               <Text size="xs" c="dimmed">
-                Replace <Code>&lt;xray|hysteria|…&gt;</Code> with the protocol you want, then
-                paste this single command on the VPS over SSH:
+                Paste on the node over SSH. The installer will prompt for a protocol —
+                or append <Code>--protocol xray</Code> (or <Code>hysteria</Code>,{' '}
+                <Code>amneziawg</Code>, <Code>naive</Code>) to skip the prompt.
               </Text>
               <ScrollArea h={120} type="auto">
                 <Code block style={{ whiteSpace: 'pre' }}>
