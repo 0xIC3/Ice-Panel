@@ -39,6 +39,21 @@ skipped cleanly so single-protocol nodes don't pay for Xray.
 | `XRAY_BINARY` | (none) | Path to `xray` executable. Empty → config-only mode (writes `config.json` but doesn't spawn xray). |
 | `XRAY_CONFIG` | `/etc/xray/config.json` | Path the adapter writes the generated config to. |
 
+### NaiveProxy adapter (slice 20, in progress)
+
+NaiveProxy multi-user mode requires a custom Caddy build with the
+`klzgrad/forwardproxy@naive` plugin (the upstream `naive` standalone is
+single-tenant only). Run the bootstrap script once per VPS:
+
+```bash
+sudo bash apps/node/scripts/bootstrap-naive.sh
+```
+
+It installs Go (if missing), `xcaddy`, then compiles
+`/usr/local/bin/caddy-naive` with the forward_proxy plugin linked in.
+Re-run periodically to keep the Chromium-coupled TLS fingerprint fresh
+(NaiveProxy upstream bumps the Chromium baseline roughly every 30 days).
+
 ### AmneziaWG adapter (slice 19, in progress)
 
 Before the agent can manage AmneziaWG inbounds, the host must have the
