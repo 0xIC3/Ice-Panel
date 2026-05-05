@@ -9,25 +9,48 @@ function randomUrlSafe(byteLength: number): string {
 }
 
 /**
- * Generate a Curve25519 (X25519) keypair for WireGuard / AmneziaWG.
- * Both keys are 32 raw bytes encoded as standard base64.
- *
- * Implementation: Node exports X25519 keys in DER format (PKCS8 for private,
- * SPKI for public). The actual 32-byte key is at the END of the DER blob —
- * so we slice the last 32 bytes.
+ * Generate a raw Curve25519 (X25519) keypair as 32-byte buffers. Node exports
+ * X25519 keys in DER (PKCS8 for private, SPKI for public). The actual 32-byte
+ * key sits at the END of the DER blob — slice the last 32.
+ */
+function generateX25519Raw() {
+  const { publicKey, privateKey } = generateKeyPairSync('x25519');
+  const privDer = privateKey.export({ format: 'der', type: 'pkcs8' });
+  const pubDer = publicKey.export({ format: 'der', type: 'spki' });
+  return {
+    privateKey: privDer.subarray(privDer.length - 32),
+    publicKey: pubDer.subarray(pubDer.length - 32),
+  };
+}
+
+/**
+ * Curve25519 keypair as **standard base64** (with `+`/`/`, padded). Used by
+ * WireGuard / AmneziaWG — matches `wg genkey` output, kernel module accepts.
  */
 export function generateWireguardKeyPair(): {
   privateKey: string;
   publicKey: string;
 } {
-  const { publicKey, privateKey } = generateKeyPairSync('x25519');
-
-  const privDer = privateKey.export({ format: 'der', type: 'pkcs8' });
-  const pubDer = publicKey.export({ format: 'der', type: 'spki' });
-
+  const { privateKey, publicKey } = generateX25519Raw();
   return {
-    privateKey: privDer.subarray(privDer.length - 32).toString('base64'),
-    publicKey: pubDer.subarray(pubDer.length - 32).toString('base64'),
+    privateKey: privateKey.toString('base64'),
+    publicKey: publicKey.toString('base64'),
+  };
+}
+
+/**
+ * Curve25519 keypair as **base64url** (`-`/`_`, no padding). Used by Xray
+ * REALITY — `xray x25519` produces this form. The Xray config validator
+ * rejects standard base64 (caught on VPS during slice-23 test on 2026-05-06).
+ */
+export function generateRealityKeyPair(): {
+  privateKey: string;
+  publicKey: string;
+} {
+  const { privateKey, publicKey } = generateX25519Raw();
+  return {
+    privateKey: privateKey.toString('base64url'),
+    publicKey: publicKey.toString('base64url'),
   };
 }
 

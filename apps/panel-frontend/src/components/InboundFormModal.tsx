@@ -218,7 +218,7 @@ export function InboundFormModal({ opened, onClose, inbound, nodes, onSubmit, lo
   }, [opened, inbound?.id]);
 
   const keypairMutation = useMutation({
-    mutationFn: generateInboundKeypair,
+    mutationFn: (protocol: 'xray' | 'amneziawg') => generateInboundKeypair(protocol),
     onError: (err) =>
       notifications.show({
         color: 'red',
@@ -228,13 +228,13 @@ export function InboundFormModal({ opened, onClose, inbound, nodes, onSubmit, lo
   });
 
   async function generateXrayKeys() {
-    const kp = await keypairMutation.mutateAsync();
+    const kp = await keypairMutation.mutateAsync('xray');
     form.setValues({ ...form.values, xrayPrivateKey: kp.privateKey, xrayPublicKey: kp.publicKey });
     notifications.show({ color: 'green', message: 'REALITY keypair generated' });
   }
 
   async function generateAwgKeys() {
-    const kp = await keypairMutation.mutateAsync();
+    const kp = await keypairMutation.mutateAsync('amneziawg');
     form.setValues({ ...form.values, awgServerPriv: kp.privateKey, awgServerPub: kp.publicKey });
     notifications.show({ color: 'green', message: 'AmneziaWG server keypair generated' });
   }

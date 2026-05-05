@@ -1,6 +1,11 @@
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import { requireAuth } from '../auth/auth.hook.js';
-import { generateWireguardKeyPair } from '../../lib/credentials.js';
+import { generateWireguardKeyPair, generateRealityKeyPair } from '../../lib/credentials.js';
+
+const KeypairQuery = z.object({
+  protocol: z.enum(['xray', 'amneziawg']).default('amneziawg'),
+});
 import {
   CreateInboundSchema,
   UpdateInboundSchema,
@@ -12,14 +17,14 @@ import * as inboundsService from './inbounds.service.js';
 export async function inboundsRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('onRequest', requireAuth);
 
-  // Generate a curve25519 keypair for REALITY (Xray) or AmneziaWG.
-  // Both protocols use the same x25519 + base64 format; we just generate
-  // panel-side instead of forcing the operator to ssh in and run
-  // `xray x25519` / `awg genkey`. The private key is returned ONCE and is
-  // never persisted by the panel — the operator pastes it into the inbound
-  // form (or it's auto-filled by the SPA).
-  app.post('/api/inbounds/generate-keypair', async (_request, reply) => {
-    return reply.send(generateWireguardKeyPair());
+  // Generate a curve25519 keypair for REALITY (Xray) or AmneziaWG. Same
+  // crypto, different alphabet: REALITY needs base64url, AmneziaWG needs
+  // standard base64. Pass `?protocol=xray` for the REALITY form. Default
+  // is `amneziawg` to keep the original SPA call site working.
+  app.post('/api/inbounds/generate-keypair', async (request, reply) => {
+    const { protocol } = KeypairQuery.parse(request.query);
+    const pair = protocol === 'xray' ? generateRealityKeyPair() : generateWireguardKeyPair();
+    return reply.send(pair);
   });
 
   app.post('/api/inbounds', async (request, reply) => {

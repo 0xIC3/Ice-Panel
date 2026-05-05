@@ -297,6 +297,12 @@ esac
 # ───── 7. Env file ─────
 ENV_DIR=/etc/ice-panel-node
 mkdir -p "$ENV_DIR"
+
+# ProtectSystem=strict in our systemd unit makes /etc read-only except for
+# explicit ReadWritePaths. ReadWritePaths can't *create* directories, only
+# permit writes inside existing ones — so we pre-create every per-protocol
+# config dir here, even if the protocol isn't installed on this node.
+mkdir -p /etc/xray /etc/hysteria /etc/amneziawg /etc/caddy
 ENV_FILE="$ENV_DIR/env"
 
 # Honour --payload only if the env file doesn't exist OR the user passed one.

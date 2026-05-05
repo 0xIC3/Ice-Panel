@@ -397,9 +397,15 @@ export interface KeypairResponse {
   publicKey: string;
 }
 
-/** Generate a fresh x25519 keypair for REALITY / AmneziaWG inbound. */
-export async function generateInboundKeypair(): Promise<KeypairResponse> {
-  const { data } = await api.post<KeypairResponse>('/api/inbounds/generate-keypair');
+/** Generate a fresh x25519 keypair for REALITY / AmneziaWG inbound.
+ *  Same crypto, different alphabet: `xray` returns base64url (REALITY
+ *  validator rejects standard base64), `amneziawg` returns standard base64. */
+export async function generateInboundKeypair(
+  protocol: 'xray' | 'amneziawg' = 'amneziawg',
+): Promise<KeypairResponse> {
+  const { data } = await api.post<KeypairResponse>(
+    `/api/inbounds/generate-keypair?protocol=${protocol}`,
+  );
   return data;
 }
 
