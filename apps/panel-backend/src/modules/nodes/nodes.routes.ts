@@ -17,20 +17,26 @@ import * as bootstrap from './bootstrap.service.js';
  * when behind a reverse proxy (Caddy / Cloudflare).
  */
 function publicUrlFromRequest(request: FastifyRequest): string {
+  // Behind a TLS-terminating reverse proxy (Caddy / nginx / Cloudflare),
+  // the `host` header carries the public hostname while `x-forwarded-proto`
+  // carries the original scheme. If `x-forwarded-host` is present, default
+  // proto to https — proxies that rewrite Host almost always terminate TLS.
+  const xfHost = request.headers['x-forwarded-host']?.toString();
   const proto =
     request.headers['x-forwarded-proto']?.toString() ||
-    (request as unknown as { protocol?: string }).protocol ||
+    (xfHost ? 'https' : (request as unknown as { protocol?: string }).protocol) ||
     'http';
-  const host = request.headers['x-forwarded-host']?.toString() || request.headers.host || 'localhost:3000';
+  const host = xfHost || request.headers.host || 'localhost:3000';
   return `${proto}://${host}`;
 }
 
 const BootstrapTokenParam = z.object({ token: z.string().regex(/^bs_[A-Za-z0-9_-]+$/).max(64) });
+const auth = { onRequest: [requireAuth] };
 
 export async function nodesRoutes(app: FastifyInstance): Promise<void> {
-  // ───── Public bootstrap-redeem route — registered BEFORE requireAuth hook
-  // because the bootstrap token IS the credential here (single-use, short
-  // TTL). Anyone with the token can fetch the payload — that's the design.
+  // Public bootstrap-redeem route — the token IS the credential (single-use,
+  // 15-min TTL). Per-route auth opt-in pattern matches auth.routes.ts and
+  // avoids the addHook scope ambiguity that previously made this 401.
   app.get('/api/internal/bootstrap/:token', async (request, reply) => {
     const params = BootstrapTokenParam.parse(request.params);
     try {
@@ -47,10 +53,7 @@ export async function nodesRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  app.addHook('onRequest', requireAuth);
-
-  // POST /api/nodes — create a node, return one-time payload + bootstrap token
-  app.post('/api/nodes', async (request, reply) => {
+  app.post('/api/nodes', auth, async (request, reply) => {
     const input = CreateNodeSchema.parse(request.body);
     try {
       const node = await nodesService.createNode(input, {
@@ -65,12 +68,9 @@ export async function nodesRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  // POST /api/nodes/:id/bootstrap — issue a fresh bootstrap token (re-roll
-  // when the original expired or was lost). Returns just the bootstrap info.
-  app.post('/api/nodes/:id/bootstrap', async (request, reply) => {
+  app.post('/api/nodes/:id/bootstrap', auth, async (request, reply) => {
     const params = NodeIdParamSchema.parse(request.params);
     try {
-      // Verify node exists + is active before issuing a token.
       const node = await nodesService.getNodeById(params.id);
       const tokenInfo = await bootstrap.issueBootstrapToken(node.id);
       return reply.code(201).send({
@@ -79,8 +79,8 @@ export async function nodesRoutes(app: FastifyInstance): Promise<void> {
         command: [
           'bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \\',
           `  --panel-url ${publicUrlFromRequest(request)} \\`,
-          `  --bootstrap ${tokenInfo.token} \\`,
-          '  --protocol <xray|hysteria|amneziawg|naive>',
+          `  --bootstrap ${tokenInfo.token}`,
+          '# Tip: append `--protocol xray` (or hysteria | amneziawg | naive) to skip the interactive prompt',
         ].join('\n'),
       });
     } catch (err) {
@@ -91,14 +91,12 @@ export async function nodesRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  // GET /api/nodes
-  app.get('/api/nodes', async (request, reply) => {
+  app.get('/api/nodes', auth, async (request, reply) => {
     const query = ListNodesQuerySchema.parse(request.query);
     return reply.send(await nodesService.listNodes(query));
   });
 
-  // GET /api/nodes/:id
-  app.get('/api/nodes/:id', async (request, reply) => {
+  app.get('/api/nodes/:id', auth, async (request, reply) => {
     const params = NodeIdParamSchema.parse(request.params);
     try {
       return reply.send(await nodesService.getNodeById(params.id));
@@ -110,8 +108,7 @@ export async function nodesRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  // PUT /api/nodes/:id
-  app.put('/api/nodes/:id', async (request, reply) => {
+  app.put('/api/nodes/:id', auth, async (request, reply) => {
     const params = NodeIdParamSchema.parse(request.params);
     const input = UpdateNodeSchema.parse(request.body);
     try {
@@ -127,8 +124,7 @@ export async function nodesRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  // DELETE /api/nodes/:id
-  app.delete('/api/nodes/:id', async (request, reply) => {
+  app.delete('/api/nodes/:id', auth, async (request, reply) => {
     const params = NodeIdParamSchema.parse(request.params);
     try {
       await nodesService.deleteNode(params.id);
