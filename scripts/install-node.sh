@@ -260,9 +260,29 @@ ProtectHome=true
 ReadWritePaths=/var/log /etc/hysteria /etc/xray /etc/amneziawg /etc/caddy
 PrivateTmp=true
 
+# Journald log limits — without these a node running for months can balloon
+# /var/log/journal toward the disk-fill threshold. Cap roughly at ~50 MB
+# total for this unit, age out older entries first.
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=10000
+
 [Install]
 WantedBy=multi-user.target
 EOF
+
+# Cap journald disk use globally to keep small VPS images alive.
+JOURNALD_DROPIN=/etc/systemd/journald.conf.d/ice-panel-cap.conf
+mkdir -p "$(dirname "$JOURNALD_DROPIN")"
+if [[ ! -f "$JOURNALD_DROPIN" ]]; then
+  log "Capping journald disk use at 200 MB (drop-in $JOURNALD_DROPIN)"
+  cat > "$JOURNALD_DROPIN" <<'EOF'
+[Journal]
+SystemMaxUse=200M
+SystemMaxFileSize=20M
+MaxRetentionSec=2week
+EOF
+  systemctl restart systemd-journald
+fi
 
 systemctl daemon-reload
 systemctl enable ice-panel-node.service
@@ -290,9 +310,17 @@ echo
 echo "  Protocol:    $PROTOCOL"
 echo "  Public IP:   $PUBLIC_IP"
 echo "  mTLS port:   $NODE_PORT/tcp  (panel connects here)"
-echo "  Env file:    $ENV_FILE  (chmod 600)"
-echo "  Logs:        journalctl -u ice-panel-node -f"
-echo "  Restart:     systemctl restart ice-panel-node"
+echo "  Env file:    $ENV_FILE  (chmod 600 — keep it secret)"
 echo
-echo "Panel-side: in the Nodes tab, the new node should show 'connected' within"
-echo "a few seconds after the panel attempts an mTLS handshake."
+echo "Verify health (mimics what the panel does on every poll):"
+echo "  curl -sk https://127.0.0.1:${NODE_PORT}/healthz | head -c 200"
+echo
+echo "Live logs (with timestamps, like 'docker compose logs -f -t'):"
+echo "  journalctl -u ice-panel-node -f -o short-iso"
+echo
+echo "Restart / stop / status:"
+echo "  systemctl restart ice-panel-node"
+echo "  systemctl status  ice-panel-node"
+echo
+echo "Panel-side: refresh the Nodes tab — the new node flips to 'connected'"
+echo "within a few seconds of the panel issuing its first mTLS healthcheck."
