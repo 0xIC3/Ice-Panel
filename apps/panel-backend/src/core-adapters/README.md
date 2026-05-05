@@ -6,7 +6,7 @@ Each subdirectory mirrors a Go-side `internal/core/<protocol>/` adapter.
 | Folder | Status | Wire formats it builds |
 |---|---|---|
 | `hysteria/` | ✅ slice 16 | `hysteria2://` URI |
-| `xray/` | ⏭️ slice 17 | `vless://` (REALITY/Vision), `vmess://`, `trojan://` |
+| `xray/` | ✅ slice 17 | `vless://` (REALITY+Vision); `vmess://`/`trojan://` may follow |
 | `amneziawg/` | ⏭️ slice 19 | `wg-quick` `.conf` |
 | `naive/` | ⏭️ slice 20 | `naive+https://` URI |
 
