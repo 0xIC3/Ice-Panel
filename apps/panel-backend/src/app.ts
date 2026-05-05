@@ -11,6 +11,7 @@ import { usersRoutes } from './modules/users/users.routes.js';
 import { nodesRoutes } from './modules/nodes/nodes.routes.js';
 import { subscriptionRoutes } from './modules/subscription/subscription.routes.js';
 import { srrRoutes } from './modules/srr/srr.routes.js';
+import { inboundsRoutes } from './modules/inbounds/inbounds.routes.js';
 
 /**
  * Build the Fastify instance with all plugins and routes registered.
@@ -73,6 +74,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(nodesRoutes);
   await app.register(subscriptionRoutes);
   await app.register(srrRoutes);
+  await app.register(inboundsRoutes);
 
   return app;
 }
