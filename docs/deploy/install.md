@@ -46,17 +46,9 @@ bash <(curl -fsSL .../install-panel.sh)
 ### TLS in front
 
 The script binds the SPA to plain HTTP on `:8080`. **Don't expose this directly.**
-Front it with Caddy / Traefik / nginx that terminates TLS and reverse-proxies
-to `127.0.0.1:8080`. Example Caddy config:
-
-```caddyfile
-panel.mydomain.com {
-  reverse_proxy 127.0.0.1:8080
-}
-```
-
-Then re-run the installer with `CORS_ORIGIN=https://panel.mydomain.com` so the
-backend accepts cross-origin requests from the new domain.
+Front it with Caddy / nginx / Cloudflare-tunnel — full configs with copy-paste
+snippets in [reverse-proxy.md](./reverse-proxy.md), incl. anti-probing rules
+that drop scanners on the bare-IP hit.
 
 ### Update
 
