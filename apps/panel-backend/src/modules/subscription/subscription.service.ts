@@ -125,6 +125,9 @@ export async function generateSubscription(
       endpoints.push({
         protocol: 'hysteria',
         nodeName: n.name,
+        host,
+        port: config.HYSTERIA_PUBLIC_PORT,
+        password: user.hysteriaPassword,
         uri: buildHysteriaUri({
           password: user.hysteriaPassword,
           host,
@@ -138,6 +141,14 @@ export async function generateSubscription(
       endpoints.push({
         protocol: 'xray',
         nodeName: n.name,
+        host,
+        port: xrayCfg.port,
+        uuid: user.xrayUuid,
+        publicKey: xrayCfg.publicKey,
+        shortId: xrayCfg.shortId,
+        sni: xrayCfg.sni,
+        flow: xrayCfg.flow,
+        fingerprint: xrayCfg.fingerprint,
         uri: buildVlessRealityUri({
           uuid: user.xrayUuid,
           host,

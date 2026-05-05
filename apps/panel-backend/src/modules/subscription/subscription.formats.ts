@@ -24,11 +24,36 @@ export function encodePlainList(uris: string[]): string {
   return Buffer.from(uris.join('\n'), 'utf8').toString('base64');
 }
 
-export interface SubscriptionEndpoint {
+interface SubscriptionEndpointBase {
   protocol: ProtocolName;
   nodeName: string;
+  /** Public host the client connects to (no port). */
+  host: string;
+  /** Public port the client connects to. */
+  port: number;
+  /** Pre-built URI for plain-list/JSON formats. Format-specific builders
+   *  (Clash, Sing-box, ...) consume the structured fields below instead. */
   uri: string;
 }
+
+export interface HysteriaSubscriptionEndpoint extends SubscriptionEndpointBase {
+  protocol: 'hysteria';
+  password: string;
+}
+
+export interface XraySubscriptionEndpoint extends SubscriptionEndpointBase {
+  protocol: 'xray';
+  uuid: string;
+  publicKey: string;
+  shortId: string;
+  sni: string;
+  flow: string;
+  fingerprint: string;
+}
+
+export type SubscriptionEndpoint =
+  | HysteriaSubscriptionEndpoint
+  | XraySubscriptionEndpoint;
 
 export interface SubscriptionJsonResponse {
   user: {
