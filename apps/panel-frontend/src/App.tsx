@@ -4,6 +4,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { LoginPage } from './pages/LoginPage';
 import { UsersPage } from './pages/UsersPage';
 import { NodesPage } from './pages/NodesPage';
+import { SrrPage } from './pages/SrrPage';
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
           <Route path="/" element={<Navigate to="/users" replace />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/nodes" element={<NodesPage />} />
+          <Route path="/srr" element={<SrrPage />} />
         </Route>
       </Route>
 

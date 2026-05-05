@@ -1,7 +1,7 @@
 import { AppShell, Burger, Group, NavLink, Text, Button, Stack } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { Outlet, NavLink as RouterNavLink, useNavigate } from 'react-router-dom';
-import { IconUsers, IconServer2, IconLogout } from '@tabler/icons-react';
+import { IconUsers, IconServer2, IconLogout, IconRoute } from '@tabler/icons-react';
 import { useAuth } from '../stores/auth';
 
 export function AppLayout() {
@@ -50,6 +50,13 @@ export function AppLayout() {
               to="/nodes"
               label="Nodes"
               leftSection={<IconServer2 size={18} />}
+            />
+            <NavLink
+              component={RouterNavLink}
+              to="/srr"
+              label="SRR"
+              description="Subscription Response Rules"
+              leftSection={<IconRoute size={18} />}
             />
           </Stack>
           <Button
