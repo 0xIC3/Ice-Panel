@@ -341,6 +341,238 @@ Mihomo / Singbox / XrayJSON шаблоны — Phase 2 (Срез 21). Subscripti
 | 22 | **Subscription Response Rules (SRR)** | Детект формата по User-Agent (паттерн Remnawave) | низко |
 | 23 | **UI: graphical protocol selector + per-protocol config** | Inbound editor с UI под каждый протокол | средне |
 
+### Подробности по срезам
+
+#### Срез 16: Refactor `CoreAdapter` под уроки фазы 1
+
+**Цель:** до того как добавлять три новых адаптера, отшлифовать интерфейс. Hysteria выявил пробелы — например `GenerateClientConfig(user)` нужен на стороне адаптера (каждый протокол строит свой URI/conf по-своему), а subprocess-management повторится в Xray/AmneziaWG/Naive.
+
+**Что вводим:**
+- Расширение `CoreAdapter` интерфейса:
+  - `Healthy() bool` — для healthcheck-фан-аута. Срез 30 (Prometheus) полит status nodes.
+  - `GenerateClientConfig(user core.User) (string, error)` — каждый адаптер сам строит URI/конфиг для клиента. Логика Hysteria URI builder переезжает из `panel-backend/subscription/formats.ts` в `node/internal/core/hysteria/adapter.go`. Subscription endpoint становится тонким — фан-аут на адаптеры через transport `GET /clientConfig?userId=X&protocol=Y`.
+- Извлечь общий subprocess-management в `internal/core/subprocess.go`: `Run(ctx, binary, args...)`, log-streaming, graceful stop с SIGTERM+5s+SIGKILL, capture exit code. Hysteria/Xray/Naive все спавнят бинари — DRY.
+- `LifecycleEvent` event-channel в адаптере (`onCrash`, `onReload`) — Phase 3 для auto-restart на crash.
+
+**Коммиты (4):**
+1. `feat(node)`: extend CoreAdapter with Healthy + GenerateClientConfig
+2. `refactor(node)`: extract common subprocess management
+3. `refactor(node)`: HysteriaAdapter generates own URI + reports health
+4. `docs`: mark slice 16 done
+
+**Gotchas:**
+- Не переусложнять интерфейс. Если что-то нужно ОДНОМУ адаптеру (Hysteria-specific auth callback) — оставлять как private, не светить в `CoreAdapter`. Принцип: ISP.
+- При перетаскивании URI builder'а `panel-backend → node` — не сломать существующий `/sub/:token` endpoint. Сделать через переходный период: backend сначала спрашивает ноду, потом fallback на свой builder.
+
+#### Срез 17: XrayAdapter — gRPC API без рестарта
+
+**Цель:** добавить поддержку Xray-core (VLESS/Reality/VMess/Trojan/Shadowsocks). Проверить что `CoreAdapter` интерфейс работает на чужом протоколе.
+
+**Что вводим:**
+- `apps/node/internal/core/xray/{adapter, grpc, config}.go`
+- Спавн `xray run -c /etc/xray/config.json` через общий subprocess-runner
+- Подключение к Xray gRPC API на `127.0.0.1:8080` (Xray слушает gRPC по умолчанию когда `api: { tag: "api", services: ["HandlerService", "StatsService"] }` в config)
+- AddUser/RemoveUser через `proxy.HandlerService.AlterInbound` с `AddUserOperation` / `RemoveUserOperation`
+- GetStats через `stats.StatsService.QueryStats` с `pattern: "user>>>email>>>"` per-user
+- `GenerateClientConfig`: VLESS+REALITY URI с `pbk` (pubkey), `sid` (shortId), `fp` (fingerprint), `flow=xtls-rprx-vision`, `type=raw`, `sni`, `host`
+
+**Ключевые решения** (из `reference_remnawave_modules.md` и `reference_xray.md`):
+- v24.9.30 naming: `network: raw` (не `tcp`), `network: xhttp` (не `splithttp`). Старые имена deprecated.
+- REALITY shortIds — **inbound-level** (общий пул на inbound), идентификация юзеров через `email` поле клиента (`email = userId`).
+- Per-user stats требуют: `email` set + `policy.levels.0.statsUserUplink/Downlink: true` + блок `stats: {}`.
+- Vision несовместим с mux, работает только над `network: raw`. Validate at config-build time.
+
+**Коммиты (5-6):**
+1. `chore(node)`: vendor xray gRPC proto definitions
+2. `feat(node)`: XrayAdapter subprocess + initial config generation
+3. `feat(node)`: XrayAdapter user mgmt via gRPC AlterInbound
+4. `feat(node)`: XrayAdapter stats query + GenerateClientConfig (VLESS+REALITY URI)
+5. `test(node)`: XrayAdapter tests with mock gRPC server
+6. `docs`: mark slice 17 done
+
+**Gotchas:**
+- gRPC отвечает только после полной инициализации Xray. Если AddUser приходит до этого — refused. Решение: `Healthy()` возвращает `false` пока gRPC не отвечает на ping → BullMQ-воркер ретраит job.
+- `email` уникальность в inbound — Xray дедуплицирует. Использовать `userId.toString()` как email.
+- REALITY `target` (поддельный сайт) валидируется через `xray tls ping <target>:443` — добавить эту проверку в admin UI Среза 23.
+
+#### Срез 18: Frontend protocol selector
+
+**Цель:** дать админу выбирать какие протоколы доступны user'у при создании. Без этого все юзеры получают все 4 протокола = бессмысленно.
+
+**Что вводим:**
+- **Schema change**: `users.enabled_protocols` колонка `Json @default("[\"hysteria\"]")` — массив имён протоколов. Минимальная миграция, без отдельной таблицы (нативный multi-select).
+- Backend: `subscription/service.ts` фильтрует endpoints по `user.enabledProtocols`
+- Backend: `users.schemas.ts` — добавить `enabledProtocols: z.array(ProtocolName).default(['hysteria'])` в Create/Update
+- Frontend: в `UserFormModal` — `MultiSelect` с 4 опциями (Hysteria/Xray/AmneziaWG/Naive)
+- Frontend: в users-таблице новая колонка "Protocols" с `Badge`-чипами
+
+**Коммиты (4):**
+1. `feat(panel-backend)`: users.enabledProtocols column + schema validation
+2. `feat(panel-backend)`: filter subscription endpoints by user's enabled protocols
+3. `feat(panel-frontend)`: MultiSelect in UserFormModal + protocol badges in table
+4. `docs`: mark slice 18 done
+
+**Gotchas:**
+- Default `['hysteria']` для существующих юзеров (миграция должна это прописать), иначе старые юзеры останутся без подписки.
+- Срез 18 даёт user-level фильтрацию. Inbound-level (per-node, кастомные настройки конкретного inbound'а) — это уже Срез 23.
+
+#### Срез 19: AmneziaWGAdapter — самый сложный
+
+**Цель:** поддержка DPI-устойчивого WireGuard через AmneziaWG kernel module. DPI-стойкость отличает нас от обычного WG в Marzban-ах.
+
+**Что вводим:**
+- **Bootstrap скрипт** в `apps/node` (отдельный systemd-юнит или manual): установка `amneziawg-tools` через PPA (Ubuntu/Debian) или COPR (RHEL/Fedora). Проверка `amneziawg` kernel module загружен (`lsmod | grep amneziawg`). Fallback path для DKMS-failure → userspace `amneziawg-go`.
+- `apps/node/internal/core/amneziawg/{adapter, config, ipallocator, syncconf}.go`
+- **IP allocator**: subnet `10.0.0.0/24` per inbound (configurable), 254 пира на inbound. Mapping `userId → IP` персистится в БД — новая таблица `amneziawg_peers (id, user_id, inbound_id, ip, created_at)` с `UNIQUE(inbound_id, ip)`. Allocator берёт первый свободный IP из range.
+- `[Interface]` config: PrivateKey + ListenPort + S1-S4/H1-H4 obfuscation (interface-immutable). Параметры из admin UI Среза 23.
+- `[Peer]` block per user: PublicKey (`user.amneziawgPublicKey`) + AllowedIPs (`<allocated-ip>/32`).
+- **Hot-reload**: `awg syncconf <iface> <(awg-quick strip <iface>)` обёрнут в `timeout 10s`. Если падает — fallback на `systemctl restart awg-quick@<iface>`.
+- `GenerateClientConfig(user)`: возвращает client-side `[Interface]` + `[Peer]` config (`Endpoint = <node-public-ip>:<port>`, `AllowedIPs = 0.0.0.0/0`, AmneziaWG obfuscation params).
+
+**Ключевые решения** (из `reference_amneziawg.md`):
+- Kernel module — единственный production-путь. Замеры: 92 Mbps (kernel) vs 33 Mbps (Go userspace).
+- S1-S4, H1-H4 — interface-immutable. Их ротация = bounce ВСЕХ клиентов.
+- Recommended params для **Russian TSPU**: `Jc=3..6, Jmin=40..89, S1=72, S2=56, S3=32, S4=16, H1-H4` ranged. Для **mobile operators**: `Jc=3, Jmax narrower (70 vs 250)`. Phase 2 — два пресета "TSPU" / "Mobile" + "Custom".
+
+**Коммиты (6-7):**
+1. `feat(panel-backend)`: `amneziawg_peers` table + IP allocator service
+2. `chore(node)`: bootstrap script for amneziawg-tools install + kernel-module check
+3. `feat(node)`: AmneziaWGAdapter — config generation
+4. `feat(node)`: AmneziaWGAdapter — peer add/remove via syncconf
+5. `feat(node)`: AmneziaWGAdapter — GenerateClientConfig (client wg-quick conf)
+6. `test(node)`: tests with mocked awg CLI
+7. `docs`: mark slice 19 done
+
+**Gotchas:**
+- ARM-контейнеры / DKMS failures → kernel module не собирается. Fallback на userspace `amneziawg-go` (заметная просадка throughput, но работает). Адаптер должен это детектить.
+- IP exhaustion (>254 user'ов на inbound) — Срез 23 поддержит multiple inbounds на одной ноде с разными subnet'ами.
+- `awg syncconf` иногда висит на ядерном баге (видели несколько раз) — обязательный `timeout 10s` с fallback restart.
+
+#### Срез 20: NaiveProxyAdapter — Caddy fork
+
+**Цель:** поддержка NaiveProxy. Самый "хитрый" адаптер из-за специфики Naive (single-tenant standalone, multi-tenant только через Caddy fork).
+
+**Что вводим:**
+- **Bootstrap**: `xcaddy build --with github.com/caddyserver/forwardproxy=github.com/klzgrad/forwardproxy@naive` — при provisioning'е ноды собирает Caddy с naive plugin'ом. Скрипт устанавливает `xcaddy` и Go (если нет), потом билдит. Результат — `/usr/local/bin/caddy-naive`.
+- `apps/node/internal/core/naive/{adapter, caddyfile, reload}.go`
+- **Caddyfile templating**: один inbound = один блок:
+  ```
+  :443 example.com {
+    tls me@example.com
+    forward_proxy {
+      basic_auth user1 password1
+      basic_auth user2 password2
+      hide_ip
+      hide_via
+      probe_resistance
+    }
+    file_server { root /var/www/html }
+  }
+  ```
+- AddUser/RemoveUser → regenerate Caddyfile из state map → `caddy reload --config /etc/caddy/Caddyfile` (graceful, без дропа сессий)
+- `GenerateClientConfig`: `naive+https://user:password@host:port?padding=true#name`
+
+**Коммиты (5-6):**
+1. `chore(node)`: xcaddy bootstrap script with naive plugin
+2. `feat(node)`: NaiveProxyAdapter — Caddyfile generator (template + write)
+3. `feat(node)`: NaiveProxyAdapter — caddy reload pipeline
+4. `feat(node)`: NaiveProxyAdapter — GenerateClientConfig
+5. `test(node)`: adapter tests with mocked caddy CLI
+6. `docs`: mark slice 20 done
+
+**Gotchas** (из `reference_naiveproxy.md`):
+- **Per-user stats нет.** MVP: `GetStats` возвращает empty counters. В Phase 3 — два пути: парсить access-logs (хрупко) или форк `forwardproxy@naive` с per-user counters (постоянная rebase-нагрузка). Решение позже.
+- **Force-kick невозможен.** После `caddy reload` старые сессии живут до idle/tunnel timeout (~10 минут). Disable user = не сможет создать НОВУЮ сессию. Документировать в admin UI.
+- **Нет UDP, нет квот, нет expiry.** Всё на panel-уровне через "disable user".
+- **Chromium-coupled релизы.** Каждые ~30 дней обновлять бинарник Naive чтобы TLS-fingerprint оставался свежим. Phase 3 — CI hook (Срез 33).
+
+#### Срез 21: Multi-format subscription generator
+
+**Цель:** клиенты разные — каждый ест свой формат. У нас уже есть base64-plain + JSON; добавляем 4 главных.
+
+**Что вводим:**
+- `apps/panel-backend/src/modules/subscription/formats/`:
+  - `clash.ts` — Clash YAML (для Clash, ClashX, FlClash, NekoBox-iOS)
+  - `singbox.ts` — Sing-box JSON (для Sing-box, Hiddify v2+)
+  - `wgconf.ts` — wg-quick `.conf` (для AmneziaWG-app, любого WG-клиента)
+  - `xrayjson.ts` — Xray JSON config (для v2rayN, NekoRay в Xray-режиме)
+- `subscription.routes.ts` принимает `?format=clash|singbox|wgconf|xrayjson|json|plain` (default plain)
+- Каждый builder получает `User + Endpoints[]` и возвращает строку нужного формата
+
+**Коммиты (5-6):**
+1. `feat(panel-backend)`: Clash YAML formatter + tests
+2. `feat(panel-backend)`: Sing-box JSON formatter + tests
+3. `feat(panel-backend)`: wg-quick conf formatter (AmneziaWG-only) + tests
+4. `feat(panel-backend)`: Xray JSON formatter + tests
+5. `feat(panel-backend)`: ?format= query param routing
+6. `docs`: mark slice 21 done
+
+**Gotchas:**
+- Clash YAML очень большой schema — покрываем основное (proxies + proxy-groups + rules). Полный feature set не нужен для MVP.
+- Sing-box эволюционирует быстро — стараться придерживаться minimal valid schema (1.10+), не использовать experimental fields.
+- `wgconf` для AmneziaWG включает obfuscation params (Jc/Jmin/Jmax/S/H/I) — добавить в `[Interface]` секцию client-side.
+
+#### Срез 22: Subscription Response Rules (SRR)
+
+**Цель:** клиент представляется через `User-Agent`. Панель сама определяет нужный формат подписки. Без этого юзеру надо вручную добавлять `?format=clash` к URL — UX разваливается.
+
+**Что вводим:**
+- Новая таблица `subscription_response_rules`: `id, name, ua_pattern (regex string), format, priority (int), enabled`
+- **Default rules** (seed-миграция):
+  - `Hiddify` (UA contains `Hiddify`) → `singbox`
+  - `NekoRay/NekoBox` → `singbox`
+  - `Clash`, `ClashX`, `FlClash` → `clash`
+  - `v2rayN` → `xrayjson`
+  - `Sing-box` → `singbox`
+  - `wireguard` (lowercase, AmneziaWG-app) → `wgconf`
+  - default catch-all → `plain` (base64)
+- Backend: при `GET /sub/:token` без `?format=` — матч UA против rules в порядке `priority ASC`, выбираем первый match'нувший
+- Frontend: новая страница `/srr` — Mantine `Table` с rules, drag-and-drop порядок, regex preview, "Test against UA" поле для проверки
+
+**Коммиты (5):**
+1. `feat(panel-backend)`: subscription_response_rules migration + seed default rules
+2. `feat(panel-backend)`: UA matcher in subscription endpoint
+3. `feat(panel-backend)`: SRR CRUD endpoints
+4. `feat(panel-frontend)`: SRR management page + test-UA-against-rule
+5. `docs`: mark slice 22 done
+
+**Gotchas:**
+- Regex в UA — defensive: limit UA-string length to 256 chars + timeout regex match (10ms). Иначе ReDoS возможен.
+- Rules priority — drag-and-drop в UI меняет `priority` через batch-PUT. Не делать ENUM, integer-priority более гибкий.
+
+#### Срез 23: UI per-protocol inbound editor
+
+**Цель:** админ создаёт inbounds (per-protocol конфиги) через UI, а не через psql + JSON. Закрывает Phase 2: после этого всё multi-core управляется визуально.
+
+**Что вводим:**
+- **Backend**: inbounds CRUD `POST/GET/PUT/DELETE /api/inbounds`. Schema уже есть (`Inbound` model в Prisma из Слайса 3) — добавляем routes/service/repository.
+- **Frontend**: страница `/inbounds` с таблицей inbounds (group by node), Mantine `Accordion` или табы.
+- **Per-protocol create wizard** (Stepper или Tabs внутри modal'а):
+  - **Hysteria**: port, obfs (none / salamander+password), masquerade (404 / proxy URL), brutal CC up/down bandwidth (bps)
+  - **Xray**: protocol selector (VLESS/VMess/Trojan/Shadowsocks), TLS settings (cert path / REALITY config: target, shortIds, dest, serverNames), Vision flag, network (raw/xhttp/grpc/websocket)
+  - **AmneziaWG**: subnet CIDR (validation + collision check), obfuscation params (Jc/Jmin/Jmax/S1-S4/H1-H4) с тремя пресетами:
+    - **TSPU** (Russia ISP DPI): Jc=3-6, Jmin=40, Jmax=89, S1=72, S2=56, S3=32, S4=16
+    - **Mobile** (cellular operators): Jc=3 fixed, Jmax=70
+    - **Custom** — все поля редактируемые
+  - **Naive**: port, masquerade root path, fronting domain (TLS SNI)
+- **Group → inbound assignment UI** — отдельная вкладка где админ привязывает inbounds к groups (M:N через group_inbounds)
+
+**Коммиты (8-10):**
+1. `feat(panel-backend)`: inbounds CRUD endpoints + Zod schemas
+2. `feat(panel-frontend)`: inbounds list page + delete
+3. `feat(panel-frontend)`: Hysteria inbound editor
+4. `feat(panel-frontend)`: Xray inbound editor (REALITY/Vision/network selectors)
+5. `feat(panel-frontend)`: AmneziaWG inbound editor (with TSPU/Mobile/Custom presets)
+6. `feat(panel-frontend)`: Naive inbound editor
+7. `feat(panel-frontend)`: group → inbound assignment UI
+8. `test(panel-backend)`: integration tests for inbounds CRUD
+9. `docs`: mark slice 23 done — **Phase 2 закрыта**
+
+**Gotchas:**
+- Edit на live-ноде иногда ломает существующие сессии (REALITY shortIds, AmneziaWG S/H — interface-immutable). Warning UI: "Saving will reset all client sessions on this inbound. Continue?"
+- REALITY `target` валидация: backend делает `xray tls ping <target>:443` через node-agent (новый transport endpoint `POST /tls-ping`) → возвращает success/failure. Frontend показывает чек-марк или ошибку.
+- AmneziaWG subnet collision detect (если уже есть inbound с `10.0.0.0/24`, второй не должен использовать пересекающийся) — backend Zod refines.
+
 ### Подробности по адаптерам
 
 #### XrayAdapter (срез 17 — первый после Hysteria, потому что самый похожий)
