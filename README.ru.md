@@ -28,36 +28,21 @@ AmneziaWG) и ломает REALITY anti-fingerprint у Xray.
 
 ### Нода — устанавливается на каждой proxy-VPS
 
-В админке: **Nodes → Create node** → скопируй одноразовый base64 payload из модального окна. Затем на VPS — запусти установщик **без флагов**, он спросит интерактивно:
+1. **В админке**: Nodes → Create node → в модалке нажми **Download**. Получишь файл `<node-name>-payload.b64` (~6-7 KB).
+2. **scp файл на VPS**:
+   ```bash
+   scp <node-name>-payload.b64 root@<vps-ip>:/tmp/payload.b64
+   ```
+3. **На VPS** — запусти установщик с флагом на файл:
+   ```bash
+   bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
+     --protocol xray \
+     --payload-file /tmp/payload.b64
+   ```
 
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh)
-```
+Замени `--protocol` на `xray`, `hysteria`, `amneziawg` или `naive`.
 
-Скрипт сам выведет меню:
-
-```
-Pick a protocol for this node:
-
-  1) Xray         VLESS+REALITY+Vision (TCP/443, transports raw/xhttp/ws/grpc)
-  2) Hysteria 2   UDP/443, QUIC, Brutal CC — лучший throughput на lossy-каналах
-  3) AmneziaWG    DPI-устойчивый WireGuard fork (нужен kernel module)
-  4) NaiveProxy   Caddy fork с klzgrad/forwardproxy@naive (≥2 GB RAM на сборку)
-
-Select [1-4]:
-```
-
-…потом спросит base64 payload, и доедет до конца сам.
-
-**Либо передать выбор флагами** (для автоматизации / повторных запусков):
-
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
-  --protocol xray \
-  --payload "<base64-blob-from-panel>"
-```
-
-Допустимые значения `--protocol`: `xray`, `hysteria`, `amneziawg`, `naive`.
+> ⚠️ **Почему `--payload-file`, а не `--payload "..."`?** Linux TTY canonical mode режет вставку на 4096 байт — реальные payload'ы 6-7 KB, и при вставке через терминал тихо теряется хвост, нода падает с `json unmarshal: unexpected end of JSON input`. Кнопка **Download** + scp + `--payload-file` — единственный надёжный путь. Интерактивный prompt также принимает `@/tmp/payload.b64` для того же.
 
 Скрипт цепочкой запускает официальные установщики
 (`get.hy2.sh`, XTLS install-script, AmneziaWG PPA + проверка kernel module,

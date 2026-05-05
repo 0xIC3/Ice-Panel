@@ -30,36 +30,21 @@ AmneziaWG and breaks Xray+REALITY's fingerprint trick.
 
 ### Node — install on each proxy VPS
 
-In the panel UI: **Nodes → Create node** → copy the one-time base64 payload from the modal. Then on the VPS — run the installer **with no flags** for an interactive menu:
+1. **In the panel UI**: Nodes → Create node → in the modal that pops up, click **Download**. You'll get `<node-name>-payload.b64` (~6-7 KB).
+2. **scp the file to your VPS**:
+   ```bash
+   scp <node-name>-payload.b64 root@<vps-ip>:/tmp/payload.b64
+   ```
+3. **On the VPS** — run the installer pointing at the file:
+   ```bash
+   bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
+     --protocol xray \
+     --payload-file /tmp/payload.b64
+   ```
 
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh)
-```
+Replace `--protocol` with `xray`, `hysteria`, `amneziawg`, or `naive`.
 
-The script will prompt:
-
-```
-Pick a protocol for this node:
-
-  1) Xray         VLESS+REALITY+Vision (TCP/443, transports raw/xhttp/ws/grpc)
-  2) Hysteria 2   UDP/443, QUIC, Brutal CC — best throughput on lossy links
-  3) AmneziaWG    DPI-resistant WireGuard fork (needs kernel module)
-  4) NaiveProxy   Caddy fork with klzgrad/forwardproxy@naive (≥2 GB RAM)
-
-Select [1-4]:
-```
-
-…then ask for the base64 payload, and proceed end-to-end.
-
-**Or pass the choice as flags** (useful for automation / re-runs):
-
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
-  --protocol xray \
-  --payload "<base64-blob-from-panel>"
-```
-
-Valid `--protocol` values: `xray`, `hysteria`, `amneziawg`, `naive`.
+> ⚠️ **Why `--payload-file` and not `--payload "..."`?** Linux TTY canonical-mode truncates pasted strings at 4096 bytes — real payloads are 6-7 KB, so terminal-pasting silently loses the tail and the node fails with `json unmarshal: unexpected end of JSON input`. The **Download** button + scp + `--payload-file` is the only reliable workflow. The interactive prompt also accepts `@/tmp/payload.b64` syntax for the same reason.
 
 The installer chains the protocol's official bootstrap (`get.hy2.sh`,
 XTLS install-script, AmneziaWG PPA + kernel-module probe, xcaddy build for

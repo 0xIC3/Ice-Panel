@@ -83,57 +83,49 @@ docker compose -f docker-compose.prod.yml --env-file .env.production down
 
 ## 2. Node
 
-### 2.1 Get a payload
+### 2.1 Get a payload — use Download, not Copy
 
-In the panel SPA → **Nodes** → **Create node** → fill name + address →
-copy the **base64 payload** from the modal (one-time, panel won't show it again).
+In the panel SPA → **Nodes** → **Create node** → fill name + address → in
+the modal that pops up, click **Download**. You'll get
+`<node-name>-payload.b64` (~6–7 KB).
+
+> ⚠️ **Don't terminal-paste the payload.** Linux TTY canonical-mode truncates
+> pasted strings at 4096 bytes. Real payloads are 6-7 KB, so anything pasted
+> directly into a shell prompt loses the tail and the node-agent fails with
+> a confusing `json unmarshal: unexpected end of JSON input`. The Download
+> button + scp + `--payload-file` is the only reliable workflow.
+
+Transfer the file to your VPS:
+
+```bash
+# from your laptop
+scp <node-name>-payload.b64 root@<vps-ip>:/tmp/payload.b64
+```
 
 ### 2.2 Install on the VPS
 
-The simplest path — **run with no flags**, the script will prompt interactively:
+**Recommended flow — flags with `--payload-file`** (skips TTY pasting):
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
+  --protocol xray \
+  --payload-file /tmp/payload.b64
+```
+
+Replace `--protocol` with `xray` / `hysteria` / `amneziawg` / `naive`.
+
+#### Or interactive
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh)
 ```
 
-Two questions:
+The script first asks for protocol (1-4), then asks for payload. **At the
+payload prompt, type `@/tmp/payload.b64`** — the leading `@` tells the
+script to read the file content directly. Don't paste the actual base64;
+TTY truncates at 4096 bytes.
 
-```
-Pick a protocol for this node:
-  1) Xray         VLESS+REALITY+Vision  (TCP/443, transports raw/xhttp/ws/grpc)
-  2) Hysteria 2   UDP/443, QUIC, Brutal CC
-  3) AmneziaWG    DPI-resistant WireGuard fork  (needs kernel module)
-  4) NaiveProxy   Caddy fork with klzgrad/forwardproxy@naive  (≥2 GB RAM)
-
-Select [1-4]: ▌
-```
-
-```
-Payload: ▌  ← paste the base64 blob from the panel modal here
-```
-
-#### Or pass flags directly
-
-For automation, re-runs, or skipping the menu:
-
-```bash
-# Hysteria 2
-bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
-  --protocol hysteria \
-  --payload "<base64-blob-from-panel>"
-
-# Xray
-bash <(curl -fsSL .../install-node.sh) --protocol xray --payload "..."
-
-# AmneziaWG
-bash <(curl -fsSL .../install-node.sh) --protocol amneziawg --payload "..."
-
-# NaiveProxy
-bash <(curl -fsSL .../install-node.sh) --protocol naive --payload "..."
-```
-
-Either way the result is identical — the menu is just sugar for filling
-`--protocol` and `--payload` from a TTY.
+Either path works; explicit flags are tidier for automation.
 
 What it does in each case:
 

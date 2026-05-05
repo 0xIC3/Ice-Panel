@@ -15,13 +15,23 @@
 #   7. Enables + starts the service, waits for /healthz
 #
 # Usage (as root):
-#   bash <(curl -fsSL .../install-node.sh) --protocol hysteria --payload "<base64-blob>"
+#   bash <(curl -fsSL .../install-node.sh)                        # interactive
+#   bash <(curl -fsSL .../install-node.sh) --protocol xray --payload-file /tmp/payload.b64
+#   bash <(curl -fsSL .../install-node.sh) --protocol xray --payload "@/tmp/payload.b64"
+#   bash <(curl -fsSL .../install-node.sh) --protocol xray --payload "<short-base64>"
 #
 # Get the payload by creating a Node in the panel UI — copy the one-time blob
-# shown in the modal.
+# shown in the modal. Real payloads are ~6-7 KB; Linux TTY canonical-mode
+# truncates pastes at 4096 bytes, so anything pasted directly through the
+# terminal (interactive prompt or shell command line) loses the tail.
+# **Always use `--payload-file` (or `@/path` syntax) for the real flow.**
+# Save the payload to a file via:
+#   * the "Save as file" button in the panel modal (one click),
+#   * scp from your laptop after pasting into a real text editor,
+#   * `curl > /tmp/payload.b64` from a private gist, etc.
 #
 # Re-runnable. Existing /etc/ice-panel-node/env is preserved unless --payload
-# is given again.
+# (or --payload-file) is given again.
 
 set -euo pipefail
 
@@ -39,11 +49,31 @@ NODE_PORT=${NODE_PORT:-8443}
 
 PROTOCOL=""
 PAYLOAD=""
+
+# Resolve a payload value: if it starts with "@", treat the rest as a path
+# and read the file content. Otherwise return as-is. Mirrors curl's `-d @file`
+# convention. Critical for long payloads — Linux TTY canonical-mode buffer
+# truncates pastes at 4096 bytes, so anything pasted directly into the
+# terminal (or via `--payload "..."` with the user shell-pasting into the
+# command line) gets cut. File-backed payload sidesteps the TTY entirely.
+resolve_payload() {
+  local value="$1"
+  if [[ "$value" == @* ]]; then
+    local path="${value#@}"
+    [[ -r "$path" ]] || fail "Cannot read payload file: $path"
+    # Strip any whitespace/newlines a careless save might leave in the file.
+    tr -d '\n\r \t' < "$path"
+  else
+    printf '%s' "$value"
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --protocol) PROTOCOL="$2"; shift 2 ;;
-    --payload)  PAYLOAD="$2"; shift 2 ;;
-    --port)     NODE_PORT="$2"; shift 2 ;;
+    --protocol)      PROTOCOL="$2"; shift 2 ;;
+    --payload)       PAYLOAD=$(resolve_payload "$2"); shift 2 ;;
+    --payload-file)  PAYLOAD=$(resolve_payload "@$2"); shift 2 ;;
+    --port)          NODE_PORT="$2"; shift 2 ;;
     -h|--help)
       grep '^#' "$0" | sed 's/^# \?//'
       exit 0
@@ -85,14 +115,33 @@ prompt_payload() {
 
 The panel issued a one-time base64 payload when you created this Node — it
 contains the mTLS keypair. Find it in the panel UI: Nodes → Create node →
-the modal that pops up after submit. Paste it now (single line, no quotes):
+the modal that pops up after submit.
+
+Two ways to enter it here:
+
+  1. Paste the base64 string directly. WORKS ONLY for payloads under
+     ~4 KB — Linux TTY truncates longer pastes at 4096 bytes. Real
+     payloads are ~6-7 KB, so this almost never works.
+
+  2. Save the payload to a file first (download via panel UI button, or
+     scp from your laptop, or `cat > /tmp/payload.b64` if your terminal
+     allows). Then enter `@/path/to/file` here — the script reads the
+     file content directly without any TTY buffering.
 
 EOF
   local input
-  read -rp "Payload: " input </dev/tty || fail "no /dev/tty — pass --payload explicitly"
-  PAYLOAD="$input"
+  read -rp "Payload (or @/path/to/file): " input </dev/tty || fail "no /dev/tty — pass --payload explicitly"
+  PAYLOAD=$(resolve_payload "$input")
   if [[ -z "$PAYLOAD" ]]; then
     fail "empty payload"
+  fi
+  # Sanity-check length: real payload is base64 of a ~3 KB JSON, so ≥4 KB
+  # base64. Anything shorter is almost certainly truncated and we'll fail
+  # later with a confusing JSON-decode error. Loudly warn now.
+  if [[ ${#PAYLOAD} -lt 4000 ]]; then
+    warn "payload is only ${#PAYLOAD} chars — typical payloads are 6-7 KB."
+    warn "If you pasted directly into the terminal, you likely hit the 4096-byte"
+    warn "TTY paste limit. Re-run with --payload @/path/to/file for the full thing."
   fi
 }
 
