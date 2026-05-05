@@ -44,7 +44,13 @@ async function createUser(
   };
 }
 
-async function createNode(name: string, address: string): Promise<void> {
+/**
+ * Test helper: creates a node + a Hysteria inbound on port 443. Existing
+ * tests rely on `createNode(name, address)` producing one hysteria endpoint
+ * per node — slice 23 made inbounds explicit, so the helper keeps that
+ * shape by also seeding the matching inbound.
+ */
+async function createNode(name: string, address: string): Promise<string> {
   const res = await app.inject({
     method: 'POST',
     url: '/api/nodes',
@@ -54,6 +60,47 @@ async function createNode(name: string, address: string): Promise<void> {
   if (res.statusCode !== 201) {
     throw new Error(`createNode failed: ${res.statusCode} ${res.body}`);
   }
+  const nodeId = JSON.parse(res.body).id as string;
+  await createHysteriaInbound(nodeId);
+  return nodeId;
+}
+
+async function createHysteriaInbound(nodeId: string, port = 443): Promise<string> {
+  const res = await app.inject({
+    method: 'POST',
+    url: '/api/inbounds',
+    headers: { authorization: `Bearer ${token}` },
+    payload: { nodeId, protocol: 'hysteria', name: `hy-${port}`, port, config: {} },
+  });
+  if (res.statusCode !== 201) {
+    throw new Error(`createHysteriaInbound failed: ${res.statusCode} ${res.body}`);
+  }
+  return JSON.parse(res.body).id;
+}
+
+async function createXrayInbound(nodeId: string, port = 8443): Promise<string> {
+  const res = await app.inject({
+    method: 'POST',
+    url: '/api/inbounds',
+    headers: { authorization: `Bearer ${token}` },
+    payload: {
+      nodeId,
+      protocol: 'xray',
+      name: `x-${port}`,
+      port,
+      config: {
+        realityDest: 'www.cloudflare.com:443',
+        realityServerNames: ['www.cloudflare.com'],
+        realityShortIds: ['abc123'],
+        realityPrivateKey: 'test-pubkey-for-vitest',
+        realityPublicKey: 'test-pubkey-for-vitest',
+      },
+    },
+  });
+  if (res.statusCode !== 201) {
+    throw new Error(`createXrayInbound failed: ${res.statusCode} ${res.body}`);
+  }
+  return JSON.parse(res.body).id;
 }
 
 beforeEach(async () => {
@@ -247,7 +294,8 @@ describe('GET /sub/:token — multi-format (slice 21)', () => {
 
   it('returns Xray JSON when ?format=xrayjson', async () => {
     const user = await createUser('alice', ['hysteria', 'xray']);
-    await createNode('eu-1', '10.0.0.1:8443');
+    const nodeId = await createNode('eu-1', '10.0.0.1:8443');
+    await createXrayInbound(nodeId);
 
     const res = await app.inject({
       method: 'GET',
@@ -388,7 +436,8 @@ describe('GET /sub/:token — error cases', () => {
 describe('GET /sub/:token — multi-protocol (slice 18)', () => {
   it('user with enabledProtocols=["hysteria","xray"] gets both endpoints per node', async () => {
     const user = await createUser('alice', ['hysteria', 'xray']);
-    await createNode('eu-1', '10.0.0.1:8443');
+    const nodeId = await createNode('eu-1', '10.0.0.1:8443');
+    await createXrayInbound(nodeId);
 
     const res = await app.inject({
       method: 'GET',
@@ -405,7 +454,7 @@ describe('GET /sub/:token — multi-protocol (slice 18)', () => {
     expect(xray.uri).toMatch(/^vless:\/\//);
     expect(xray.uri).toContain(user.xrayUuid);
     expect(xray.uri).toContain('security=reality');
-    expect(xray.uri).toContain('sid=abc123'); // from .env.test
+    expect(xray.uri).toContain('sid=abc123');
   });
 
   it('user with enabledProtocols=["hysteria"] only gets hysteria endpoints', async () => {

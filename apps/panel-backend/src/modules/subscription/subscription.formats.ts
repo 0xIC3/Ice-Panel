@@ -21,7 +21,11 @@ export function hostFromAddress(address: string): string {
  * every mainstream client (NekoRay, Hiddify, v2rayN, ...).
  */
 export function encodePlainList(uris: string[]): string {
-  return Buffer.from(uris.join('\n'), 'utf8').toString('base64');
+  // Filter empty URIs — amneziawg endpoints don't have a URL form, so they
+  // contribute nothing to the universal plain-list body. Clients that want
+  // AmneziaWG fetch with `?format=wgconf`.
+  const nonEmpty = uris.filter((u) => u.length > 0);
+  return Buffer.from(nonEmpty.join('\n'), 'utf8').toString('base64');
 }
 
 interface SubscriptionEndpointBase {
