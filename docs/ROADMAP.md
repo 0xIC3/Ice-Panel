@@ -134,7 +134,7 @@ Single-protocol модель также упрощает:
 | 12 | 🆕 Subscription generator | ✅ done | `/sub/:token`, Hysteria2 URI, base64 plain + JSON формат |
 | 13 | Сквозной флоу Hysteria2 (admin → user → реальный клиент) | ✅ done | Real-world integration; deploy runbook в `docs/deploy/hysteria-node.md` |
 | 14 | Frontend skeleton (Vite + React + Mantine + TanStack Query + Zustand) | ✅ done | SPA, AppShell + login + Users/Nodes CRUD, one-time payload modal |
-| 15 | Docker production build | ⏭️ next | Multi-stage Dockerfile, оптимизация образа |
+| 15 | Docker production build | ✅ done | Multi-stage Dockerfiles (panel-backend ~770 MB, frontend ~75 MB nginx, node ~14 MB distroless) + `docker-compose.prod.yml` |
 
 ### Подробности по срезам
 
