@@ -33,8 +33,9 @@ type Adapter struct {
 	cfg    Config
 	logger *slog.Logger
 
-	mu    sync.Mutex
-	users map[string]xrayClient // key: userId
+	mu      sync.Mutex
+	users   map[string]xrayClient // key: userId
+	started bool                  // set true after first successful regenerateAndRestart
 
 	proc *subprocess.Subprocess
 }
@@ -62,6 +63,7 @@ func (a *Adapter) Start(ctx context.Context) error {
 func (a *Adapter) Stop(ctx context.Context) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	a.started = false
 	if a.proc == nil {
 		return nil
 	}
@@ -130,9 +132,11 @@ func (a *Adapter) GetStats() (*core.Stats, error) {
 func (a *Adapter) Healthy() bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if !a.started {
+		return false
+	}
 	if a.cfg.BinaryPath == "" {
-		// Config-only mode: healthy after Start ran (which sets users to non-nil).
-		return a.users != nil
+		return true
 	}
 	return a.proc != nil && a.proc.Running()
 }
@@ -154,6 +158,7 @@ func (a *Adapter) regenerateAndRestartLocked(ctx context.Context) error {
 	if a.cfg.BinaryPath == "" {
 		// Config-only mode: nothing more to do.
 		a.logger.Info("xray config written (config-only mode)", "users", len(clients))
+		a.started = true
 		return nil
 	}
 
@@ -175,6 +180,7 @@ func (a *Adapter) regenerateAndRestartLocked(ctx context.Context) error {
 		return fmt.Errorf("start xray: %w", err)
 	}
 	a.proc = proc
+	a.started = true
 	a.logger.Info("xray (re)started", "users", len(clients))
 	return nil
 }
