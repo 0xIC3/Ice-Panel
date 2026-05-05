@@ -1,25 +1,9 @@
 import type { User, UserTraffic } from '../../generated/prisma/client.js';
 
-export interface HysteriaUriOpts {
-  password: string;
-  /** Host portion only — port comes separately so we can distinguish the
-   *  control-plane port (panel→node mTLS) from the client-facing UDP port. */
-  host: string;
-  /** Public Hysteria2 UDP port the client connects to. */
-  port: number;
-  name: string;
-}
-
-/**
- * Build a `hysteria2://` URI consumable by Hiddify, NekoRay, v2rayN, the
- * upstream `hysteria` client, and our own IcePath-VPN bot.
- *
- * Slice 13 separates the host from the port; slice 17 (inbounds CRUD) will
- * carry SNI / obfs / insecure / pinSHA256 per inbound.
- */
-export function buildHysteriaUri(opts: HysteriaUriOpts): string {
-  return `hysteria2://${encodeURIComponent(opts.password)}@${opts.host}:${opts.port}/?#${encodeURIComponent(opts.name)}`;
-}
+// Re-export so existing imports keep working (slice 16 moved the
+// implementation into core-adapters/hysteria — this file now hosts only
+// the format-level helpers that are not protocol-specific).
+export { buildHysteriaUri, type HysteriaUriOpts } from '../../core-adapters/hysteria/index.js';
 
 /**
  * Strip the optional `:port` suffix from a `host[:port]` string. Returns
