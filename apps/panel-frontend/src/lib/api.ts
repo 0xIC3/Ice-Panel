@@ -377,6 +377,17 @@ export async function deleteInbound(id: string): Promise<void> {
   await api.delete(`/api/inbounds/${id}`);
 }
 
+export interface KeypairResponse {
+  privateKey: string;
+  publicKey: string;
+}
+
+/** Generate a fresh x25519 keypair for REALITY / AmneziaWG inbound. */
+export async function generateInboundKeypair(): Promise<KeypairResponse> {
+  const { data } = await api.post<KeypairResponse>('/api/inbounds/generate-keypair');
+  return data;
+}
+
 export async function testSrrRule(userAgent: string): Promise<TestSrrResponse> {
   const { data } = await api.post<TestSrrResponse>('/api/srr/test', { userAgent });
   return data;

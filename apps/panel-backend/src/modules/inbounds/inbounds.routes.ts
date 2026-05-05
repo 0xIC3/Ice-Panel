@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { requireAuth } from '../auth/auth.hook.js';
+import { generateWireguardKeyPair } from '../../lib/credentials.js';
 import {
   CreateInboundSchema,
   UpdateInboundSchema,
@@ -10,6 +11,16 @@ import * as inboundsService from './inbounds.service.js';
 
 export async function inboundsRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('onRequest', requireAuth);
+
+  // Generate a curve25519 keypair for REALITY (Xray) or AmneziaWG.
+  // Both protocols use the same x25519 + base64 format; we just generate
+  // panel-side instead of forcing the operator to ssh in and run
+  // `xray x25519` / `awg genkey`. The private key is returned ONCE and is
+  // never persisted by the panel — the operator pastes it into the inbound
+  // form (or it's auto-filled by the SPA).
+  app.post('/api/inbounds/generate-keypair', async (_request, reply) => {
+    return reply.send(generateWireguardKeyPair());
+  });
 
   app.post('/api/inbounds', async (request, reply) => {
     const input = CreateInboundSchema.parse(request.body);

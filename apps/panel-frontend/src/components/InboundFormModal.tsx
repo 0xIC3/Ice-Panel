@@ -16,7 +16,11 @@ import {
   TextInput,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
+import { IconKey } from '@tabler/icons-react';
+import { notifications } from '@mantine/notifications';
+import { useMutation } from '@tanstack/react-query';
 import {
+  generateInboundKeypair,
   type CreateInboundInput,
   type Inbound,
   type Node,
@@ -213,6 +217,28 @@ export function InboundFormModal({ opened, onClose, inbound, nodes, onSubmit, lo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opened, inbound?.id]);
 
+  const keypairMutation = useMutation({
+    mutationFn: generateInboundKeypair,
+    onError: (err) =>
+      notifications.show({
+        color: 'red',
+        title: 'Generate failed',
+        message: err instanceof Error ? err.message : String(err),
+      }),
+  });
+
+  async function generateXrayKeys() {
+    const kp = await keypairMutation.mutateAsync();
+    form.setValues({ ...form.values, xrayPrivateKey: kp.privateKey, xrayPublicKey: kp.publicKey });
+    notifications.show({ color: 'green', message: 'REALITY keypair generated' });
+  }
+
+  async function generateAwgKeys() {
+    const kp = await keypairMutation.mutateAsync();
+    form.setValues({ ...form.values, awgServerPriv: kp.privateKey, awgServerPub: kp.publicKey });
+    notifications.show({ color: 'green', message: 'AmneziaWG server keypair generated' });
+  }
+
   function applyAwgPreset(preset: 'tspu' | 'mobile' | 'custom') {
     form.setFieldValue('awgPreset', preset);
     if (preset === 'tspu') {
@@ -405,15 +431,27 @@ export function InboundFormModal({ opened, onClose, inbound, nodes, onSubmit, lo
                 required
                 {...form.getInputProps('xrayShortIds')}
               />
-              <PasswordInput
-                label="REALITY private key"
-                description="Generate via `xray x25519`"
-                required
-                {...form.getInputProps('xrayPrivateKey')}
-              />
+              <Group align="end" wrap="nowrap" gap="xs">
+                <PasswordInput
+                  flex={1}
+                  label="REALITY private key"
+                  description="curve25519, base64. Click Generate or paste from `xray x25519`."
+                  required
+                  {...form.getInputProps('xrayPrivateKey')}
+                />
+                <Button
+                  leftSection={<IconKey size={14} />}
+                  variant="light"
+                  loading={keypairMutation.isPending}
+                  onClick={generateXrayKeys}
+                  type="button"
+                >
+                  Generate
+                </Button>
+              </Group>
               <TextInput
                 label="REALITY public key"
-                description="Paired with private key — emitted in client URI"
+                description="Paired with private key — emitted in client URI. Auto-filled by Generate."
                 required
                 {...form.getInputProps('xrayPublicKey')}
               />
@@ -478,15 +516,27 @@ export function InboundFormModal({ opened, onClose, inbound, nodes, onSubmit, lo
                 required
                 {...form.getInputProps('awgSubnet')}
               />
-              <PasswordInput
-                label="Server private key"
-                description="`awg genkey`"
-                required
-                {...form.getInputProps('awgServerPriv')}
-              />
+              <Group align="end" wrap="nowrap" gap="xs">
+                <PasswordInput
+                  flex={1}
+                  label="Server private key"
+                  description="curve25519, base64. Click Generate or paste from `awg genkey`."
+                  required
+                  {...form.getInputProps('awgServerPriv')}
+                />
+                <Button
+                  leftSection={<IconKey size={14} />}
+                  variant="light"
+                  loading={keypairMutation.isPending}
+                  onClick={generateAwgKeys}
+                  type="button"
+                >
+                  Generate
+                </Button>
+              </Group>
               <TextInput
                 label="Server public key"
-                description="`awg pubkey < private`"
+                description="Auto-filled by Generate, or paste from `awg pubkey < private`."
                 required
                 {...form.getInputProps('awgServerPub')}
               />
