@@ -151,11 +151,157 @@ Then re-run the panel installer with `CORS_ORIGIN=https://panel.yourdomain.com`.
 
 ---
 
-## Option 3: Cloudflare tunnel (testing only)
+## Option 3: Cloudflare proxied (yellow cloud) + Origin Certificate
 
-**Why:** you want to expose a panel behind CGNAT or without a public IP. **Do
-not use this in production** — Cloudflare sees all your subscription tokens
-in cleartext during their TLS-termination, which defeats the threat model.
+**Why:** hide the panel's real VPS IP, get free DDoS protection, free
+HTTP/3, free brotli, automatic geo-WAF rules. The most popular production
+path for the panel.
+
+> ⚠️ **Cloudflare proxy works for the PANEL ONLY**, not for proxy nodes —
+> see the warning at the bottom of this section.
+
+### Step 1: DNS
+
+In your Cloudflare dashboard for the domain:
+
+```
+Type:    A
+Name:    panel
+Content: <your-vps-public-ip>
+Proxy:   ☁ Proxied (yellow / orange cloud)
+TTL:     Auto
+```
+
+### Step 2: SSL/TLS mode
+
+Cloudflare → SSL/TLS → Overview:
+- **Full (strict)** — recommended. CF talks HTTPS to origin, validates the
+  cert. Requires you to install Cloudflare's Origin Certificate on the VPS
+  (next step).
+- **Flexible** is the lazy mode (CF↔origin in plain HTTP) — works without
+  installing any cert, but cleartext between CF and your VPS is a real
+  attack surface for anyone snooping that link. Only acceptable for
+  throwaway testing.
+
+### Step 3: Origin Certificate
+
+Cloudflare → SSL/TLS → Origin Server → **Create Certificate**:
+- Hostnames: `panel.yourdomain.com` (or `*.yourdomain.com` if you want
+  one cert for many subdomains)
+- Validity: 15 years (default — Cloudflare CA, not browser-trusted, but
+  trusted by CF edge)
+
+Save the two PEM blobs to the VPS:
+
+```bash
+mkdir -p /etc/caddy/cf
+nano /etc/caddy/cf/cert.pem        # paste "Origin Certificate" PEM
+nano /etc/caddy/cf/privkey.pem     # paste "Private Key" PEM
+chmod 600 /etc/caddy/cf/*
+```
+
+### Step 4: Caddy with the Origin cert
+
+```caddyfile
+panel.yourdomain.com {
+    tls /etc/caddy/cf/cert.pem /etc/caddy/cf/privkey.pem
+    reverse_proxy 127.0.0.1:8080
+}
+
+# Anti-probing — anyone hitting the bare VPS IP on :443 gets a silent 204.
+# Caddy serves this with its self-signed internal cert; bots that resolved
+# the domain via dig / cert-transparency logs and tried to bypass CF will
+# bounce off this with no banner / no fingerprint.
+:443 {
+    tls internal
+    respond 204
+}
+```
+
+```bash
+apt-get install -y caddy
+mv Caddyfile /etc/caddy/Caddyfile  # or edit /etc/caddy/Caddyfile
+systemctl reload caddy
+```
+
+### Step 5: Update CORS in panel
+
+```bash
+cd /opt/ice-panel
+sed -i 's|^CORS_ORIGIN=.*|CORS_ORIGIN=https://panel.yourdomain.com|' .env.production
+docker compose -f docker-compose.prod.yml --env-file .env.production restart backend
+```
+
+### Step 6: Close port 8080 from the public internet
+
+The panel-installer left `:8080` open as a fallback for IP-direct testing.
+With CF + Caddy in front you don't need that anymore — Caddy talks to
+backend via `127.0.0.1:8080` (loopback, ufw doesn't filter loopback).
+
+```bash
+ufw delete allow 8080/tcp
+ufw reload
+```
+
+Now the only ways into the panel are:
+1. `https://panel.yourdomain.com` via CF edge → Caddy → backend
+2. SSH into the VPS and curl `127.0.0.1:8080` directly
+
+### Step 7: Lock origin to CF IPs only (optional, recommended)
+
+If somebody discovers your real VPS IP (e.g. via leaked email headers),
+they could bypass CF and hit your VPS directly on `:443`. Plug that hole
+by allowing only Cloudflare's IP ranges to reach `:443`:
+
+```bash
+# Pull the current CF IP list
+for ip in $(curl -fsSL https://www.cloudflare.com/ips-v4); do
+  ufw allow from "$ip" to any port 443 proto tcp
+done
+ufw delete allow 443/tcp        # remove the wide-open rule
+ufw reload
+```
+
+Re-run this script periodically — Cloudflare adds IP ranges occasionally.
+
+### Verify
+
+```bash
+# From outside (your laptop)
+curl https://panel.yourdomain.com/health
+# → {"status":"ok","db":"ok","redis":"ok"}
+
+# Real VPS IP NOT visible
+nslookup panel.yourdomain.com
+# → resolves to a Cloudflare IP, not yours
+
+curl -k https://<your-vps-ip>
+# → silent 204 from the anti-probing block (or connection refused if
+#   you locked :443 to CF-only IPs in step 7)
+```
+
+### ⚠️ Cloudflare proxy works ONLY for the panel — nodes must be DNS-only
+
+| Protocol on the node | CF Proxied (yellow) | DNS only (gray) |
+|---|---|---|
+| **Hysteria 2** (UDP/443) | ❌ CF Free does **not** pass UDP — kills the protocol | ✅ Required |
+| **AmneziaWG** (UDP/51820) | ❌ Same — UDP not proxied | ✅ Required |
+| **Xray + REALITY (raw)** | ❌ CF terminates TLS → REALITY's anti-fingerprint trick relies on the client doing the real TLS handshake itself, CF in the middle breaks it | ✅ Required for REALITY |
+| **Xray + WS + TLS** | ✅ Works — this is the canonical CDN-fronting pattern | Also works |
+| **NaiveProxy** | ⚠️ Technically works but CF in the middle disturbs the Chromium-fingerprint claim | ✅ Safer |
+
+**Rule of thumb**: when adding a Node DNS record, the default is **DNS only
+(gray cloud)**. Only Xray-with-WS+TLS inbounds may be proxied.
+
+---
+
+## Option 4: Cloudflare Tunnel (testing only / CGNAT)
+
+**Why:** you want to expose a panel from a VPS behind CGNAT, or without
+opening any inbound port at all (CF connects out from your host). **Don't
+use this in production for the same reason as Flexible TLS** — Cloudflare
+sees all your subscription tokens in cleartext during their TLS-termination,
+which defeats the panel's threat model.
 
 ```bash
 # On the panel host
@@ -176,7 +322,8 @@ cloudflared service install
 ```
 
 After this `panel.yourdomain.com` resolves to Cloudflare edge, which
-tunnels back to your VPS. TLS handled by Cloudflare.
+tunnels back to your VPS through the outbound `cloudflared` daemon. TLS
+handled by Cloudflare.
 
 ---
 

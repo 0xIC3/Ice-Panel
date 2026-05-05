@@ -18,6 +18,14 @@ bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts
 
 Билдит Docker-образы локально, генерирует случайные секреты, поднимает стек Postgres + Redis + backend + frontend и печатает URL где создаётся первый администратор. Первый запуск ~5–10 минут.
 
+**Для production**: фронти панель Cloudflare proxied субдоменом + Caddy на
+VPS — прячет реальный IP и даёт бесплатный TLS. Полная настройка с
+Origin-Certificate, ufw-локом до CF-IP и anti-probing правилами в
+[docs/deploy/reverse-proxy.md](./docs/deploy/reverse-proxy.md). **Внимание**:
+Cloudflare proxy подходит **только для панели** — proxy-ноды должны быть
+**DNS only (gray cloud)**: CF Free не пропускает UDP (убивает Hysteria /
+AmneziaWG) и ломает REALITY anti-fingerprint у Xray.
+
 ### Нода — устанавливается на каждой proxy-VPS
 
 В админке: **Nodes → Create node** → скопируй одноразовый base64 payload из модального окна. Затем на VPS — запусти установщик **без флагов**, он спросит интерактивно:

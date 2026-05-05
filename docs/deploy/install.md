@@ -46,9 +46,21 @@ bash <(curl -fsSL .../install-panel.sh)
 ### TLS in front
 
 The script binds the SPA to plain HTTP on `:8080`. **Don't expose this directly.**
-Front it with Caddy / nginx / Cloudflare-tunnel — full configs with copy-paste
-snippets in [reverse-proxy.md](./reverse-proxy.md), incl. anti-probing rules
-that drop scanners on the bare-IP hit.
+
+Recommended production setup:
+- **Subdomain on Cloudflare with yellow cloud (Proxied)** for the panel — hides VPS IP, free DDoS, free TLS
+- **Caddy on the VPS** with a Cloudflare Origin Certificate, listening on `:443`
+- Panel-only: `panel.yourdomain.com` → CF edge → Caddy → `127.0.0.1:8080`
+- Then close `:8080` from public internet via `ufw delete allow 8080/tcp`
+
+> ⚠️ **Cloudflare proxy is for the PANEL ONLY** — never for proxy nodes.
+> CF Free doesn't pass UDP (kills Hysteria/AmneziaWG) and CF's TLS-termination
+> breaks Xray+REALITY's anti-fingerprint trick. Node DNS records should be
+> **DNS only (gray cloud)**.
+
+Full setup with all 4 options (Caddy direct / nginx / **Cloudflare proxied** / Cloudflare Tunnel),
+including ufw lock-down to CF-only IPs and origin-cert install, in
+**[reverse-proxy.md](./reverse-proxy.md)**.
 
 ### Update
 

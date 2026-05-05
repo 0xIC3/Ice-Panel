@@ -20,6 +20,14 @@ Builds the Docker images locally, generates random secrets, runs the
 Postgres + Redis + backend + frontend stack, and prints the URL where you
 bootstrap the first admin. Takes ~5–10 minutes on the first run.
 
+**For production**: front the panel with Cloudflare proxied subdomain + Caddy
+on the VPS to hide the real IP and get free TLS — full setup with
+Origin-Certificate install, ufw lock-down to CF IPs, and anti-probing rules
+in [docs/deploy/reverse-proxy.md](./docs/deploy/reverse-proxy.md). **Note
+the warning there**: Cloudflare proxy is for the panel only — proxy nodes
+must use DNS only (gray cloud), since CF doesn't pass UDP for Hysteria /
+AmneziaWG and breaks Xray+REALITY's fingerprint trick.
+
 ### Node — install on each proxy VPS
 
 In the panel UI: **Nodes → Create node** → copy the one-time base64 payload from the modal. Then on the VPS — run the installer **with no flags** for an interactive menu:
