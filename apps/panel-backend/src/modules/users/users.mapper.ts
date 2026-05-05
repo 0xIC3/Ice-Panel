@@ -95,7 +95,7 @@ export function mapUserToPublic(
  * protocol names. Falls back to ['hysteria'] if the stored shape is
  * unexpected (defensive — should not happen with our schema validation).
  */
-function parseEnabledProtocols(value: unknown): string[] {
+export function parseEnabledProtocols(value: unknown): string[] {
   if (!Array.isArray(value)) return ['hysteria'];
   return value.filter((v): v is string => typeof v === 'string');
 }

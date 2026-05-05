@@ -9,31 +9,38 @@ import { registerAndLogin } from '../../../tests/helpers/auth.js';
 let app: FastifyInstance;
 let token: string;
 
-async function createUser(username: string): Promise<{
+async function createUser(
+  username: string,
+  enabledProtocols?: string[],
+): Promise<{
   id: string;
   subscriptionToken: string;
   hysteriaPassword: string;
+  xrayUuid: string;
 }> {
+  const payload: Record<string, unknown> = { username };
+  if (enabledProtocols) payload.enabledProtocols = enabledProtocols;
   const res = await app.inject({
     method: 'POST',
     url: '/api/users',
     headers: { authorization: `Bearer ${token}` },
-    payload: { username },
+    payload,
   });
   if (res.statusCode !== 201) {
     throw new Error(`createUser failed: ${res.statusCode} ${res.body}`);
   }
   const body = JSON.parse(res.body);
-  // Subscription token is in the public DTO; hysteriaPassword is not, so
-  // pull it directly from the DB for assertions.
+  // Subscription token is in the public DTO; hysteriaPassword/xrayUuid aren't,
+  // so pull them directly from the DB for assertions.
   const persisted = await prisma.user.findUniqueOrThrow({
     where: { id: body.id },
-    select: { hysteriaPassword: true },
+    select: { hysteriaPassword: true, xrayUuid: true },
   });
   return {
     id: body.id,
     subscriptionToken: body.subscriptionToken,
     hysteriaPassword: persisted.hysteriaPassword,
+    xrayUuid: persisted.xrayUuid,
   };
 }
 
@@ -227,6 +234,59 @@ describe('GET /sub/:token — error cases', () => {
     });
     expect(res.statusCode).toBe(403);
     expect(JSON.parse(res.body).reason).toBe('LIMITED');
+  });
+});
+
+describe('GET /sub/:token — multi-protocol (slice 18)', () => {
+  it('user with enabledProtocols=["hysteria","xray"] gets both endpoints per node', async () => {
+    const user = await createUser('alice', ['hysteria', 'xray']);
+    await createNode('eu-1', '10.0.0.1:8443');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/sub/${user.subscriptionToken}?format=json`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.endpoints).toHaveLength(2);
+    const protocols = body.endpoints.map((e: { protocol: string }) => e.protocol).sort();
+    expect(protocols).toEqual(['hysteria', 'xray']);
+
+    const xray = body.endpoints.find((e: { protocol: string }) => e.protocol === 'xray');
+    expect(xray.uri).toMatch(/^vless:\/\//);
+    expect(xray.uri).toContain(user.xrayUuid);
+    expect(xray.uri).toContain('security=reality');
+    expect(xray.uri).toContain('sid=abc123'); // from .env.test
+  });
+
+  it('user with enabledProtocols=["hysteria"] only gets hysteria endpoints', async () => {
+    const user = await createUser('bob', ['hysteria']);
+    await createNode('eu-1', '10.0.0.1:8443');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/sub/${user.subscriptionToken}?format=json`,
+    });
+
+    const body = JSON.parse(res.body);
+    expect(body.endpoints).toHaveLength(1);
+    expect(body.endpoints[0].protocol).toBe('hysteria');
+  });
+
+  it('default user (no enabledProtocols passed) gets hysteria-only', async () => {
+    const user = await createUser('carol');
+    await createNode('eu-1', '10.0.0.1:8443');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/sub/${user.subscriptionToken}?format=json`,
+    });
+
+    const body = JSON.parse(res.body);
+    expect(body.endpoints).toHaveLength(1);
+    expect(body.endpoints[0].protocol).toBe('hysteria');
+    expect(body.user.id).toBe(user.id);
   });
 });
 

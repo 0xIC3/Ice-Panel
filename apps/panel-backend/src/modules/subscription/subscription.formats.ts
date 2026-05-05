@@ -1,9 +1,11 @@
 import type { User, UserTraffic } from '../../generated/prisma/client.js';
+import type { ProtocolName } from '@ice-panel/shared';
 
 // Re-export so existing imports keep working (slice 16 moved the
 // implementation into core-adapters/hysteria — this file now hosts only
 // the format-level helpers that are not protocol-specific).
 export { buildHysteriaUri, type HysteriaUriOpts } from '../../core-adapters/hysteria/index.js';
+export { buildVlessRealityUri, type VlessRealityUriOpts } from '../../core-adapters/xray/index.js';
 
 /**
  * Strip the optional `:port` suffix from a `host[:port]` string. Returns
@@ -23,7 +25,7 @@ export function encodePlainList(uris: string[]): string {
 }
 
 export interface SubscriptionEndpoint {
-  protocol: 'hysteria';
+  protocol: ProtocolName;
   nodeName: string;
   uri: string;
 }
