@@ -51,9 +51,39 @@ export interface XraySubscriptionEndpoint extends SubscriptionEndpointBase {
   fingerprint: string;
 }
 
+export interface AmneziawgSubscriptionEndpoint extends SubscriptionEndpointBase {
+  protocol: 'amneziawg';
+  /** User's WireGuard private key. */
+  privateKey: string;
+  /** IP allocated to this user inside the inbound's subnet, CIDR /32 form. */
+  allowedIp: string;
+  /** Server's WireGuard public key (the inbound's interface PublicKey). */
+  serverPublicKey: string;
+  /** Junk/header obfuscation parameters — must match the server inbound. */
+  jc: number;
+  jmin: number;
+  jmax: number;
+  s1: number;
+  s2: number;
+  s3: number;
+  s4: number;
+  h1: number;
+  h2: number;
+  h3: number;
+  h4: number;
+}
+
+export interface NaiveSubscriptionEndpoint extends SubscriptionEndpointBase {
+  protocol: 'naive';
+  username: string;
+  password: string;
+}
+
 export type SubscriptionEndpoint =
   | HysteriaSubscriptionEndpoint
-  | XraySubscriptionEndpoint;
+  | XraySubscriptionEndpoint
+  | AmneziawgSubscriptionEndpoint
+  | NaiveSubscriptionEndpoint;
 
 export interface SubscriptionJsonResponse {
   user: {
