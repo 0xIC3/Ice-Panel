@@ -17,6 +17,10 @@ const ConfigSchema = z.object({
   // the panel↔node control-plane port stored in `nodes.address`. Slice 17
   // (inbounds CRUD) will replace this with per-inbound config.
   HYSTERIA_PUBLIC_PORT: z.coerce.number().int().min(1).max(65535).default(443),
+
+  // Comma-separated list of frontend origins allowed to call the API.
+  // Default covers the Vite dev server.
+  CORS_ORIGIN: z.string().default('http://localhost:5173'),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

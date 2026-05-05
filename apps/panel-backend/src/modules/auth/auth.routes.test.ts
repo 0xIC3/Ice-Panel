@@ -103,6 +103,28 @@ describe('POST /api/auth/login', () => {
   });
 });
 
+describe('GET /api/auth/status', () => {
+  it('reports registration enabled when no admins exist', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/auth/status' });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.authentication.password.enabled).toBe(true);
+    expect(body.registration.enabled).toBe(true);
+  });
+
+  it('reports registration disabled once an admin exists', async () => {
+    await registerAdmin(app);
+    const res = await app.inject({ method: 'GET', url: '/api/auth/status' });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).registration.enabled).toBe(false);
+  });
+
+  it('is publicly accessible (no auth required)', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/auth/status' });
+    expect(res.statusCode).toBe(200);
+  });
+});
+
 describe('GET /api/auth/me', () => {
   it('returns the authenticated admin', async () => {
     const token = await registerAndLogin(app);

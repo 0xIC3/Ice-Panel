@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance } from 'fastify';
+import fastifyCors from '@fastify/cors';
 import fastifyJwt from '@fastify/jwt';
 import fastifyRateLimit from '@fastify/rate-limit';
 import { ZodError } from 'zod';
@@ -47,6 +48,11 @@ export async function buildApp(): Promise<FastifyInstance> {
       db: dbOk ? 'ok' : 'down',
       redis: redisOk ? 'ok' : 'down',
     };
+  });
+
+  await app.register(fastifyCors, {
+    origin: config.CORS_ORIGIN.split(',').map((s) => s.trim()),
+    credentials: true,
   });
 
   await app.register(fastifyRateLimit, {

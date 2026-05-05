@@ -7,6 +7,20 @@ import * as adminService from '../admin/admin.service.js';
 import { mapAdminToPublic } from '../admin/admin.mapper.js';
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
+  // GET /api/auth/status — public discovery: tells the frontend which auth
+  // methods are enabled and whether bootstrap registration is still open.
+  app.get('/api/auth/status', async () => {
+    const adminCount = await adminService.countAdmins();
+    return {
+      authentication: {
+        password: { enabled: true },
+      },
+      registration: {
+        enabled: adminCount === 0,
+      },
+    };
+  });
+
   // POST /api/auth/login — strict rate limit (anti-brute-force)
   app.post(
     '/api/auth/login',
