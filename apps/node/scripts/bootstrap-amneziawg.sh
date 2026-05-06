@@ -38,30 +38,40 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y "linux-headers-${KERNEL_VER}" 
 
 # ───── 3. Kernel module via DKMS ─────
 AWG_MODULE_REPO=https://github.com/amnezia-vpn/amneziawg-linux-kernel-module.git
-AWG_MODULE_DIR=/usr/src/amneziawg-build
+AWG_MODULE_DIR=/usr/src/amneziawg-src
 
 if lsmod | grep -q '^amneziawg\b'; then
   log "amneziawg kernel module already loaded — skipping module install"
 else
   log "Installing amneziawg kernel module via DKMS from $AWG_MODULE_REPO"
 
-  # Fresh clone or update
-  if [[ -d "$AWG_MODULE_DIR/.git" ]]; then
-    git -C "$AWG_MODULE_DIR" fetch --depth 1 origin main
-    git -C "$AWG_MODULE_DIR" reset --hard origin/main
-  else
-    git clone --depth 1 "$AWG_MODULE_REPO" "$AWG_MODULE_DIR"
-  fi
+  # Fresh clone (don't specify branch — use repo default which may be master)
+  rm -rf "$AWG_MODULE_DIR"
+  git clone --depth 1 "$AWG_MODULE_REPO" "$AWG_MODULE_DIR"
 
-  # Parse version from dkms.conf
-  AWG_VER=$(grep 'PACKAGE_VERSION' "$AWG_MODULE_DIR/dkms.conf" | head -1 | grep -oP '"[^"]+"' | tr -d '"')
+  # Find dkms.conf — may be at root or one level deep
+  DKMS_CONF=$(find "$AWG_MODULE_DIR" -maxdepth 2 -name 'dkms.conf' | head -1)
+  if [[ -z "$DKMS_CONF" ]]; then
+    fail "dkms.conf not found in $AWG_MODULE_DIR — repo structure may have changed"
+  fi
+  log "Found dkms.conf at: $DKMS_CONF"
+
+  # Parse version; fallback to a known good version
+  AWG_VER=$(grep 'PACKAGE_VERSION' "$DKMS_CONF" | head -1 | grep -oP '"[^"]+"' | tr -d '"')
+  if [[ -z "$AWG_VER" ]]; then
+    AWG_VER="1.0.0"
+    warn "Could not parse version from dkms.conf — using fallback $AWG_VER"
+  fi
   log "amneziawg module version: $AWG_VER"
 
-  # Remove stale DKMS entries for this version if present
-  dkms remove "amneziawg/${AWG_VER}" --all 2>/dev/null || true
+  # DKMS requires source in /usr/src/<name>-<version>/
+  DKMS_SRC="/usr/src/amneziawg-${AWG_VER}"
+  DKMS_ROOT=$(dirname "$DKMS_CONF")
+  rm -rf "$DKMS_SRC"
+  cp -r "$DKMS_ROOT" "$DKMS_SRC"
 
-  # Add, build, install
-  cp -r "$AWG_MODULE_DIR" "/usr/src/amneziawg-${AWG_VER}"
+  # Remove stale DKMS entries then add/build/install
+  dkms remove "amneziawg/${AWG_VER}" --all 2>/dev/null || true
   dkms add "amneziawg/${AWG_VER}"
   dkms build "amneziawg/${AWG_VER}"
   dkms install "amneziawg/${AWG_VER}"
@@ -79,12 +89,8 @@ if command -v awg >/dev/null && command -v awg-quick >/dev/null; then
 else
   log "Building amneziawg-tools from $AWG_TOOLS_REPO"
 
-  if [[ -d "$AWG_TOOLS_DIR/.git" ]]; then
-    git -C "$AWG_TOOLS_DIR" fetch --depth 1 origin master
-    git -C "$AWG_TOOLS_DIR" reset --hard origin/master
-  else
-    git clone --depth 1 "$AWG_TOOLS_REPO" "$AWG_TOOLS_DIR"
-  fi
+  rm -rf "$AWG_TOOLS_DIR"
+  git clone --depth 1 "$AWG_TOOLS_REPO" "$AWG_TOOLS_DIR"
 
   make -C "$AWG_TOOLS_DIR/src" -j"$(nproc)"
   make -C "$AWG_TOOLS_DIR/src" install
