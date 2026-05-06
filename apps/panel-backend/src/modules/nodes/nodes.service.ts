@@ -1,4 +1,5 @@
 import { issueNodeCert, encodeNodePayload } from '../keygen/keygen.service.js';
+import { eventBus } from '../../lib/event-bus.js';
 import * as repo from './nodes.repository.js';
 import { issueBootstrapToken } from './bootstrap.service.js';
 import {
@@ -92,6 +93,12 @@ export async function createNode(
     expiresAt: tokenInfo.expiresAt.toISOString(),
     command: renderBootstrapCommand(ctx.panelUrl, tokenInfo.token),
   };
+
+  // Trigger backfill so existing active users land on this fresh node.
+  // Without this, addUser only fires on future user.created events; admins
+  // would have to recreate every existing user, which we hit live during the
+  // 2026-05-06 VPS test (Hysteria auth rejected pre-existing user).
+  eventBus.emit('node.created', { nodeId: node.id, nodeName: node.name });
 
   return mapNodeWithPayload(node, payload, bootstrap);
 }

@@ -123,9 +123,9 @@ export function NodePayloadModal({ opened, onClose, nodeName, payload, bootstrap
           </>
         ) : null}
 
-        <Divider />
+        {payload ? <Divider /> : null}
 
-        <Stack gap={4}>
+        {payload ? <Stack gap={4}>
           <Group justify="space-between" wrap="nowrap">
             <Text fw={600}>Manual / file flow (advanced)</Text>
             <Button
@@ -166,7 +166,7 @@ export function NodePayloadModal({ opened, onClose, nodeName, payload, bootstrap
               {copiedKey === 'payload' ? 'Copied' : 'Copy payload'}
             </Button>
           </Group>
-        </Stack>
+        </Stack> : null}
 
         <Group justify="flex-end" mt="md">
           <Button onClick={onClose} variant="filled">

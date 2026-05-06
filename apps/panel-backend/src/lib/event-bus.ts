@@ -12,6 +12,10 @@ export interface DomainEventMap {
   'user.status-changed':  { userId: string; from: string; to: string };
   'user.deleted':         { userId: string };
   'user.traffic-reset':   { userId: string; previousUsedBytes: bigint };
+  // node.created → backfill all active users to this node. Required because
+  // an empty new node otherwise stays empty until each existing user is
+  // mutated again. Caught live during slice-23 VPS test 2026-05-06.
+  'node.created':         { nodeId: string; nodeName: string };
 }
 
 type EventHandler<K extends keyof DomainEventMap> = (

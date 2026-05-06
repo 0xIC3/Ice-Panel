@@ -6,6 +6,7 @@ import {
   findExpiredUsers,
   findExceededTrafficUsers,
 } from '../users/users.cron.js';
+import { pollNodeStatuses } from '../nodes/nodes.cron.js';
 
 // ───── Queue ─────
 
@@ -34,6 +35,7 @@ const CRON_JOBS: CronJobSpec[] = [
   { name: 'reset-traffic-monthly',          pattern: '20 0 1 * *' }, // 1-е число 00:20
   { name: 'review-find-expired',            pattern: '*/30 * * * * *' }, // каждые 30 секунд
   { name: 'review-find-exceeded-traffic',   pattern: '*/45 * * * * *' }, // каждые 45 секунд
+  { name: 'node-healthcheck-poll',          pattern: '*/30 * * * * *' }, // каждые 30 секунд
 ];
 
 // ───── Регистрация (вызывается один раз при бутстрапе) ─────
@@ -88,6 +90,15 @@ export function startCronTasksWorker(): Worker {
         case 'review-find-exceeded-traffic': {
           const n = await findExceededTrafficUsers();
           if (n > 0) console.log(`[cron] review-find-exceeded-traffic — flipped ${n} users → limited`);
+          break;
+        }
+        case 'node-healthcheck-poll': {
+          const { ok, down } = await pollNodeStatuses();
+          // Only log when something is actually unhealthy — quiet ticks keep
+          // the journal readable. ok-counts don't matter unless you graph them.
+          if (down > 0) {
+            console.log(`[cron] node-healthcheck-poll — ${ok} online, ${down} unreachable`);
+          }
           break;
         }
         default:

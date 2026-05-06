@@ -14,7 +14,11 @@ export interface RemoveUserJobData {
   userId: string;
 }
 
-export type NodeUserJobData = AddUserJobData | RemoveUserJobData;
+export interface BackfillNodeJobData {
+  nodeId: string;
+}
+
+export type NodeUserJobData = AddUserJobData | RemoveUserJobData | BackfillNodeJobData;
 
 // ───── Queue ─────
 
@@ -134,6 +138,92 @@ async function syncRemoveUser(userId: string): Promise<void> {
   );
 }
 
+/**
+ * Push every active user to a single freshly-registered node. Run on
+ * `node.created` so an empty new node doesn't stay empty until each user
+ * is mutated again. AddUser is idempotent on the node side, so this is
+ * also safe to re-run (e.g. from a future "Sync users" admin button).
+ */
+async function syncBackfillNode(nodeId: string): Promise<void> {
+  const node = await prisma.node.findFirst({
+    where: { id: nodeId, deletedAt: null, status: { not: 'disabled' } },
+    select: { id: true, name: true, address: true },
+  });
+  if (!node) {
+    console.log(`[worker:node-users] backfillNode ${nodeId} — node not active, skipping`);
+    return;
+  }
+
+  interface BackfillUserRow {
+    id: string;
+    shortId: string;
+    username: string;
+    hysteriaPassword: string;
+    naivePassword: string;
+    xrayUuid: string;
+    amneziawgPublicKey: string;
+  }
+
+  const users: BackfillUserRow[] = await prisma.user.findMany({
+    where: { deletedAt: null, status: 'active' },
+    select: {
+      id: true,
+      shortId: true,
+      username: true,
+      hysteriaPassword: true,
+      naivePassword: true,
+      xrayUuid: true,
+      amneziawgPublicKey: true,
+    },
+  });
+
+  if (users.length === 0) {
+    console.log(`[worker:node-users] backfillNode ${node.name} — no active users, skipping`);
+    return;
+  }
+
+  console.log(`[worker:node-users] backfillNode ${node.name} — pushing ${users.length} user(s)`);
+
+  const transport = new NodeTransport(node);
+  const results = await Promise.allSettled(
+    users.map(async (u: BackfillUserRow) => {
+      const req: AddUserRequest = {
+        userId: u.id,
+        shortId: u.shortId,
+        username: u.username,
+        credentials: {
+          hysteriaPassword: u.hysteriaPassword,
+          naivePassword: u.naivePassword,
+          xrayUuid: u.xrayUuid,
+          amneziawgPublicKey: u.amneziawgPublicKey,
+        },
+      };
+      await transport.addUser(req);
+    }),
+  );
+
+  const failures = results.flatMap(
+    (r: PromiseSettledResult<void>, i: number) =>
+      r.status === 'rejected' ? [{ user: users[i]!, reason: r.reason }] : [],
+  );
+  for (const f of failures as { user: BackfillUserRow; reason: unknown }[]) {
+    const detail =
+      f.reason instanceof NodeRequestError
+        ? `${f.reason.status} ${f.reason.message}`
+        : String(f.reason);
+    console.log(
+      `[worker:node-users] backfillNode ${node.name} → ${f.user.username} FAILED: ${detail}`,
+    );
+  }
+  if (failures.length > 0) {
+    throw new AggregateError(
+      failures.map((f) => f.reason),
+      `${failures.length}/${users.length} users failed to backfill onto ${node.name}`,
+    );
+  }
+  console.log(`[worker:node-users] backfillNode ${node.name} — ${users.length} user(s) ok`);
+}
+
 // ───── Worker ─────
 
 export function startNodeUsersWorker(): Worker<NodeUserJobData> {
@@ -149,6 +239,11 @@ export function startNodeUsersWorker(): Worker<NodeUserJobData> {
         case 'removeUser': {
           const { userId } = job.data as RemoveUserJobData;
           await syncRemoveUser(userId);
+          break;
+        }
+        case 'backfillNode': {
+          const { nodeId } = job.data as BackfillNodeJobData;
+          await syncBackfillNode(nodeId);
           break;
         }
         default:

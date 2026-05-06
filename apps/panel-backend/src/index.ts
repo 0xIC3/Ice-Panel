@@ -4,6 +4,7 @@ import { config } from './config.js';
 import { prisma, pingDatabase } from './prisma.js';
 import { pingRedis, closeRedis } from './lib/redis.js';
 import { registerUserEventHandlers } from './modules/users/users.events.js';
+import { registerNodeEventHandlers } from './modules/nodes/nodes.events.js';
 import { startNodeUsersWorker } from './modules/users/users.queue.js';
 import {
   startCronTasksWorker,
@@ -30,6 +31,7 @@ async function start() {
     }
 
     registerUserEventHandlers();
+    registerNodeEventHandlers();
     nodeUsersWorker = startNodeUsersWorker();
     cronTasksWorker = startCronTasksWorker();
 

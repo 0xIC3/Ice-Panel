@@ -14,11 +14,12 @@ import { useDisclosure } from '@mantine/hooks';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { IconEdit, IconPlus, IconRefresh, IconTrash } from '@tabler/icons-react';
+import { IconEdit, IconKey, IconPlus, IconRefresh, IconTrash } from '@tabler/icons-react';
 import {
   createNode,
   deleteNode,
   listNodes,
+  refreshNodeBootstrap,
   updateNode,
   type CreateNodeInput,
   type Node,
@@ -95,6 +96,30 @@ export function NodesPage() {
       notifications.show({
         color: 'red',
         title: 'Delete failed',
+        message: err instanceof Error ? err.message : String(err),
+      }),
+  });
+
+  // Re-issue a bootstrap token for an existing node — used when the original
+  // expired / was lost, or when admin changed `node.address` and needs a new
+  // cert with the matching SAN. Reuses the same NodePayloadModal as the create
+  // flow, but `payload` stays empty (panel never re-emits the cert payload —
+  // only the install command + token).
+  const refreshBootstrapMutation = useMutation({
+    mutationFn: (node: Node) =>
+      refreshNodeBootstrap(node.id).then((info) => ({ node, info })),
+    onSuccess: ({ node, info }) => {
+      notifications.show({ color: 'green', message: 'New bootstrap token issued' });
+      setPayload({
+        name: node.name,
+        payload: '',
+        bootstrap: info,
+      });
+    },
+    onError: (err) =>
+      notifications.show({
+        color: 'red',
+        title: 'Refresh bootstrap failed',
         message: err instanceof Error ? err.message : String(err),
       }),
   });
@@ -176,6 +201,19 @@ export function NodesPage() {
                 <Table.Td>{new Date(n.createdAt).toLocaleDateString()}</Table.Td>
                 <Table.Td>
                   <Group gap={4} wrap="nowrap">
+                    <Tooltip label="Refresh bootstrap (re-issue install token)">
+                      <ActionIcon
+                        variant="subtle"
+                        color="blue"
+                        loading={
+                          refreshBootstrapMutation.isPending &&
+                          refreshBootstrapMutation.variables?.id === n.id
+                        }
+                        onClick={() => refreshBootstrapMutation.mutate(n)}
+                      >
+                        <IconKey size={16} />
+                      </ActionIcon>
+                    </Tooltip>
                     <Tooltip label="Edit">
                       <ActionIcon variant="subtle" onClick={() => setEditing(n)}>
                         <IconEdit size={16} />
