@@ -97,6 +97,13 @@ func buildAdapters(logger *slog.Logger) []core.CoreAdapter {
 	// config and starts xray immediately on boot.
 	if os.Getenv("XRAY_BINARY") != "" {
 		cfg, _ := buildXrayConfig()
+		// buildXrayConfig returns zero Config when REALITY keys are not in env
+		// (deferred-key flow). Still need BinaryPath so the adapter can spawn
+		// xray after receiving ApplyInbound from the panel.
+		if cfg.BinaryPath == "" {
+			cfg.BinaryPath = os.Getenv("XRAY_BINARY")
+			cfg.ConfigPath = getenv("XRAY_CONFIG", defaultXrayConfigPath)
+		}
 		adapters = append(adapters, xray.New(cfg, logger))
 		logger.Info("xray adapter registered")
 	}

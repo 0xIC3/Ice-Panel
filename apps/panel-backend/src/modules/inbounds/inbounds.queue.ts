@@ -44,6 +44,35 @@ async function fetchNode(nodeId: string): Promise<NodeRow | null> {
   });
 }
 
+interface ActiveUser {
+  id: string;
+  shortId: string;
+  username: string;
+  xrayUuid: string;
+  hysteriaPassword: string;
+  amneziawgPublicKey: string;
+  naivePassword: string;
+}
+
+async function fetchActiveUsers(): Promise<ActiveUser[]> {
+  const now = new Date();
+  return prisma.user.findMany({
+    where: {
+      status: 'active',
+      OR: [{ expireAt: null }, { expireAt: { gt: now } }],
+    },
+    select: {
+      id: true,
+      shortId: true,
+      username: true,
+      xrayUuid: true,
+      hysteriaPassword: true,
+      amneziawgPublicKey: true,
+      naivePassword: true,
+    },
+  });
+}
+
 async function fetchEnabledInbounds(nodeId: string): Promise<InboundDto[]> {
   const rows = await prisma.inbound.findMany({
     where: { nodeId, enabled: true },
@@ -93,8 +122,10 @@ export async function applyInboundsForNode(nodeId: string): Promise<void> {
     `[worker:inbound-sync] applyInbounds ${node.name} — pushing ${inbounds.length} inbound(s)`,
   );
 
+  const transport = new NodeTransport(node);
+
   try {
-    const res = await new NodeTransport(node).applyInbounds(req);
+    const res = await transport.applyInbounds(req);
     console.log(
       `[worker:inbound-sync] applyInbounds ${node.name} ok — applied=${res.applied} skipped=${res.skipped}`,
     );
@@ -108,6 +139,35 @@ export async function applyInboundsForNode(nodeId: string): Promise<void> {
     console.log(`[worker:inbound-sync] applyInbounds ${node.name} FAILED: ${detail}`);
     throw err;
   }
+
+  // Push all active users so protocol servers (xray, hysteria, etc.) have
+  // an up-to-date client list. addUser is idempotent on the node side.
+  if (inbounds.length === 0) return;
+
+  const users = await fetchActiveUsers();
+  console.log(
+    `[worker:inbound-sync] pushing ${users.length} user(s) to ${node.name}`,
+  );
+  for (const u of users) {
+    try {
+      await transport.addUser({
+        userId: u.id,
+        shortId: u.shortId,
+        username: u.username,
+        credentials: {
+          xrayUuid: u.xrayUuid,
+          hysteriaPassword: u.hysteriaPassword,
+          amneziawgPublicKey: u.amneziawgPublicKey,
+          naivePassword: u.naivePassword,
+        },
+      });
+    } catch (err) {
+      // Log but don't throw — one failed user shouldn't block the rest.
+      const detail = err instanceof Error ? err.message : String(err);
+      console.log(`[worker:inbound-sync] addUser ${u.username} to ${node.name} FAILED: ${detail}`);
+    }
+  }
+  console.log(`[worker:inbound-sync] user sync to ${node.name} done`);
 }
 
 // ───── Worker ─────
