@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Provision a fresh Ubuntu/Debian VPS to run an AmneziaWG inbound.
 #
-# Installs amneziawg + amneziawg-tools + amneziawg-dkms from the upstream PPA,
-# loads the kernel module, and verifies the toolchain. Idempotent — safe to
-# rerun. On DKMS build failure (common on ARM containers, custom kernels),
-# falls back to suggesting the userspace amneziawg-go binary.
+# Installation strategy:
+#   Ubuntu 22.04 (jammy) and earlier: use ppa:amnezia/amneziawg (Launchpad)
+#   Ubuntu 24.04 (noble) and later:   PPA doesn't register for noble, so we
+#     install via DKMS from the upstream GitHub source + build awg-tools.
 #
-# Usage:  sudo bash bootstrap-amneziawg.sh
+# Idempotent — safe to rerun.
 set -euo pipefail
 
 log()  { printf '\033[1;34m[bootstrap]\033[0m %s\n' "$*"; }
@@ -16,78 +16,108 @@ fail() { printf '\033[1;31m[fail]\033[0m %s\n' "$*" >&2; exit 1; }
 [[ $EUID -eq 0 ]] || fail "Must be run as root (sudo bash $0)"
 
 # ───── 1. Distro check ─────
-if [[ ! -r /etc/os-release ]]; then
-  fail "Cannot read /etc/os-release; unsupported distro"
-fi
+[[ -r /etc/os-release ]] || fail "Cannot read /etc/os-release; unsupported distro"
 . /etc/os-release
 case "${ID:-}" in
   ubuntu|debian) ;;
-  *) fail "Only Ubuntu/Debian are supported here. Detected ID=${ID:-unknown}. For RHEL/Fedora use the COPR repo (kaymes/amneziawg)." ;;
+  *) fail "Only Ubuntu/Debian supported. Detected ID=${ID:-unknown}." ;;
 esac
 log "Detected $PRETTY_NAME"
 
 # ───── 2. Prereqs ─────
-log "Installing apt prereqs (software-properties-common, gnupg)"
+log "Installing apt prereqs"
 DEBIAN_FRONTEND=noninteractive apt-get update -y
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
-  software-properties-common gnupg ca-certificates curl
+  software-properties-common gnupg ca-certificates curl \
+  build-essential dkms git libmnl-dev pkg-config wireguard-tools
 
-# ───── 3. AmneziaWG PPA ─────
-PPA_LIST=/etc/apt/sources.list.d/amnezia-ubuntu-amneziawg-*.list
-if compgen -G "$PPA_LIST" > /dev/null; then
-  log "AmneziaWG PPA already configured"
-else
-  log "Adding ppa:amnezia/amneziawg"
-  add-apt-repository -y ppa:amnezia/amneziawg
-fi
-DEBIAN_FRONTEND=noninteractive apt-get update -y
-
-# ───── 4. Install ─────
 KERNEL_VER=$(uname -r)
-log "Installing amneziawg packages (running kernel: $KERNEL_VER)"
+log "Running kernel: $KERNEL_VER"
+DEBIAN_FRONTEND=noninteractive apt-get install -y "linux-headers-${KERNEL_VER}" || \
+  warn "linux-headers-${KERNEL_VER} not found — DKMS build may fail"
+
+# ───── 3. Kernel module via DKMS ─────
+AWG_MODULE_REPO=https://github.com/amnezia-vpn/amneziawg-linux-kernel-module.git
+AWG_MODULE_DIR=/usr/src/amneziawg-build
+
+if lsmod | grep -q '^amneziawg\b'; then
+  log "amneziawg kernel module already loaded — skipping module install"
+else
+  log "Installing amneziawg kernel module via DKMS from $AWG_MODULE_REPO"
+
+  # Fresh clone or update
+  if [[ -d "$AWG_MODULE_DIR/.git" ]]; then
+    git -C "$AWG_MODULE_DIR" fetch --depth 1 origin main
+    git -C "$AWG_MODULE_DIR" reset --hard origin/main
+  else
+    git clone --depth 1 "$AWG_MODULE_REPO" "$AWG_MODULE_DIR"
+  fi
+
+  # Parse version from dkms.conf
+  AWG_VER=$(grep 'PACKAGE_VERSION' "$AWG_MODULE_DIR/dkms.conf" | head -1 | grep -oP '"[^"]+"' | tr -d '"')
+  log "amneziawg module version: $AWG_VER"
+
+  # Remove stale DKMS entries for this version if present
+  dkms remove "amneziawg/${AWG_VER}" --all 2>/dev/null || true
+
+  # Add, build, install
+  cp -r "$AWG_MODULE_DIR" "/usr/src/amneziawg-${AWG_VER}"
+  dkms add "amneziawg/${AWG_VER}"
+  dkms build "amneziawg/${AWG_VER}"
+  dkms install "amneziawg/${AWG_VER}"
+
+  log "Loading amneziawg kernel module"
+  modprobe amneziawg || warn "modprobe amneziawg failed — try rebooting"
+fi
+
+# ───── 4. AWG userspace tools ─────
+AWG_TOOLS_REPO=https://github.com/amnezia-vpn/amneziawg-tools.git
+AWG_TOOLS_DIR=/usr/src/amneziawg-tools-build
+
+if command -v awg >/dev/null && command -v awg-quick >/dev/null; then
+  log "awg tools already installed: $(awg --version 2>&1 | head -1)"
+else
+  log "Building amneziawg-tools from $AWG_TOOLS_REPO"
+
+  if [[ -d "$AWG_TOOLS_DIR/.git" ]]; then
+    git -C "$AWG_TOOLS_DIR" fetch --depth 1 origin master
+    git -C "$AWG_TOOLS_DIR" reset --hard origin/master
+  else
+    git clone --depth 1 "$AWG_TOOLS_REPO" "$AWG_TOOLS_DIR"
+  fi
+
+  make -C "$AWG_TOOLS_DIR/src" -j"$(nproc)"
+  make -C "$AWG_TOOLS_DIR/src" install
+
+  log "awg: $(awg --version 2>&1 | head -1)"
+  log "awg-quick: $(command -v awg-quick)"
+fi
+
+# ───── 5. Verify ─────
+command -v awg     >/dev/null || fail "awg binary not found after install"
+command -v awg-quick >/dev/null || fail "awg-quick binary not found after install"
+
 DKMS_OK=true
-if ! DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    amneziawg amneziawg-tools amneziawg-dkms "linux-headers-${KERNEL_VER}" 2>&1; then
-  warn "DKMS build failed — kernel module won't load. amneziawg-tools is still installed."
+if ! lsmod | grep -q '^amneziawg\b'; then
+  warn "amneziawg module not loaded — DKMS build may have failed or reboot needed"
   DKMS_OK=false
 fi
 
-# ───── 5. Module check ─────
-if $DKMS_OK; then
-  if lsmod | grep -q '^amneziawg\b'; then
-    log "amneziawg kernel module already loaded"
-  else
-    log "Loading amneziawg kernel module"
-    if modprobe amneziawg; then
-      log "Module loaded"
-    else
-      warn "modprobe amneziawg failed. DKMS may not have produced a module for this kernel."
-      DKMS_OK=false
-    fi
-  fi
+# ───── 6. IP forwarding ─────
+SYSCTL_CONF=/etc/sysctl.d/99-awg.conf
+if [[ ! -f "$SYSCTL_CONF" ]]; then
+  log "Enabling IP forwarding"
+  echo "net.ipv4.ip_forward=1" > "$SYSCTL_CONF"
+  echo "net.ipv6.conf.all.forwarding=1" >> "$SYSCTL_CONF"
+  sysctl --system >/dev/null
 fi
-
-# ───── 6. Toolchain verify ─────
-if ! command -v awg >/dev/null; then
-  fail "awg binary not found after install. Aborting."
-fi
-log "awg version: $(awg --version 2>&1 | head -1)"
-log "awg-quick:   $(awg-quick --version 2>&1 | head -1 || echo 'present')"
 
 # ───── 7. Summary ─────
 echo
 if $DKMS_OK; then
-  log "✅ AmneziaWG kernel-mode is ready."
-  echo "    Throughput: ~kernel-native (90+ Mbps on 1 vCPU VPS)."
+  log "AmneziaWG kernel-mode is ready."
+  echo "    Module: $(modinfo amneziawg 2>/dev/null | grep '^version' | head -1 || echo 'loaded')"
 else
-  warn "⚠ Kernel module is NOT loaded. Two options:"
-  echo "    1. Reboot — sometimes DKMS finishes after a reboot."
-  echo "    2. Fall back to userspace: install 'amneziawg-go' (Go reimplementation)."
-  echo "       Throughput drops to ~30 Mbps but works without kernel module."
-  echo "       https://github.com/amnezia-vpn/amneziawg-go"
+  warn "Kernel module is NOT loaded. Try rebooting, then 'modprobe amneziawg'."
+  warn "Or use amneziawg-go (userspace, ~30 Mbps): https://github.com/amnezia-vpn/amneziawg-go"
 fi
-echo
-echo "Next steps:"
-echo "  - sysctl: enable IP forwarding -> 'echo net.ipv4.ip_forward=1 > /etc/sysctl.d/99-awg.conf && sysctl --system'"
-echo "  - Open the inbound's UDP port in the firewall (default: ufw allow 51820/udp)"
-echo "  - Start the ice-panel node-agent — it will manage the awg interface(s) via 'awg syncconf'."
