@@ -172,7 +172,11 @@ export function InboundsPage() {
                 <Table.Td>
                   <Code>{ib.port}</Code>
                 </Table.Td>
-                <Table.Td>{ib.enabled ? '✓' : '—'}</Table.Td>
+                <Table.Td>
+                  <Badge color={ib.enabled ? 'green' : 'gray'} variant="light">
+                    {ib.enabled ? 'enabled' : 'disabled'}
+                  </Badge>
+                </Table.Td>
                 <Table.Td>
                   <Group gap={4} wrap="nowrap">
                     <Tooltip label="Edit">
