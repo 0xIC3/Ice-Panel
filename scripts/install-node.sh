@@ -342,8 +342,13 @@ case "$PROTOCOL" in
     else
       log "xray already present: $(xray version | head -1)"
     fi
+    # XTLS installer creates its own xray.service that conflicts with our
+    # node-agent's subprocess management. Disable it — ice-panel-node owns xray.
+    systemctl stop xray.service  >/dev/null 2>&1 || true
+    systemctl disable xray.service >/dev/null 2>&1 || true
+    log "XTLS xray.service disabled — ice-panel-node manages xray directly"
     PROTO_BINARY=$(command -v xray)
-    PROTO_CONFIG=/etc/xray/config.json
+    PROTO_CONFIG=/usr/local/etc/xray/config.json
     ;;
   amneziawg)
     log "Chaining bootstrap-amneziawg.sh"

@@ -90,12 +90,15 @@ func buildAdapters(logger *slog.Logger) []core.CoreAdapter {
 		}, logger),
 	}
 
-	// Xray adapter is opt-in: registered only when XRAY_REALITY_PRIVATE_KEY
-	// is set. Without REALITY private key the inbound config is invalid, so
-	// the adapter would fail to Start anyway — better to skip cleanly.
-	if cfg, ok := buildXrayConfig(); ok {
+	// Xray adapter is always registered when XRAY_BINARY is set so that
+	// ApplyInbound (panel push) can configure REALITY keys at runtime without
+	// requiring them to be baked into the env file at install time.
+	// If XRAY_REALITY_PRIVATE_KEY is already in env, the adapter pre-seeds its
+	// config and starts xray immediately on boot.
+	if os.Getenv("XRAY_BINARY") != "" {
+		cfg, _ := buildXrayConfig()
 		adapters = append(adapters, xray.New(cfg, logger))
-		logger.Info("xray adapter enabled")
+		logger.Info("xray adapter registered")
 	}
 
 	return adapters

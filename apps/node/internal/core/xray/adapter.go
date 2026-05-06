@@ -52,11 +52,16 @@ func New(cfg Config, logger *slog.Logger) *Adapter {
 
 func (a *Adapter) Name() string { return Name }
 
-// Start writes the initial (empty-clients) config to disk and spawns xray.
-// In config-only mode (no BinaryPath) it just writes the config.
+// Start writes the initial config to disk and spawns xray.
+// If REALITY keys are not yet configured (deferred via ApplyInbound), Start
+// is a no-op — the adapter will activate on the first ApplyInbound call.
 func (a *Adapter) Start(ctx context.Context) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if a.cfg.Inbound.RealityPrivateKey == "" {
+		a.logger.Info("xray adapter: no REALITY key yet — waiting for ApplyInbound from panel")
+		return nil
+	}
 	return a.regenerateAndRestartLocked(ctx)
 }
 
