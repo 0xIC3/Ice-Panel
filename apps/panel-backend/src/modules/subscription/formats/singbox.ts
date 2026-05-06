@@ -29,12 +29,20 @@ export function buildSingboxJson(endpoints: SubscriptionEndpoint[]): string {
     const tag = `${e.nodeName}-${e.protocol}`;
     if (e.protocol === 'hysteria') {
       proxyTags.push(tag);
+      // sing-box requires `tls.enabled: true` for hysteria2 outbounds —
+      // without it the parser fails with "TLS required" (caught in Hiddify
+      // 4.1.1 on 2026-05-06). Hysteria2 always uses TLS by design, so this
+      // is purely a parser-satisfaction quirk.
       outbounds.push({
         type: 'hysteria2',
         tag,
         server: e.host,
         server_port: e.port,
         password: e.password,
+        tls: {
+          enabled: true,
+          server_name: e.host,
+        },
       });
     } else if (e.protocol === 'xray') {
       proxyTags.push(tag);
