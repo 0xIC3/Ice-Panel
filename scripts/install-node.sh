@@ -27,6 +27,38 @@
 # valid 15 min, single-use; if it expires, click "Refresh bootstrap" in
 # the panel UI to mint a new one.
 #
+# === ONE-COMMAND PROTOCOL SETUP ===
+#
+# For a fully-configured node — node-agent + protocol server + systemd unit
+# + ACME cert — pass per-protocol flags. Otherwise install-node.sh installs
+# the binaries and you have to drop config files manually.
+#
+# Hysteria 2 — auto-configure server with LE-issued cert + masquerade:
+#   bash <(curl -fsSL .../install-node.sh) \
+#     --panel-url https://panel.example.com \
+#     --bootstrap bs_xxx \
+#     --protocol hysteria \
+#     --hysteria-domain hy2-01.example.com \
+#     --hysteria-email admin@example.com
+#   # Optional: --hysteria-masquerade-url https://en.wikipedia.org/
+#   #           --hysteria-obfs-password <salamander-pwd>
+#
+# Xray — pre-fill REALITY env so adapter starts immediately. Get keypair
+# from the inbound creation form (panel UI → Inbounds → Create → Generate):
+#   bash <(curl -fsSL .../install-node.sh) \
+#     --panel-url https://panel.example.com \
+#     --bootstrap bs_xxx \
+#     --protocol xray \
+#     --xray-reality-private-key sI_p9bg-7cy... \
+#     --xray-reality-short-ids abc123 \
+#     --xray-reality-server-names www.cloudflare.com \
+#     --xray-reality-dest www.cloudflare.com:443
+#   # Optional: --xray-port 443
+#
+# AmneziaWG / NaiveProxy — auto-config flags will land in slice 24 alongside
+# panel-side auto-push. For now use --protocol amneziawg / --protocol naive
+# and follow docs/deploy/install.md for per-protocol manual config steps.
+#
 # Alternative flows (file-based — for air-gapped or self-hosted gist setups):
 #   bash <(curl -fsSL .../install-node.sh) --protocol xray --payload-file /tmp/payload.b64
 #   bash <(curl -fsSL .../install-node.sh) --protocol xray --payload "@/tmp/payload.b64"
@@ -62,6 +94,27 @@ PAYLOAD=""
 PANEL_URL=""
 BOOTSTRAP_TOKEN=""
 
+# Hysteria 2 server config (only used with --protocol hysteria). When DOMAIN
+# is given, the script writes /etc/hysteria/config.yaml + a hysteria systemd
+# unit and starts the server — admin gets a fully-configured node from one
+# command, no manual SSH editing.
+HY_DOMAIN=""
+HY_EMAIL=""
+HY_MASQUERADE_URL="https://www.bing.com/"
+HY_OBFS_PASSWORD=""
+
+# Xray REALITY inbound params (only used with --protocol xray). When all the
+# required ones are passed, they're written into /etc/ice-panel-node/env so
+# the node-agent's xray adapter spawns a working REALITY listener at startup.
+# Without these flags the Xray adapter stays disabled until the admin edits
+# the env file manually (slice 24 will auto-push these from the panel).
+XR_PRIVATE_KEY=""
+XR_PUBLIC_KEY=""
+XR_SHORT_IDS=""
+XR_SERVER_NAMES="www.cloudflare.com"
+XR_DEST="www.cloudflare.com:443"
+XR_PORT="443"
+
 # Resolve a payload value: if it starts with "@", treat the rest as a path
 # and read the file content. Otherwise return as-is. Mirrors curl's `-d @file`
 # convention. Critical for long payloads — Linux TTY canonical-mode buffer
@@ -88,6 +141,18 @@ while [[ $# -gt 0 ]]; do
     --panel-url)     PANEL_URL="${2%/}"; shift 2 ;;
     --bootstrap)     BOOTSTRAP_TOKEN="$2"; shift 2 ;;
     --port)          NODE_PORT="$2"; shift 2 ;;
+    # Hysteria 2 — auto-configure server (config.yaml + systemd unit)
+    --hysteria-domain)         HY_DOMAIN="$2"; shift 2 ;;
+    --hysteria-email)          HY_EMAIL="$2"; shift 2 ;;
+    --hysteria-masquerade-url) HY_MASQUERADE_URL="$2"; shift 2 ;;
+    --hysteria-obfs-password)  HY_OBFS_PASSWORD="$2"; shift 2 ;;
+    # Xray REALITY — pre-fill env so the adapter starts immediately
+    --xray-reality-private-key)  XR_PRIVATE_KEY="$2"; shift 2 ;;
+    --xray-reality-public-key)   XR_PUBLIC_KEY="$2"; shift 2 ;;
+    --xray-reality-short-ids)    XR_SHORT_IDS="$2"; shift 2 ;;
+    --xray-reality-server-names) XR_SERVER_NAMES="$2"; shift 2 ;;
+    --xray-reality-dest)         XR_DEST="$2"; shift 2 ;;
+    --xray-port)                 XR_PORT="$2"; shift 2 ;;
     -h|--help)
       grep '^#' "$0" | sed 's/^# \?//'
       exit 0
@@ -333,6 +398,18 @@ EOF
       cat >> "$ENV_FILE" <<EOF
 XRAY_BINARY=${PROTO_BINARY}
 XRAY_CONFIG=${PROTO_CONFIG}
+EOF
+      if [[ -n "$XR_PRIVATE_KEY" && -n "$XR_SHORT_IDS" ]]; then
+        cat >> "$ENV_FILE" <<EOF
+XRAY_REALITY_PRIVATE_KEY=${XR_PRIVATE_KEY}
+XRAY_REALITY_SHORT_IDS=${XR_SHORT_IDS}
+XRAY_REALITY_SERVER_NAMES=${XR_SERVER_NAMES}
+XRAY_REALITY_DEST=${XR_DEST}
+XRAY_PORT=${XR_PORT}
+EOF
+        log "Xray REALITY env populated (port=${XR_PORT}, sni=${XR_SERVER_NAMES})"
+      else
+        cat >> "$ENV_FILE" <<EOF
 # Fill in once you create an Xray inbound in the panel:
 # XRAY_REALITY_PRIVATE_KEY=
 # XRAY_REALITY_SHORT_IDS=
@@ -340,6 +417,7 @@ XRAY_CONFIG=${PROTO_CONFIG}
 # XRAY_REALITY_DEST=www.cloudflare.com:443
 # XRAY_PORT=443
 EOF
+      fi
       ;;
     naive)
       cat >> "$ENV_FILE" <<EOF
@@ -431,6 +509,88 @@ fi
 systemctl daemon-reload
 systemctl enable ice-panel-node.service
 systemctl restart ice-panel-node.service
+
+# ───── 9b. Hysteria server config (auto-configure when domain given) ─────
+# When admin passes --hysteria-domain + --hysteria-email, we lay down a full
+# Hysteria 2 server config and systemd unit. Without this, the admin would
+# have to SSH in and write /etc/hysteria/config.yaml by hand after running
+# install-node.sh — caught during the 2026-05-06 VPS test as a friction
+# point. Skipped silently if either flag is missing or if the protocol
+# isn't hysteria.
+if [[ "$PROTOCOL" == "hysteria" && -n "$HY_DOMAIN" && -n "$HY_EMAIL" ]]; then
+  HY_CONFIG=/etc/hysteria/config.yaml
+  if [[ ! -f "$HY_CONFIG" ]]; then
+    log "Writing Hysteria 2 server config at $HY_CONFIG (domain=$HY_DOMAIN)"
+    {
+      cat <<EOF
+listen: :443
+
+acme:
+  domains:
+    - ${HY_DOMAIN}
+  email: ${HY_EMAIL}
+
+auth:
+  type: http
+  http:
+    url: http://127.0.0.1:9000/auth
+    insecure: true
+
+masquerade:
+  type: proxy
+  proxy:
+    url: ${HY_MASQUERADE_URL}
+    rewriteHost: true
+
+bandwidth:
+  up: 1 gbps
+  down: 1 gbps
+EOF
+      if [[ -n "$HY_OBFS_PASSWORD" ]]; then
+        cat <<EOF
+
+obfs:
+  type: salamander
+  salamander:
+    password: ${HY_OBFS_PASSWORD}
+EOF
+      fi
+    } > "$HY_CONFIG"
+    chmod 600 "$HY_CONFIG"
+  else
+    log "Hysteria config already exists at $HY_CONFIG — keeping (delete to regenerate)"
+  fi
+
+  HY_UNIT=/etc/systemd/system/hysteria.service
+  if [[ ! -f "$HY_UNIT" ]]; then
+    log "Installing Hysteria 2 systemd unit at $HY_UNIT"
+    cat > "$HY_UNIT" <<EOF
+[Unit]
+Description=Hysteria 2 server
+After=network-online.target ice-panel-node.service
+Wants=network-online.target ice-panel-node.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/hysteria server -c ${HY_CONFIG}
+Restart=always
+RestartSec=5
+LimitNOFILE=1048576
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    systemctl daemon-reload
+  fi
+  systemctl enable hysteria.service >/dev/null 2>&1 || true
+  systemctl restart hysteria.service
+  log "Hysteria 2 started — first run will obtain the LE certificate via HTTP-01"
+elif [[ "$PROTOCOL" == "hysteria" ]]; then
+  warn "Hysteria server NOT auto-configured — pass --hysteria-domain <fqdn> --hysteria-email <addr> next time"
+  warn "Or manually write /etc/hysteria/config.yaml + systemd unit as documented in docs/deploy/install.md"
+fi
 
 # ───── 10. Wait for /healthz ─────
 log "Waiting for /healthz on 127.0.0.1:${NODE_PORT} (up to 30s)"

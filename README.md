@@ -8,57 +8,85 @@ Where competitors (Marzban, Remnawave, x-ui) wrap everything through Xray-core, 
 
 ## 🚀 One-command install
 
-> Both scripts target Ubuntu 22.04+ / Debian 12+. Require root. Idempotent (safe to re-run).
+> Both scripts target Ubuntu 22.04+ / Debian 12+. Require root. Idempotent (safe to re-run). Validated end-to-end on real VPS for Xray (REALITY+Vision) and Hysteria 2 on 2026-05-06.
 
-### Panel — install on the admin's VPS
+### 1. Panel — install on the admin's VPS
+
+**Production with auto-TLS** (recommended) — point a DNS A-record like `panel.example.com` at the VPS (Cloudflare row → **DNS only / gray cloud**), wait for propagation, then:
 
 ```bash
+sudo -i
+PANEL_DOMAIN=panel.example.com \
+  bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-panel.sh)
+```
+
+The script installs Docker, builds the panel images, brings up Postgres + Redis + backend + frontend, **installs Caddy and configures auto-TLS** for your domain, locks `ufw` to 22/80/443 only, and prints the URL where you bootstrap the first admin. ~5–10 minutes on the first run.
+
+**Bare-IP testing** (HTTP only — for quick local tests):
+
+```bash
+sudo -i
 bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-panel.sh)
 ```
 
-Builds the Docker images locally, generates random secrets, runs the
-Postgres + Redis + backend + frontend stack, and prints the URL where you
-bootstrap the first admin. Takes ~5–10 minutes on the first run.
+SPA goes up on `http://<vps-ip>:8080`. Don't run anything serious like this — admin JWTs travel in cleartext.
 
-**For production**: front the panel with Cloudflare proxied subdomain + Caddy
-on the VPS to hide the real IP and get free TLS — full setup with
-Origin-Certificate install, ufw lock-down to CF IPs, and anti-probing rules
-in [docs/deploy/reverse-proxy.md](./docs/deploy/reverse-proxy.md). **Note
-the warning there**: Cloudflare proxy is for the panel only — proxy nodes
-must use DNS only (gray cloud), since CF doesn't pass UDP for Hysteria /
-AmneziaWG and breaks Xray+REALITY's fingerprint trick.
+For Cloudflare Proxied mode (yellow cloud) with Origin Certificate — see [docs/deploy/reverse-proxy.md](./docs/deploy/reverse-proxy.md). **Cloudflare proxy is for the panel only** — proxy nodes must use DNS only, since CF Free doesn't pass UDP for Hysteria / AmneziaWG and breaks Xray+REALITY's fingerprint trick.
 
-### Node — install on each proxy VPS
+### 2. Node — one command per protocol
 
-1. **In the panel UI**: Nodes → Create node → in the modal that pops up, click **Download**. You'll get `<node-name>-payload.b64` (~6-7 KB).
-2. **scp the file to your VPS**:
-   ```bash
-   scp <node-name>-payload.b64 root@<vps-ip>:/tmp/payload.b64
-   ```
-3. **On the VPS** — run the installer pointing at the file:
-   ```bash
-   bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
-     --protocol xray \
-     --payload-file /tmp/payload.b64
-   ```
+In the panel SPA: **Nodes → Create node** → fill `name` + `address` → submit. The modal reveals a copy-pastable **bootstrap command** with a single-use 15-min token. Paste on the node VPS, append the protocol-specific flags below.
 
-Replace `--protocol` with `xray`, `hysteria`, `amneziawg`, or `naive`.
+#### Xray (VLESS + REALITY + Vision)
 
-> ⚠️ **Why `--payload-file` and not `--payload "..."`?** Linux TTY canonical-mode truncates pasted strings at 4096 bytes — real payloads are 6-7 KB, so terminal-pasting silently loses the tail and the node fails with `json unmarshal: unexpected end of JSON input`. The **Download** button + scp + `--payload-file` is the only reliable workflow. The interactive prompt also accepts `@/tmp/payload.b64` syntax for the same reason.
+No domain needed — REALITY uses SNI spoofing. First create an Xray inbound in the panel (**Inbounds → Create**, click **Generate** for the keypair), then on the node VPS:
 
-The installer chains the protocol's official bootstrap (`get.hy2.sh`,
-XTLS install-script, AmneziaWG PPA + kernel-module probe, xcaddy build for
-Naive), drops a `systemd` unit, opens `ufw` ports, and waits until `/healthz`
-answers.
+```bash
+sudo -i
+bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
+  --panel-url https://panel.example.com \
+  --bootstrap bs_xxx \
+  --protocol xray \
+  --xray-reality-private-key sI_p9bg-7cy... \
+  --xray-reality-short-ids   abc123 \
+  --xray-reality-server-names www.cloudflare.com \
+  --xray-reality-dest        www.cloudflare.com:443
+```
 
-Full deploy guide (troubleshooting / TLS-fronting / update workflow / why
-single-protocol-per-node): **[docs/deploy/install.md](./docs/deploy/install.md)**.
+#### Hysteria 2
+
+Add a DNS A-record `hy2-01.example.com` → VPS IP (DNS only — UDP/443 doesn't go through CF Free anyway). Then:
+
+```bash
+sudo -i
+bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
+  --panel-url https://panel.example.com \
+  --bootstrap bs_xxx \
+  --protocol hysteria \
+  --hysteria-domain hy2-01.example.com \
+  --hysteria-email admin@example.com
+```
+
+The script writes `/etc/hysteria/config.yaml` with ACME / masquerade / auth-callback, drops a `hysteria.service` systemd unit, and Hysteria's first run obtains the LE cert via HTTP-01 — no manual SSH editing.
+
+#### AmneziaWG / NaiveProxy
+
+```bash
+bash <(curl -fsSL .../install-node.sh) --panel-url ... --bootstrap ... --protocol amneziawg
+bash <(curl -fsSL .../install-node.sh) --panel-url ... --bootstrap ... --protocol naive
+```
+
+Both install the binaries (kernel module + tools for AWG; xcaddy fork for Naive — 2 GB RAM minimum) but currently require manual config-file editing post-install. Auto-config flags land in slice 24.
+
+> ⚠️ **`node.address` is BOTH the mTLS endpoint AND the public host in client URIs** until slice 25. So set it correctly at create time: domain for Hysteria/Naive (`hy2-01.example.com:8443`), IP for Xray/AmneziaWG (`<ip>:8443`). Changing it later requires `Refresh bootstrap` (key icon on node row) to re-issue the cert with the matching SAN.
+
+Full deploy guide (per-protocol details, troubleshooting, update workflow): **[docs/deploy/install.md](./docs/deploy/install.md)**.
 
 ---
 
 ## Status
 
-🎉 **Phase 2 complete** (2026-05-05). MVP ready for self-hosted VPS testing. All four protocol adapters built and end-to-end through the admin UI; subscription generator supports six formats with UA-driven auto-selection; full inbound + SRR editor.
+🎉 **Phase 2 complete + multi-node multi-protocol VPS-validated** (2026-05-06). Two real VPS (Sweden Xray REALITY + Germany Hysteria 2) under one panel, one subscription URL emits both endpoints, Hiddify connects to both. Slice 23.1 hardened panel-ops on top: node-status poller, `node.created` user backfill, refresh-bootstrap UI. Slice 24 (Xray uplift + per-user stats + auto-push inbound config) is next.
 
 See [docs/ROADMAP.md](./docs/ROADMAP.md) for the slice-by-slice progress plan and Phase 3 priorities.
 

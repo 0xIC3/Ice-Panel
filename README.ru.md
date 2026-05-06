@@ -8,55 +8,85 @@ Self-hosted панель управления прокси с **нативной
 
 ## 🚀 Установка одной командой
 
-> Скрипты рассчитаны на Ubuntu 22.04+ / Debian 12+. Требуют root. Идемпотентны (можно перезапускать).
+> Скрипты рассчитаны на Ubuntu 22.04+ / Debian 12+. Требуют root. Идемпотентны (можно перезапускать). Валидировано end-to-end на реальных VPS для Xray (REALITY+Vision) и Hysteria 2 — 2026-05-06.
 
-### Панель — устанавливается на VPS администратора
+### 1. Панель — установка на VPS администратора
+
+**Production с auto-TLS** (рекомендуется) — заведи DNS A-запись типа `panel.example.com` → IP VPS (Cloudflare → **DNS only / серое облако**), дождись пропагации и:
 
 ```bash
+sudo -i
+PANEL_DOMAIN=panel.example.com \
+  bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-panel.sh)
+```
+
+Скрипт ставит Docker, билдит образы, поднимает Postgres + Redis + backend + frontend, **ставит Caddy и настраивает auto-TLS** для домена, лочит `ufw` на 22/80/443 и печатает URL где создаётся первый администратор. ~5–10 минут.
+
+**Тестовый запуск без TLS** (HTTP, для быстрых локальных проверок):
+
+```bash
+sudo -i
 bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-panel.sh)
 ```
 
-Билдит Docker-образы локально, генерирует случайные секреты, поднимает стек Postgres + Redis + backend + frontend и печатает URL где создаётся первый администратор. Первый запуск ~5–10 минут.
+SPA поднимается на `http://<vps-ip>:8080`. Не запускай ничего серьёзного так — JWT админа летят в открытом виде.
 
-**Для production**: фронти панель Cloudflare proxied субдоменом + Caddy на
-VPS — прячет реальный IP и даёт бесплатный TLS. Полная настройка с
-Origin-Certificate, ufw-локом до CF-IP и anti-probing правилами в
-[docs/deploy/reverse-proxy.md](./docs/deploy/reverse-proxy.md). **Внимание**:
-Cloudflare proxy подходит **только для панели** — proxy-ноды должны быть
-**DNS only (gray cloud)**: CF Free не пропускает UDP (убивает Hysteria /
-AmneziaWG) и ломает REALITY anti-fingerprint у Xray.
+Для Cloudflare Proxied (жёлтое облако) с Origin Certificate — см. [docs/deploy/reverse-proxy.md](./docs/deploy/reverse-proxy.md). **Cloudflare proxy подходит только для панели** — proxy-ноды должны быть DNS only: CF Free не пропускает UDP для Hysteria / AmneziaWG и ломает Xray REALITY.
 
-### Нода — устанавливается на каждой proxy-VPS
+### 2. Нода — одна команда на каждый протокол
 
-1. **В админке**: Nodes → Create node → в модалке нажми **Download**. Получишь файл `<node-name>-payload.b64` (~6-7 KB).
-2. **scp файл на VPS**:
-   ```bash
-   scp <node-name>-payload.b64 root@<vps-ip>:/tmp/payload.b64
-   ```
-3. **На VPS** — запусти установщик с флагом на файл:
-   ```bash
-   bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
-     --protocol xray \
-     --payload-file /tmp/payload.b64
-   ```
+В админке: **Nodes → Create node** → имя + адрес → submit. Модалка покажет команду с одноразовым 15-минутным токеном. Вставь её на VPS-ноду + флаги протокола ниже.
 
-Замени `--protocol` на `xray`, `hysteria`, `amneziawg` или `naive`.
+#### Xray (VLESS + REALITY + Vision)
 
-> ⚠️ **Почему `--payload-file`, а не `--payload "..."`?** Linux TTY canonical mode режет вставку на 4096 байт — реальные payload'ы 6-7 KB, и при вставке через терминал тихо теряется хвост, нода падает с `json unmarshal: unexpected end of JSON input`. Кнопка **Download** + scp + `--payload-file` — единственный надёжный путь. Интерактивный prompt также принимает `@/tmp/payload.b64` для того же.
+Домен не нужен — REALITY использует SNI-spoofing. Сначала создай Xray inbound в панели (**Inbounds → Create**, кнопка **Generate** для keypair'а), потом на ноде:
 
-Скрипт цепочкой запускает официальные установщики
-(`get.hy2.sh`, XTLS install-script, AmneziaWG PPA + проверка kernel module,
-xcaddy build для Naive), кладёт `systemd`-юнит, открывает порты в `ufw` и
-ждёт пока ответит `/healthz`.
+```bash
+sudo -i
+bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
+  --panel-url https://panel.example.com \
+  --bootstrap bs_xxx \
+  --protocol xray \
+  --xray-reality-private-key sI_p9bg-7cy... \
+  --xray-reality-short-ids   abc123 \
+  --xray-reality-server-names www.cloudflare.com \
+  --xray-reality-dest        www.cloudflare.com:443
+```
 
-Полный гайд по деплою (troubleshooting / TLS-фронтинг / обновление / почему
-single-protocol-per-node): **[docs/deploy/install.md](./docs/deploy/install.md)**.
+#### Hysteria 2
+
+DNS A-запись `hy2-01.example.com` → IP VPS (DNS only — UDP/443 через CF Free всё равно не пройдёт). Затем:
+
+```bash
+sudo -i
+bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
+  --panel-url https://panel.example.com \
+  --bootstrap bs_xxx \
+  --protocol hysteria \
+  --hysteria-domain hy2-01.example.com \
+  --hysteria-email admin@example.com
+```
+
+Скрипт пишет `/etc/hysteria/config.yaml` с ACME / masquerade / auth-callback, кладёт `hysteria.service` systemd-юнит, и Hysteria первым запуском получит LE-сертификат через HTTP-01. Без ручного редактирования.
+
+#### AmneziaWG / NaiveProxy
+
+```bash
+bash <(curl -fsSL .../install-node.sh) --panel-url ... --bootstrap ... --protocol amneziawg
+bash <(curl -fsSL .../install-node.sh) --panel-url ... --bootstrap ... --protocol naive
+```
+
+Оба ставят бинарники (kernel-модуль + tools для AWG; xcaddy fork для Naive — минимум 2 GB RAM), но требуют ручного допиливания конфигов после установки. Авто-конфиг флаги для них появятся в slice 24.
+
+> ⚠️ **`node.address` сейчас одновременно и mTLS-эндпоинт, и публичный host в URI клиента** — до slice 25. Поэтому на этапе создания ноды задай его правильно: домен для Hysteria/Naive (`hy2-01.example.com:8443`), IP для Xray/AmneziaWG (`<ip>:8443`). Менять позже — только через **Refresh bootstrap** (иконка-ключ в строке ноды) для перевыпуска cert с правильным SAN.
+
+Полный гайд по деплою (детали по протоколам, troubleshooting, обновление): **[docs/deploy/install.md](./docs/deploy/install.md)**.
 
 ---
 
 ## Статус
 
-🎉 **Phase 2 завершена** (2026-05-05). MVP готов к тестированию на самохостинговой VPS. Все четыре адаптера протоколов работают end-to-end через админку; генератор подписок поддерживает шесть форматов с авто-выбором по User-Agent; полный редактор inbound'ов и SRR.
+🎉 **Phase 2 + multi-node multi-protocol валидация на VPS** (2026-05-06). Две реальные VPS (Швеция Xray REALITY + Германия Hysteria 2) под одной панелью, одна subscription URL отдаёт оба endpoint'а, Hiddify коннектится к обоим. Поверх — slice 23.1 (panel-ops harden): node-status poller, backfill юзеров на `node.created`, refresh-bootstrap UI. Дальше slice 24 (Xray uplift + per-user stats + auto-push inbound config).
 
 Подробный план срезов и приоритеты Phase 3 — [docs/ROADMAP.md](./docs/ROADMAP.md).
 

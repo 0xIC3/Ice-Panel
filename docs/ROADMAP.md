@@ -343,10 +343,24 @@ Mihomo / Singbox / XrayJSON шаблоны — Phase 2 (Срез 21). Subscripti
 
 ### 🎉 Phase 2 closed — `Phase 3` next
 
+**Multi-node multi-protocol VPS validation (2026-05-06):** Two real VPS (SE Xray REALITY + DE Hysteria 2) under one panel; one subscription URL emits both endpoints; Hiddify connects to both with auto-balancer (69 ms hysteria / 117 ms xray). Validates the entire CoreAdapter abstraction + bootstrap-token flow + SRR auto-format end-to-end.
+
+**Slice 23.1 — panel-ops hotfix (post-VPS-test, 2026-05-06):**
+- ✅ `node.created` event handler enqueues a `backfillNode` job — pushes every active user to a freshly-registered node so it doesn't stay empty until each user is mutated again.
+- ✅ Refresh-bootstrap UI button (key icon on node row) wraps the existing `POST /api/nodes/:id/bootstrap` for cert renewal / payload re-issue without curl + admin JWT gymnastics.
+- ✅ Node-status poller — BullMQ repeatable cron (~30 s) calls `/healthz` over mTLS per node, writes `nodes.status` (online/unreachable) only on actual change. Replaces the permanent `UNKNOWN` status in the UI.
+- ✅ install-node.sh auto-config flags for Hysteria 2 (`--hysteria-domain` + `--hysteria-email` writes `/etc/hysteria/config.yaml` + systemd unit) and Xray (`--xray-reality-*` flags pre-fill `/etc/ice-panel-node/env` so the adapter starts without manual editing).
+
 **Carried over from slice 23 (deferred to Phase 3 slices below):**
 - Group ↔ inbound assignment UI (`group_inbounds` schema exists since slice 3 but is dormant — subscription fan-out doesn't filter by user's groups). Lift to slice 26.
 - HTTPUpgrade + KCP transports for Xray. Lift to slice 24.
 - Trojan + Shadowsocks subprotocols. Lift to slice 24.
+
+**Carried over from slice 23.1 / VPS test (lift to slice 24/25):**
+- Per-user Xray traffic stats — Xray `policy.levels.0.statsUserUp/Down` + `api: { StatsService }` + node-agent gRPC poll → panel `user_traffic` upsert. Confirmed live: Hiddify pushed 16.4 MiB but panel showed `0.00 / 100 GB`. Lift to slice 24.
+- Auto-push inbound config from panel → node so admins don't hand-edit `/etc/ice-panel-node/env`. Lift to slice 24.
+- `publicHost` separation on Inbound or Node (today `node.address` is overloaded for both control-plane mTLS and the public client URL — changing it post-create breaks the cert SAN, requires Refresh bootstrap dance). Lift to slice 25.
+- AmneziaWG / NaiveProxy auto-config flags in `install-node.sh` (today only Xray + Hysteria have them). Lift to slice 24.
 
 ### Подробности по срезам
 

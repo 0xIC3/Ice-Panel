@@ -1,9 +1,15 @@
 # Deploying a Hysteria 2 Node (manual / Phase 1 era)
 
 > **For most cases use the one-command installer instead — see [install.md](./install.md).**
-> This runbook is the manual step-by-step that the installer encapsulates.
-> Useful if you want to understand exactly what gets installed, or if you're
-> debugging a failed install.
+>
+> As of 2026-05-06 (slice 23.1) `install-node.sh` accepts `--hysteria-domain`
+> and `--hysteria-email` flags that auto-write `/etc/hysteria/config.yaml`
+> + a `hysteria.service` systemd unit + obtain the LE cert in one shot.
+> No manual SSH editing needed.
+>
+> This runbook is the original manual step-by-step (the installer
+> encapsulates exactly these steps). Useful if you want to understand
+> what gets installed, or if you're debugging a failed install.
 
 Runbook for provisioning a single VPS as an Ice-Panel proxy node running
 Hysteria 2. Validated on Ubuntu 24.04 (AEZA, Hetzner) with a 1 vCPU / 1-4 GB

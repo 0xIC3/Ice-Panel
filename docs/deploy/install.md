@@ -1,68 +1,95 @@
-# Ice-Panel — one-command install
+# Ice-Panel — install runbook
 
 Two scripts cover the whole stack:
 
-- **Panel** (admin's VPS): `scripts/install-panel.sh` — Docker-based.
-- **Node** (each proxy VPS): `scripts/install-node.sh` — systemd-based, chains
-  per-protocol bootstrap.
+- **Panel** (admin's VPS): `scripts/install-panel.sh` — Docker-based, one
+  command provisions Postgres + Redis + backend + frontend + optionally Caddy
+  with auto-TLS.
+- **Node** (each proxy VPS): `scripts/install-node.sh` — systemd-based, one
+  command provisions node-agent + the chosen protocol's server with config
+  + ACME cert + firewall rules.
 
 Both target Ubuntu 22.04+ / Debian 12+ and require root.
+
+> Protocols validated end-to-end on real VPS as of 2026-05-06: **Xray
+> VLESS+REALITY+Vision** ✅ and **Hysteria 2** ✅. AmneziaWG and NaiveProxy
+> are coded but haven't been live-tested yet — manual config steps below
+> are best-effort, file an issue if anything breaks.
 
 ---
 
 ## 1. Panel
 
-On the VPS that will host the admin UI / database / Redis:
+### 1a. Bare-IP testing (HTTP only — for quick local tests)
 
 ```bash
+sudo -i
 bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-panel.sh)
 ```
 
-What you get after ~5-10 minutes (first build of the Docker images):
+After ~5–10 minutes (first Docker build) the SPA is live on
+`http://<vps-ip>:8080`. **Don't run anything serious like this** — no TLS,
+admin JWT cookies travel in cleartext.
 
-- `/opt/ice-panel/` — checkout of this repo
-- `/opt/ice-panel/.env.production` — generated `JWT_SECRET` + Postgres password (mode 600)
-- 4 containers running:
-  - `icepanel-prod-postgres` (16-alpine, persistent volume)
-  - `icepanel-prod-redis` (7-alpine, AOF persistence)
-  - `icepanel-prod-backend` (Fastify, internal port 3000)
-  - `icepanel-prod-frontend` (nginx serving Vite build, **publishes `:8080` on host**)
+### 1b. Production with auto-TLS (recommended)
+
+Pre-requisites:
+1. A domain you own with DNS managed somewhere (Cloudflare etc.)
+2. An A-record pointing `panel.example.com` → VPS public IP, **DNS only
+   (gray cloud)** during install — Caddy needs Let's Encrypt HTTP-01 to
+   reach the VPS directly. You can flip to **Proxied** after the cert is
+   issued (Cloudflare Full-strict mode + Origin Cert — see
+   [reverse-proxy.md](./reverse-proxy.md)).
+3. DNS propagation done — verify with `dig panel.example.com +short` from
+   another machine.
+
+Then on the panel VPS:
+
+```bash
+sudo -i
+PANEL_DOMAIN=panel.example.com \
+  bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-panel.sh)
+```
+
+What you get:
+
+- `/opt/ice-panel/` — checkout
+- `/opt/ice-panel/.env.production` — generated `JWT_SECRET` + Postgres
+  password + `CORS_ORIGIN=https://panel.example.com` (mode 600)
+- 4 containers: `postgres`, `redis`, `backend`, `frontend`
+- **Caddy** installed from the official cloudsmith repo
+- `/etc/caddy/Caddyfile` proxies `panel.example.com` → `127.0.0.1:8080`
+- Anti-probing block (`:443 { tls internal; respond 204 }`) — bare-IP
+  hits get a silent 204 so scanners can't fingerprint Ice-Panel by
+  hostname
+- `ufw` allows only 22/80/443 — internal `:8080` is **not** exposed
 - Prisma migrations applied automatically (incl. SRR seed rules)
 
-Then open `http://<vps-ip>:8080` in a browser — you'll see the **"Create first admin"** form.
+Then open `https://panel.example.com` → "Create first admin" form → done.
 
-### Customising
+### 1c. Customising
 
 Override via env before the curl:
 
 ```bash
+PANEL_DOMAIN=panel.example.com  \
 ICE_PANEL_DIR=/srv/ice          \
 ICE_PANEL_REF=v0.2.0            \
-FRONTEND_PORT=18080             \
-CORS_ORIGIN=https://panel.mydomain.com \
-bash <(curl -fsSL .../install-panel.sh)
+SKIP_OS_UPGRADE=1               \
+  bash <(curl -fsSL .../install-panel.sh)
 ```
 
-### TLS in front
+| Var | Default | Notes |
+|---|---|---|
+| `PANEL_DOMAIN` | unset | If set → installs Caddy and writes Caddyfile, sets `CORS_ORIGIN=https://$PANEL_DOMAIN` |
+| `ICE_PANEL_DIR` | `/opt/ice-panel` | Install path |
+| `ICE_PANEL_REF` | `main` | Git ref to check out |
+| `FRONTEND_PORT` | `8080` | Internal SPA port (only exposed to public when `PANEL_DOMAIN` is unset) |
+| `CORS_ORIGIN` | derived | Override only if frontend lives on a different host |
+| `SKIP_OS_UPGRADE` | `0` | Skip `apt-get dist-upgrade` (faster on a freshly-rebuilt image) |
+| `SKIP_FIREWALL` | `0` | Skip `ufw` setup (managed firewall elsewhere) |
 
-The script binds the SPA to plain HTTP on `:8080`. **Don't expose this directly.**
-
-Recommended production setup:
-- **Subdomain on Cloudflare with yellow cloud (Proxied)** for the panel — hides VPS IP, free DDoS, free TLS
-- **Caddy on the VPS** with a Cloudflare Origin Certificate, listening on `:443`
-- Panel-only: `panel.yourdomain.com` → CF edge → Caddy → `127.0.0.1:8080`
-- Then close `:8080` from public internet via `ufw delete allow 8080/tcp`
-
-> ⚠️ **Cloudflare proxy is for the PANEL ONLY** — never for proxy nodes.
-> CF Free doesn't pass UDP (kills Hysteria/AmneziaWG) and CF's TLS-termination
-> breaks Xray+REALITY's anti-fingerprint trick. Node DNS records should be
-> **DNS only (gray cloud)**.
-
-Full setup with all 4 options (Caddy direct / nginx / **Cloudflare proxied** / Cloudflare Tunnel),
-including ufw lock-down to CF-only IPs and origin-cert install, in
-**[reverse-proxy.md](./reverse-proxy.md)**.
-
-### Update
+### 1d. Update
 
 ```bash
 cd /opt/ice-panel
@@ -70,130 +97,261 @@ git pull
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
 ```
 
-### Logs / ops
+### 1e. Logs / ops
 
 ```bash
 cd /opt/ice-panel
 docker compose -f docker-compose.prod.yml --env-file .env.production logs -f backend
 docker compose -f docker-compose.prod.yml --env-file .env.production restart backend
-docker compose -f docker-compose.prod.yml --env-file .env.production down
+docker compose -f docker-compose.prod.yml --env-file .env.production down -v   # destroy + restart from scratch
 ```
 
 ---
 
-## 2. Node
+## 2. Node — one-command per protocol
 
-### 2.1 Get a payload — use Download, not Copy
+The general flow:
 
-In the panel SPA → **Nodes** → **Create node** → fill name + address → in
-the modal that pops up, click **Download**. You'll get
-`<node-name>-payload.b64` (~6–7 KB).
+1. Add a **DNS A-record** (only Hysteria / NaiveProxy require a domain;
+   Xray and AmneziaWG can use the bare IP). Cloudflare row → **DNS only**.
+2. In the panel SPA: **Nodes → Create node** → fill `name` + `address`
+   (`<host-or-ip>:8443`). Submit. The modal reveals a **bootstrap command**
+   already pre-filled with your panel URL + a single-use 15-min token.
+3. SSH to the node VPS, paste the command + add per-protocol flags
+   (sections below).
+4. Wait ~30 s — the node's status flips from `UNKNOWN` → `ONLINE` in
+   the panel UI.
 
-> ⚠️ **Don't terminal-paste the payload.** Linux TTY canonical-mode truncates
-> pasted strings at 4096 bytes. Real payloads are 6-7 KB, so anything pasted
-> directly into a shell prompt loses the tail and the node-agent fails with
-> a confusing `json unmarshal: unexpected end of JSON input`. The Download
-> button + scp + `--payload-file` is the only reliable workflow.
+If the bootstrap token expires before you redeem it, click the **key
+icon** (Refresh bootstrap) on the node row in the UI to mint a new one.
 
-Transfer the file to your VPS:
+> ⚠️ **`node.address` is BOTH the mTLS control-plane endpoint AND the
+> public host emitted in client URIs** until slice 25 (Hosts abstraction)
+> ships. So:
+> - For Hysteria / NaiveProxy: set `node.address` to the **public domain**
+>   (e.g. `hy2-01.example.com:8443`) at create time. The mTLS cert SAN
+>   gets generated from this string, so changing it later forces a full
+>   `Refresh bootstrap` cycle.
+> - For Xray / AmneziaWG (no domain): use `<public-ip>:8443`.
+
+### 2.1 Xray (VLESS + REALITY + Vision)
+
+Pre-reqs: VPS public IP, no domain needed (REALITY uses SNI spoofing).
+
+In the panel: **Inbounds → Create** → Protocol = Xray → fill in REALITY
+fields → click **Generate** for the keypair → save. Copy the **private
+key**, **short ID**, and **server name** somewhere — you'll paste them
+into the install command.
 
 ```bash
-# from your laptop
-scp <node-name>-payload.b64 root@<vps-ip>:/tmp/payload.b64
-```
-
-### 2.2 Install on the VPS
-
-**Recommended flow — flags with `--payload-file`** (skips TTY pasting):
-
-```bash
+sudo -i
 bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
+  --panel-url https://panel.example.com \
+  --bootstrap bs_xxx \
   --protocol xray \
-  --payload-file /tmp/payload.b64
+  --xray-reality-private-key sI_p9bg-7cy...   \
+  --xray-reality-short-ids   abc123           \
+  --xray-reality-server-names www.cloudflare.com \
+  --xray-reality-dest        www.cloudflare.com:443
 ```
 
-Replace `--protocol` with `xray` / `hysteria` / `amneziawg` / `naive`.
+What it does:
+- OS upgrade (skip with `SKIP_OS_UPGRADE=1`)
+- `ufw`: 22/tcp + 8443/tcp (mTLS) + 443/tcp (Xray)
+- Installs Go 1.23+ and builds `ice-panel-node` from this repo
+- Installs Xray via XTLS install-script
+- Pre-fills `/etc/ice-panel-node/env` with REALITY params so the Xray
+  adapter spawns a working REALITY listener at startup
+- Starts `ice-panel-node.service`
 
-#### Or interactive
+After ~30 s: panel shows node `ONLINE`, Xray listening on `:443`,
+subscription URL works in any client.
+
+### 2.2 Hysteria 2
+
+Pre-reqs:
+1. A subdomain (`hy2-01.example.com`) with a DNS A-record → VPS IP,
+   **DNS only** in Cloudflare (UDP-443 doesn't go through CF Free's
+   yellow-cloud anyway).
+2. Wait for DNS to propagate.
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh)
+sudo -i
+bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
+  --panel-url https://panel.example.com \
+  --bootstrap bs_xxx \
+  --protocol hysteria \
+  --hysteria-domain hy2-01.example.com \
+  --hysteria-email admin@example.com
 ```
 
-The script first asks for protocol (1-4), then asks for payload. **At the
-payload prompt, type `@/tmp/payload.b64`** — the leading `@` tells the
-script to read the file content directly. Don't paste the actual base64;
-TTY truncates at 4096 bytes.
+Optional flags:
+- `--hysteria-masquerade-url https://en.wikipedia.org/` — what the server
+  pretends to be when scanned (default: `https://www.bing.com/`)
+- `--hysteria-obfs-password <pwd>` — enable Salamander obfuscation
 
-Either path works; explicit flags are tidier for automation.
+What it does (in addition to the common steps):
+- `ufw`: 22/tcp + 8443/tcp + 443/udp + 80/tcp (ACME HTTP-01)
+- Installs Hysteria via the official `get.hy2.sh`
+- Writes `/etc/hysteria/config.yaml` with ACME on the domain you passed,
+  HTTP auth callback on `127.0.0.1:9000` (handled by node-agent), and
+  the masquerade target
+- Drops `/etc/systemd/system/hysteria.service` and starts it
+- Hysteria's first run obtains the LE cert via HTTP-01 (so port 80 must
+  be open until that succeeds — about 5 seconds)
 
-What it does in each case:
+In the panel: **Inbounds → Create** → Protocol = Hysteria 2 → public
+host = your domain → save. Then add `hysteria` to the user's
+`enabledProtocols` and the subscription URL gains the new endpoint.
 
-1. Installs Go 1.23+ if missing
-2. Clones the repo to `/opt/ice-panel-node`
-3. Builds the static `ice-panel-node` Go binary → `/usr/local/bin/`
-4. **Chains the protocol-specific bootstrap:**
-   - `hysteria` → `bash <(curl get.hy2.sh)`
-   - `xray` → official XTLS install-script
-   - `amneziawg` → `apps/node/scripts/bootstrap-amneziawg.sh` (PPA + kernel-module check)
-   - `naive` → `apps/node/scripts/bootstrap-naive.sh` (xcaddy + forwardproxy@naive)
-5. Writes `/etc/ice-panel-node/env` with `NODE_PAYLOAD` + protocol-specific env
-6. Drops `/etc/systemd/system/ice-panel-node.service` and starts it
-7. Opens firewall ports via `ufw`
-8. Polls `https://127.0.0.1:8443/healthz` until it answers
-
-After ~30s the panel should show the node as **connected** in the Nodes table.
-
-### 2.3 Update
+### 2.3 AmneziaWG (manual config — auto-flags coming in slice 24)
 
 ```bash
-cd /opt/ice-panel-node
-git pull
-go build -trimpath -ldflags="-s -w" -o /usr/local/bin/ice-panel-node ./apps/node
-systemctl restart ice-panel-node
+sudo -i
+bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
+  --panel-url https://panel.example.com \
+  --bootstrap bs_xxx \
+  --protocol amneziawg
 ```
 
-(`install-node.sh --protocol <same> --payload "<existing>"` does the same
-end-to-end, but a re-build is faster.)
+This installs the kernel module via DKMS (`amneziawg-dkms`) and the userspace
+tools (`amneziawg-tools`). If DKMS fails on your kernel, the bootstrap script
+prints a fallback path to userspace `amneziawg-go`.
 
-### 2.4 Logs / status
+In the panel create an AmneziaWG inbound with the obfuscation params
+(Jc/Jmin/Jmax/S1-S4/H1-H4 — use the **TSPU** preset on Russian carriers
+or **Mobile** for cellular). The panel allocates a `/24` subnet by
+default; per-user IPs are issued automatically when users get
+`amneziawg` in `enabledProtocols`.
+
+You'll need to manually wire the inbound's params to `/etc/ice-panel-node/env`
+(slice 24 will auto-push these). See the AmneziaWG section in
+[../../apps/node/README.md](../../apps/node/README.md) for the env keys.
+
+### 2.4 NaiveProxy (manual config — auto-flags coming in slice 24)
+
+Pre-reqs: 2 GB RAM minimum (xcaddy build is heavy), domain like
+`naive-01.example.com`.
 
 ```bash
-systemctl status ice-panel-node
-journalctl -u ice-panel-node -f
-journalctl -u hysteria-server -f   # protocol-side
-journalctl -u awg-quick@awg0 -f
+sudo -i
+bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
+  --panel-url https://panel.example.com \
+  --bootstrap bs_xxx \
+  --protocol naive
 ```
 
-### 2.5 Switching protocols on a node
+This builds Caddy with `klzgrad/forwardproxy@naive` plugin and installs
+it as `/usr/local/bin/caddy-naive`. You then drop a Caddyfile at
+`/etc/caddy/Caddyfile` (template in `apps/node/scripts/bootstrap-naive.sh`)
+and wire it to the inbound created in the panel. **No per-user stats** —
+upstream limitation.
 
-Don't. Spin up a fresh VPS — protocols share kernel/network state in messy
-ways (Hysteria UDP listeners vs AmneziaWG's wg0 interface vs Caddy's :443).
-Single-protocol-per-node is the supported pattern (see ROADMAP §"Модель деплоя").
+> Hiddify doesn't natively parse `naive+https://` URIs in singbox format;
+> for testing use **NekoBox** or the Naïve Chrome extension.
 
 ---
 
-## Troubleshooting
+## 3. Verification
 
-### Panel: `/health` shows `db: down` or `redis: down`
-Container slow to come up. `docker compose ... logs postgres` / `redis`. Usually
-just retry; if persistent, check `df -h` and `free -m`.
+### 3.1 Panel health
 
-### Panel SPA shows "Network Error" on every API call
-CORS misconfig. Check `.env.production`'s `CORS_ORIGIN` matches the URL you're
-loading the SPA from (scheme + host + port must match exactly).
+```bash
+curl -s https://panel.example.com/health | jq
+# expect: {"status":"ok","db":"ok","redis":"ok"}
+```
+
+### 3.2 Node mTLS reachability (from the panel VPS)
+
+```bash
+nc -vz <node-ip-or-domain> 8443
+```
+
+(Should print `succeeded`. The handshake itself fails because `nc` doesn't
+present a client cert — that's expected and only verifies network
+reachability.)
+
+### 3.3 Subscription dump
+
+Get the subscription URL from the user row's **copy-link** action in the
+SPA. Then:
+
+```bash
+curl -s 'https://panel.example.com/sub/<token>' | base64 -d
+# expect: vless://...   (and/or hysteria2://... etc., one per inbound)
+```
+
+Hiddify's UA gets singbox JSON via SRR (slice 22), other clients get
+plain base64 by default.
+
+---
+
+## 4. Troubleshooting
+
+### `/health` shows `db: down` or `redis: down`
+Container slow to come up. Tail `docker compose ... logs postgres` /
+`redis`. Usually just retry; if persistent, check `df -h` and `free -m`.
+
+### SPA shows "Network Error" on every API call
+CORS misconfig. Check `.env.production`'s `CORS_ORIGIN` matches the URL
+you're loading the SPA from (scheme + host + port must match exactly).
 
 ### Node: `/healthz` never answers
-- Wrong payload — base64 must be the exact string from the modal, no whitespace.
-- Time skew — mTLS rejects certs with future-dated `NotBefore`. `timedatectl set-ntp true`.
-- Firewall — `ufw status`. Panel reaches the node on `NODE_PORT` (default 8443/tcp).
+- Wrong payload — base64 must be the exact string from the modal, no
+  whitespace. Use `--bootstrap` flow to dodge TTY truncation.
+- Time skew — mTLS rejects certs with future-dated `NotBefore`.
+  `timedatectl set-ntp true`.
+- Firewall — `ufw status`. Panel reaches the node on `8443/tcp`.
+
+### Node: status stuck at `UNKNOWN` even though node-agent is up
+The status poller runs every 30 s. If you just registered the node, wait
+30 s. If it's been longer:
+```bash
+# on panel VPS
+docker compose -f /opt/ice-panel/docker-compose.prod.yml --env-file /opt/ice-panel/.env.production logs backend --tail 50 | grep -iE "node-healthcheck|FAILED"
+```
+`fetch failed` means the panel can't reach the node — usually `node.address`
+points to a domain whose mTLS cert SAN was generated for a different IP.
+Fix: hit the **Refresh bootstrap** key icon on the node row, then re-run
+install-node.sh on the VPS with the new token.
+
+### Hysteria: "obtaining certificate" hangs
+Port 80 not reachable from public Internet. ACME HTTP-01 needs `:80/tcp`
+during the cert dance. Open it in your provider's firewall too if there's
+an upstream layer.
+
+### Hysteria: client connects but "auth rejected"
+Means UDP/handshake works but the user's password isn't on the node.
+Most common cause: user was created BEFORE the node — that's slice 23.1
+backfill territory; if backfill failed, just edit the user (toggle a
+field, save) and the resulting `addUser` job will fan out.
 
 ### AmneziaWG: bootstrap reports DKMS failure
-Modern kernel (6.8+) sometimes can't compile the module. The bootstrap script
-notes this and prints the userspace fallback. The adapter doesn't auto-fall-back
-yet — manual `apt install amneziawg-go` + edit the `awg-quick` PATH if you want
-to keep going without kernel mode.
+Modern kernel (6.8+) sometimes can't compile the module. The bootstrap
+script notes this and prints the userspace fallback. The adapter doesn't
+auto-fall-back yet — `apt install amneziawg-go` + edit the `awg-quick`
+PATH if you want to keep going without kernel mode.
 
-### Naive: `xcaddy build` OOMs on a 1 GB VPS
-Need ≥2 GB to compile Caddy. Either resize, or build the binary on a beefier
-machine and `scp` it over.
+### NaiveProxy: `xcaddy build` OOMs on a 1 GB VPS
+Need ≥2 GB to compile Caddy. Either resize, or build the binary on a
+beefier machine and `scp` it over.
+
+### Hiddify: "Unknown parse outbound" or "TLS required"
+Both of these were fixed during the 2026-05-06 VPS test (commits in
+`apps/panel-backend/src/core-adapters/hysteria/uri.ts` and
+`apps/panel-backend/src/modules/subscription/formats/singbox.ts`). If
+you still hit them, your panel is on an older revision — `git pull`
+and rebuild the backend container.
+
+---
+
+## 5. What's NOT yet automated (slice 24 / 25 backlog)
+
+| Feature | Today | After slice 24 / 25 |
+|---|---|---|
+| Per-user Xray traffic accounting | Always 0 / quota | Real bytes via Xray StatsService gRPC |
+| Inbound config push to nodes | Manual env edit | Panel auto-pushes via mTLS |
+| `node.address` overload | Set domain at create time | Separate `publicHost` field on inbound |
+| AmneziaWG / NaiveProxy auto-config | Manual env edit | One-command flags like Hysteria/Xray today |
+
+See `memory/project_current_state.md` for the full slice plan.
