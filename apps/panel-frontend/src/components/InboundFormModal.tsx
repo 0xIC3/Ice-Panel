@@ -409,11 +409,7 @@ export function InboundFormModal({ opened, onClose, inbound, nodes, onSubmit, lo
             />
           </Group>
 
-          <Switch
-            label="Enabled"
-            checked={form.values.enabled}
-            onChange={(e) => form.setFieldValue('enabled', e.currentTarget.checked)}
-          />
+          <Switch label="Enabled" {...form.getInputProps('enabled', { type: 'checkbox' })} />
 
           <Divider label={`${form.values.protocol} configuration`} labelPosition="center" />
 
