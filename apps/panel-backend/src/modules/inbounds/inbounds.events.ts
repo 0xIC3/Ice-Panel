@@ -21,7 +21,7 @@ export function registerInboundEventHandlers(): void {
       // Coalesce: if an `applyNodeInbounds` is already queued for this node,
       // don't add another. The currently-running one will read the latest
       // state from the DB anyway. `removeOnComplete` cleans up later.
-      { jobId: `apply:${nodeId}` },
+      { jobId: `apply-${nodeId}` },
     );
   };
 
