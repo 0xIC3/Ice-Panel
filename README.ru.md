@@ -95,7 +95,8 @@ bash <(curl -fsSL .../install-node.sh) --panel-url ... --bootstrap ... --protoco
 - ⏭️ **Slice 24b2/3/4** — Hysteria / AmneziaWG / Naive ApplyInbound real impls.
 - ⏭️ **Slice 24c** — Xray defaults uplift + транспорты/субпротоколы + per-user traffic stats.
 
-Полный план: [docs/ROADMAP.md](./docs/ROADMAP.md) (v3, 2026-05-06).
+Полный план: [docs/ROADMAP.md](./docs/ROADMAP.md) (v3.2, 2026-05-06).
+Тестовые чек-листы для каждого slice'а: [docs/TESTING.md](./docs/TESTING.md).
 
 Подробный план срезов и приоритеты Phase 3 — [docs/ROADMAP.md](./docs/ROADMAP.md).
 

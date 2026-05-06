@@ -95,7 +95,8 @@ Full deploy guide (per-protocol details, troubleshooting, update workflow): **[d
 - ⏭️ **Slice 24b2/3/4** next — Hysteria / AmneziaWG / Naive ApplyInbound real impls.
 - ⏭️ **Slice 24c** — Xray defaults uplift + transports/subprotocols + per-user traffic stats.
 
-Full plan: [docs/ROADMAP.md](./docs/ROADMAP.md) (v3, 2026-05-06).
+Full plan: [docs/ROADMAP.md](./docs/ROADMAP.md) (v3.2, 2026-05-06).
+Per-slice testing checklists: [docs/TESTING.md](./docs/TESTING.md).
 
 See [docs/ROADMAP.md](./docs/ROADMAP.md) for the slice-by-slice progress plan and Phase 3 priorities.
 

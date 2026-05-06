@@ -3,7 +3,9 @@
 > Этот документ — план развития проекта и справочник по используемым технологиям.
 > Обновляется по мере прохождения срезов. Если в коде ушло вперёд — значит документ устарел, обнови его.
 >
-> **Версия:** 3.1 (2026-05-06) — slice 24b разбит на 24b1 (interface + Xray real impl, ✅ done) и 24b2/24b3/24b4 (Hysteria / AmneziaWG / Naive real impls — отдельные follow-up commits).
+> **Версия:** 3.2 (2026-05-06) — slice 24b разбит на 24b1 (interface + Xray real impl, ✅ done) и 24b2/24b3/24b4 (Hysteria / AmneziaWG / Naive real impls — отдельные follow-up commits). Появился `docs/TESTING.md` с per-slice верификационными чек-листами.
+
+> **Companion doc:** [TESTING.md](./TESTING.md) — конкретные чек-листы что и как проверять при закрытии каждого slice'а (local checks / VPS checks / edge cases / done criteria). Обновляется при закрытии slice + при поимке новых багов.
 
 ---
 
