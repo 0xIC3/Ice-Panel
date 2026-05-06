@@ -136,7 +136,12 @@ export async function generateSubscription(
   for (const ib of inbounds) {
     if (!enabled.has(ib.protocol as never)) continue;
 
-    const host = hostFromAddress(ib.node.address);
+    // Slice 25 — `publicHost` and `publicPort` on the inbound override the
+    // historic fallback (`hostFromAddress(node.address)` / `inbound.port`).
+    // Lets admins keep `node.address` as the mTLS-only control-plane endpoint
+    // (often a bare IP) while emitting a real FQDN to clients.
+    const host = ib.publicHost ?? hostFromAddress(ib.node.address);
+    const port = ib.publicPort ?? ib.port;
     const nodeName = ib.node.name;
 
     if (ib.protocol === 'hysteria') {
@@ -144,12 +149,12 @@ export async function generateSubscription(
         protocol: 'hysteria',
         nodeName,
         host,
-        port: ib.port,
+        port,
         password: user.hysteriaPassword,
         uri: buildHysteriaUri({
           password: user.hysteriaPassword,
           host,
-          port: ib.port,
+          port,
           name: nodeName,
         }),
       });
@@ -162,7 +167,7 @@ export async function generateSubscription(
         protocol: 'xray',
         nodeName,
         host,
-        port: ib.port,
+        port,
         uuid: user.xrayUuid,
         publicKey: cfg.realityPublicKey,
         shortId,
@@ -176,7 +181,7 @@ export async function generateSubscription(
         uri: buildVlessRealityUri({
           uuid: user.xrayUuid,
           host,
-          port: ib.port,
+          port,
           publicKey: cfg.realityPublicKey,
           shortId,
           sni,
@@ -196,7 +201,7 @@ export async function generateSubscription(
         protocol: 'amneziawg',
         nodeName,
         host,
-        port: ib.port,
+        port,
         privateKey: user.amneziawgPrivateKey,
         allowedIp: `${peer.ip}/32`,
         serverPublicKey: cfg.serverPublicKey,
@@ -223,14 +228,14 @@ export async function generateSubscription(
         protocol: 'naive',
         nodeName,
         host: naiveHost,
-        port: ib.port,
+        port,
         username: user.username,
         password: user.naivePassword,
         uri: buildNaiveUri({
           username: user.username,
           password: user.naivePassword,
           host: naiveHost,
-          port: ib.port,
+          port,
           name: nodeName,
         }),
       });

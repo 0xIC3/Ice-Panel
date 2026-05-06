@@ -53,6 +53,8 @@ export async function createInbound(input: CreateInboundInput): Promise<Inbound>
         name: input.name,
         port: input.port,
         enabled: input.enabled,
+        publicHost: input.publicHost ?? null,
+        publicPort: input.publicPort ?? null,
         config: input.config as never,
       },
     });
@@ -110,6 +112,9 @@ export async function updateInbound(
         name: input.name ?? undefined,
         port: input.port ?? undefined,
         enabled: input.enabled ?? undefined,
+        // null clears, undefined keeps current — Prisma honours that semantic.
+        publicHost: input.publicHost === undefined ? undefined : input.publicHost,
+        publicPort: input.publicPort === undefined ? undefined : input.publicPort,
         config: validatedConfig === undefined ? undefined : (validatedConfig as never),
       },
     });

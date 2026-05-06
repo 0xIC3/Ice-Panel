@@ -94,11 +94,29 @@ export const InboundConfigByProtocol = z.discriminatedUnion('protocol', [
   z.object({ protocol: z.literal('naive'), config: NaiveConfigSchema }),
 ]);
 
+// Public-facing host the panel emits in client URIs. Must be a hostname or
+// IP — RFC 1123 hostname or IPv4 dotted-quad. Length capped at 253 (RFC).
+const PublicHostSchema = z
+  .string()
+  .min(1)
+  .max(253)
+  .regex(
+    /^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/,
+    'Must be a valid hostname or IPv4',
+  );
+
 const BaseFields = z.object({
   nodeId: z.uuid(),
   name: NameSchema,
   port: PortSchema,
   enabled: z.boolean().default(true),
+  // Slice 25 — separate the public-facing client-URL host from the mTLS
+  // control-plane endpoint (`node.address`). Empty string is treated like
+  // null on the way in, so admins can clear the field in the UI.
+  publicHost: PublicHostSchema.optional()
+    .or(z.literal('').transform(() => undefined))
+    .optional(),
+  publicPort: PortSchema.optional(),
 });
 
 export const CreateInboundSchema = z.intersection(BaseFields, InboundConfigByProtocol);
@@ -112,6 +130,12 @@ export const UpdateInboundSchema = z.object({
   name: NameSchema.optional(),
   port: PortSchema.optional(),
   enabled: z.boolean().optional(),
+  // `null` explicitly clears the override; `undefined` (omitted) keeps the
+  // current value. Empty string from a form input also clears.
+  publicHost: PublicHostSchema.nullable()
+    .or(z.literal('').transform(() => null))
+    .optional(),
+  publicPort: PortSchema.nullable().optional(),
   /** Protocol-specific config — must match the existing inbound's protocol. */
   config: z.unknown().optional(),
 });

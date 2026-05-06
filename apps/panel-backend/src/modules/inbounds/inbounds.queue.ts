@@ -52,6 +52,8 @@ async function fetchEnabledInbounds(nodeId: string): Promise<InboundDto[]> {
       name: true,
       protocol: true,
       port: true,
+      publicHost: true,
+      publicPort: true,
       config: true,
     },
     orderBy: { port: 'asc' },
@@ -60,6 +62,9 @@ async function fetchEnabledInbounds(nodeId: string): Promise<InboundDto[]> {
     id: r.id,
     name: r.name,
     protocol: r.protocol as ProtocolName,
+    // The node-agent gets the actual listen port (what xray/hysteria binds
+    // to). publicPort is purely for client-URL emission and lives only on
+    // the panel side, so we don't ship it across the wire.
     port: r.port,
     // Prisma returns Json as `unknown`; the panel-side service has already
     // validated the shape via Zod when the inbound was created/updated.

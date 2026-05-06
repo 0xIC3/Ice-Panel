@@ -37,6 +37,11 @@ interface FormValues {
   port: number | '';
   enabled: boolean;
 
+  // Slice 25 — public-facing host/port for client URIs. Empty string clears
+  // the override and falls back to the node's address.
+  publicHost: string;
+  publicPort: number | '';
+
   // Hysteria
   hyObfsPassword: string;
   hyMasqueradeUrl: string;
@@ -89,6 +94,9 @@ function defaults(rule: Inbound | null, defaultNodeId: string): FormValues {
     name: rule?.name ?? '',
     port: rule?.port ?? 443,
     enabled: rule?.enabled ?? true,
+
+    publicHost: rule?.publicHost ?? '',
+    publicPort: rule?.publicPort ?? '',
 
     hyObfsPassword: '',
     hyMasqueradeUrl: '',
@@ -305,11 +313,18 @@ export function InboundFormModal({ opened, onClose, inbound, nodes, onSubmit, lo
         break;
     }
 
+    // Slice 25: empty string → null (clears the override on update, omits
+    // it on create). The backend treats null as "use node.address fallback".
+    const publicHost = values.publicHost.trim() === '' ? null : values.publicHost.trim();
+    const publicPort = values.publicPort === '' ? null : Number(values.publicPort);
+
     if (isEdit) {
       const update: UpdateInboundInput = {
         name: values.name,
         port,
         enabled: values.enabled,
+        publicHost,
+        publicPort,
         config: config as never,
       };
       await onSubmit(update, mode);
@@ -320,6 +335,8 @@ export function InboundFormModal({ opened, onClose, inbound, nodes, onSubmit, lo
         name: values.name,
         port,
         enabled: values.enabled,
+        ...(publicHost ? { publicHost } : {}),
+        ...(publicPort ? { publicPort } : {}),
         config: config as never,
       };
       await onSubmit(create, mode);
@@ -370,6 +387,25 @@ export function InboundFormModal({ opened, onClose, inbound, nodes, onSubmit, lo
               allowDecimal={false}
               allowNegative={false}
               {...form.getInputProps('port')}
+            />
+          </Group>
+
+          <Group grow align="flex-start">
+            <TextInput
+              label="Public host (override)"
+              placeholder="leave blank → use node address"
+              description="What clients see in the subscription URL. Set this when the node's address is a private IP or differs from the public FQDN."
+              {...form.getInputProps('publicHost')}
+            />
+            <NumberInput
+              label="Public port (override)"
+              placeholder="same as Port"
+              description="Rare. Set when CDN/Cloudflare/port-forwarding maps a different external port."
+              min={1}
+              max={65535}
+              allowDecimal={false}
+              allowNegative={false}
+              {...form.getInputProps('publicPort')}
             />
           </Group>
 
