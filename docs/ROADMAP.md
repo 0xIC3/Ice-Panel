@@ -3,7 +3,7 @@
 > Этот документ — план развития проекта и справочник по используемым технологиям.
 > Обновляется по мере прохождения срезов. Если в коде ушло вперёд — значит документ устарел, обнови его.
 >
-> **Версия:** 2 (2026-05-03) — обновлено после глубокого изучения Remnawave.
+> **Версия:** 3 (2026-05-06) — обновлено после live-валидации multi-node multi-protocol на VPS, slice 23.1 panel-ops harden, slice 24a auto-push wire pipeline, slice 25 publicHost separation.
 
 ---
 
@@ -341,26 +341,30 @@ Mihomo / Singbox / XrayJSON шаблоны — Phase 2 (Срез 21). Subscripti
 | 22 | **Subscription Response Rules (SRR)** | ✅ done | DB table + 7 seed rules, UA matcher with `(?i)` inline-flag support, CRUD endpoints, `/api/srr/test` preview, frontend `/srr` page with rule table + UA tester |
 | 23 | **UI: graphical inbound editor** | ✅ done | inbounds CRUD with discriminated config schemas, subscription emission driven from inbounds (replaces env-driven Xray), per-protocol form Modal (Hysteria/Xray/AmneziaWG/Naive), Xray network selector (raw/xhttp/ws/grpc), x25519 keypair generator endpoint + Generate-button UX, CORS DELETE/PUT fix |
 
-### 🎉 Phase 2 closed — `Phase 3` next
+### 🎉 Phase 2 closed — multi-node validated, Phase 3 in progress
 
-**Multi-node multi-protocol VPS validation (2026-05-06):** Two real VPS (SE Xray REALITY + DE Hysteria 2) under one panel; one subscription URL emits both endpoints; Hiddify connects to both with auto-balancer (69 ms hysteria / 117 ms xray). Validates the entire CoreAdapter abstraction + bootstrap-token flow + SRR auto-format end-to-end.
+**Multi-node multi-protocol VPS validation (2026-05-06):** Two real VPS (SE Xray REALITY + DE Hysteria 2) under one panel; one subscription URL emits both endpoints; Hiddify connects to both with auto-balancer (69 ms hysteria / 117 ms xray). Validates the entire CoreAdapter abstraction + bootstrap-token flow + SRR auto-format end-to-end. Total cost of validation: 1 EUR in hourly VPS billing.
 
-**Slice 23.1 — panel-ops hotfix (post-VPS-test, 2026-05-06):**
-- ✅ `node.created` event handler enqueues a `backfillNode` job — pushes every active user to a freshly-registered node so it doesn't stay empty until each user is mutated again.
-- ✅ Refresh-bootstrap UI button (key icon on node row) wraps the existing `POST /api/nodes/:id/bootstrap` for cert renewal / payload re-issue without curl + admin JWT gymnastics.
-- ✅ Node-status poller — BullMQ repeatable cron (~30 s) calls `/healthz` over mTLS per node, writes `nodes.status` (online/unreachable) only on actual change. Replaces the permanent `UNKNOWN` status in the UI.
-- ✅ install-node.sh auto-config flags for Hysteria 2 (`--hysteria-domain` + `--hysteria-email` writes `/etc/hysteria/config.yaml` + systemd unit) and Xray (`--xray-reality-*` flags pre-fill `/etc/ice-panel-node/env` so the adapter starts without manual editing).
+### Доп. срезы после Phase 2 (post-VPS-test ops harden + начало Phase 3)
 
-**Carried over from slice 23 (deferred to Phase 3 slices below):**
-- Group ↔ inbound assignment UI (`group_inbounds` schema exists since slice 3 but is dormant — subscription fan-out doesn't filter by user's groups). Lift to slice 26.
-- HTTPUpgrade + KCP transports for Xray. Lift to slice 24.
-- Trojan + Shadowsocks subprotocols. Lift to slice 24.
+| # | Название | Статус | Что вводим |
+|---|---|---|---|
+| 23.1 | **Panel-ops hotfix** | ✅ done | node.created → backfillNode job; Refresh-bootstrap UI button (`/api/nodes/:id/bootstrap`); 30s node-status poller; install-node.sh auto-config flags для Hysteria + Xray |
+| 24a | **Auto-push inbound config (wire pipeline)** | ✅ done | `inbound.{created,updated,deleted}` events; BullMQ `inbound-sync` queue with coalesced jobId per node; `NodeTransport.applyInbounds()`; node-agent `/applyInbounds` endpoint with atomic persist to `/etc/ice-panel-node/inbounds.json` |
+| 24b | **Auto-push: per-adapter live reconfig** | ⏭️ next | `CoreAdapter.ApplyInbound(json.RawMessage)`; Xray regen+restart, AWG syncconf, Caddy reload, Hysteria SIGHUP; adapters fall back to `inbounds.json` if env vars absent |
+| 24c | **Xray defaults uplift + transports/subprotocols** | ⏭️ | Per-user stats (StatsService gRPC + poller → user_traffic); HTTPUpgrade + KCP transports; Trojan + Shadowsocks subprotocols; sniffing + sockopt-BBR + DNS-OUT + BLOCK rules |
+| 25 | **publicHost / publicPort на Inbound** | ✅ done | Two nullable columns; subscription generator prefers them over hostFromAddress(node.address); UI form fields; closes the cert-SAN gotcha at the architectural level |
 
-**Carried over from slice 23.1 / VPS test (lift to slice 24/25):**
-- Per-user Xray traffic stats — Xray `policy.levels.0.statsUserUp/Down` + `api: { StatsService }` + node-agent gRPC poll → panel `user_traffic` upsert. Confirmed live: Hiddify pushed 16.4 MiB but panel showed `0.00 / 100 GB`. Lift to slice 24.
-- Auto-push inbound config from panel → node so admins don't hand-edit `/etc/ice-panel-node/env`. Lift to slice 24.
-- `publicHost` separation on Inbound or Node (today `node.address` is overloaded for both control-plane mTLS and the public client URL — changing it post-create breaks the cert SAN, requires Refresh bootstrap dance). Lift to slice 25.
-- AmneziaWG / NaiveProxy auto-config flags in `install-node.sh` (today only Xray + Hysteria have them). Lift to slice 24.
+**Carried over from slice 23 (lift to indicated slice):**
+- Group ↔ inbound assignment UI (`group_inbounds` schema exists since slice 3 but is dormant). Lift to slice 26.
+- ✅ HTTPUpgrade + KCP transports for Xray. Lifted to slice 24c.
+- ✅ Trojan + Shadowsocks subprotocols. Lifted to slice 24c.
+
+**Carried over from VPS test 2026-05-06 (all addressed):**
+- ✅ Per-user Xray traffic stats — slice 24c
+- ✅ Auto-push inbound config from panel → node — slice 24a (wire) + 24b (live reconfig)
+- ✅ `publicHost` separation — slice 25
+- ✅ AmneziaWG / NaiveProxy auto-config flags in `install-node.sh` — slice 24b will surface them once adapters can read `inbounds.json`
 
 ### Подробности по срезам
 
@@ -594,6 +598,206 @@ Mihomo / Singbox / XrayJSON шаблоны — Phase 2 (Срез 21). Subscripti
 - REALITY `target` валидация: backend делает `xray tls ping <target>:443` через node-agent (новый transport endpoint `POST /tls-ping`) → возвращает success/failure. Frontend показывает чек-марк или ошибку.
 - AmneziaWG subnet collision detect (если уже есть inbound с `10.0.0.0/24`, второй не должен использовать пересекающийся) — backend Zod refines.
 
+#### Срез 23.1: Panel-ops hotfix (post-VPS-test 2026-05-06)
+
+**Цель:** закрыть три ортогональных пробела, найденных за один день multi-node-теста, прежде чем уходить в большой Phase 3 slice 24. Все три — операционные, не привязаны к конкретному протоколу.
+
+**Что вводим:**
+
+1. **`node.created` event handler + `backfillNode` BullMQ job.** При регистрации ноды панель шлёт `addUser` для каждого активного юзера на свежеподнятую ноду. Без этого новая нода стояла пустая до тех пор, пока админ не пересоздавал юзеров вручную (поймали live: Hysteria auth rejected pre-existing `hepp` user). Coalesced jobId `apply:<nodeId>` чтобы серия мутаций сжалась в один push. Idempotency on the node side keeps retries safe.
+
+2. **Refresh-bootstrap UI button.** Иконка-ключ в строке ноды → `POST /api/nodes/:id/bootstrap` → модалка с новой install-командой. До этого admin делал curl с JWT-токеном из localStorage — workable но не нормальный flow. NodePayloadModal научился рендериться с `payload=''` (refresh не возвращает cert payload).
+
+3. **Node-status poller.** BullMQ repeatable cron `node-healthcheck-poll` каждые 30 секунд: `NodeTransport.healthcheck()` per active node, маппит результат → `online`/`unreachable`, апдейтит `nodes.status` + `lastStatusChange` + `lastStatusMessage` **только при изменении** (нет churn записей в DB на каждый тик). Заменяет permanent `UNKNOWN` status в UI.
+
+4. **install-node.sh auto-config flags.** Чтобы при первой установке протокол сразу запускался без SSH-редактирования env-файла:
+   - Hysteria: `--hysteria-domain <fqdn>` + `--hysteria-email <addr>` (+ опционально `--hysteria-masquerade-url` / `--hysteria-obfs-password`) → пишет полный `/etc/hysteria/config.yaml` с ACME + masquerade + auth callback + drops `hysteria.service` systemd unit.
+   - Xray: `--xray-reality-private-key` + `--xray-reality-short-ids` + `--xray-reality-server-names` + `--xray-reality-dest` + `--xray-port` → префиллит `/etc/ice-panel-node/env` так что REALITY-listener поднимается на старте без правок.
+   - AWG / Naive — manual config до slice 24b.
+
+**Файлы:**
+- NEW: `apps/panel-backend/src/modules/nodes/nodes.events.ts` (registerNodeEventHandlers)
+- NEW: `apps/panel-backend/src/modules/nodes/nodes.cron.ts` (pollNodeStatuses)
+- EDIT: `apps/panel-backend/src/lib/event-bus.ts` (+ `node.created` event)
+- EDIT: `apps/panel-backend/src/modules/nodes/nodes.service.ts` (emit node.created)
+- EDIT: `apps/panel-backend/src/modules/users/users.queue.ts` (+ syncBackfillNode + BackfillNodeJobData)
+- EDIT: `apps/panel-backend/src/modules/scheduler/scheduler.queue.ts` (+ node-healthcheck-poll job)
+- EDIT: `apps/panel-backend/src/index.ts` (register handlers, start workers)
+- EDIT: `apps/panel-frontend/src/pages/NodesPage.tsx` (Refresh-bootstrap button)
+- EDIT: `apps/panel-frontend/src/components/NodePayloadModal.tsx` (handle empty payload)
+- EDIT: `scripts/install-node.sh` (10 new CLI flags for Hysteria + Xray)
+
+**Коммиты (1):**
+1. `feat(slice-23.1)`: node-status poller + node.created backfill + refresh-bootstrap UI
+
+**Gotchas:**
+- node.created emit fires unconditionally; if no handler is registered (tests), the emit is a noop. No test changes needed.
+- Coalesced jobId means the second mutation within retry-window will not enqueue a SECOND backfill — the first one will pick up the latest state when it runs. This is intentional but admins should not expect each Inbound CRUD to produce its own log line.
+- Re-bootstrap doesn't trigger backfill — only initial node.created does. If admin re-bootstraps after several users were created, the new mTLS cert is fine but adapter map is empty until next user mutation. Slice 24b's `inbounds.json` persistence partially mitigates this (config survives restarts); for users themselves a `node.bootstrap-issued` event would fix it, listed for slice 27 (multi-node mgmt UI).
+
+#### Срез 24a: Auto-push inbound config — wire pipeline (panel→node mTLS)
+
+**Цель:** при создании/изменении/удалении inbound в UI или регистрации новой ноды панель собирает полный enabled-набор inbound'ов этой ноды и пушит через mTLS на node-agent. Node-agent атомарно persists в `/etc/ice-panel-node/inbounds.json` для следующего рестарта. Адаптеры в этом slice'е ещё НЕ умеют live-reconfig (это slice 24b) — но wire format готов.
+
+**Что вводим:**
+
+- **Wire DTO** (`packages/shared/src/transport.ts`): `ApplyInboundsRequest { inbounds: InboundDto[] }` + `ApplyInboundsResponse { ok, applied, skipped }`. `InboundDto` несёт `id`, `name`, `protocol`, `port`, и `config` как union `XrayInboundCfg | HysteriaInboundCfg | AmneziawgInboundCfg | NaiveInboundCfg` — каждый по форме идентичен Zod-схемам в `inbounds.schemas.ts`.
+
+- **Panel-backend events:**
+  - `event-bus.ts` → новые события `inbound.{created,updated,deleted}` с payload `{ inboundId, nodeId }`.
+  - `inbounds.service.ts` эмитит на каждом CRUD после успешного DB-write. `deleteInbound` теперь делает `findUnique` ПЕРЕД delete чтобы достать `nodeId` для event payload (после delete row already gone).
+
+- **Panel-backend queue** (`inbounds.queue.ts`): `inboundSyncQueue` BullMQ + `syncInboundsForNode(nodeId)`. Читает все enabled inbounds для ноды → пушит через `NodeTransport.applyInbounds()`. 30s timeout (xray restart needs slack). attempts=3, exponential backoff. **Coalesced jobId `apply:<nodeId>`**: серия inbound CRUD на одной ноде даёт один push, не N штук.
+
+- **Panel-backend handler** (`inbounds.events.ts`): подписка на 4 события (`inbound.{created,updated,deleted}` + `node.created`) → enqueue `applyNodeInbounds`. `node.created` тут пушит **пустой** массив (нода ещё не имеет inbound'ов) — подготавливает node-agent в known good state.
+
+- **NodeTransport** (`apps/panel-backend/src/modules/nodes/nodes.transport.ts`): метод `applyInbounds(req)` отправляет POST `/applyInbounds` через mTLS, 30s timeout.
+
+- **Node-agent endpoint** (`apps/node/internal/server/server.go`): `POST /applyInbounds` декодирует `ApplyInboundsRequest`, атомарно пишет `/etc/ice-panel-node/inbounds.json` (mode 0600, через tmp+rename), логирует факт получения, отвечает `{ok: true, applied: N, skipped: 0}`.
+
+- **Atomic write helper** в server.go: `writeInboundsAtomically(path, inbounds)` — `os.CreateTemp` в той же директории → `Write` → `Chmod 0600` → `os.Rename` → defer `os.Remove(tmpName)`. Crash mid-write не оставляет corrupt JSON.
+
+- **Persist path** `/etc/ice-panel-node/inbounds.json` через env `NODE_INBOUNDS_STORE`. ReadWritePaths systemd-юнита расширены: `+/etc/ice-panel-node`. Иначе ProtectSystem=strict не пускает запись.
+
+**Файлы:**
+- NEW: `apps/panel-backend/src/modules/inbounds/inbounds.queue.ts`
+- NEW: `apps/panel-backend/src/modules/inbounds/inbounds.events.ts`
+- EDIT: `packages/shared/src/transport.ts` (ApplyInboundsRequest + InboundDto + per-protocol cfg shapes)
+- EDIT: `apps/panel-backend/src/lib/event-bus.ts` (+ inbound.{created,updated,deleted})
+- EDIT: `apps/panel-backend/src/modules/nodes/nodes.transport.ts` (+ applyInbounds method)
+- EDIT: `apps/panel-backend/src/modules/inbounds/inbounds.service.ts` (emit events on CRUD)
+- EDIT: `apps/panel-backend/src/index.ts` (register handlers, start worker, shutdown)
+- EDIT: `apps/node/internal/dto/dto.go` (+ InboundDto + ApplyInboundsRequest/Response)
+- EDIT: `apps/node/internal/server/server.go` (+ /applyInbounds handler + atomic write helper)
+- EDIT: `apps/node/main.go` (+ NODE_INBOUNDS_STORE env wiring)
+- EDIT: `scripts/install-node.sh` (ReadWritePaths += /etc/ice-panel-node)
+
+**Коммиты (1):**
+1. `feat(slice-24a)`: auto-push inbound config — panel→node mTLS pipeline
+
+**Gotchas:**
+- `applyInbounds` пушит **только enabled** inbounds (`where: { enabled: true }`). Disabled inbound на стороне ноды трактуется как удалённый — следующий push без него снимет listener.
+- `port` в DTO — это actual listen port (что слушает xray/hysteria). `publicPort` (slice 25) живёт только на panel-side и через wire не идёт.
+- При отсутствии `NODE_PAYLOAD` env (re-deploy сценарий) node-agent не стартует, но wire endpoint должен быть достижим — поэтому панель делает retry job. Coalesced jobId не блокирует retry если первый завершился rejected.
+- `ApplyInboundsRequest.inbounds` может быть пустым — это валидно (нода без inbound'ов). Слайс 24b будет тиерить down listener'ы при empty array.
+
+#### Срез 24b: Auto-push — per-adapter live reconfig
+
+**Цель:** node-agent адаптеры (Xray/Hysteria/AWG/Naive) научаются принимать новый inbound config через `inbounds.json` (или прямой `ApplyInbound` вызов от server.go) и **переконфигурить protocol server без рестарта node-agent'а**. Это финал auto-push цепочки: после slice 24b admin не делает SSH ничего, всё пушится из UI.
+
+**Что вводим:**
+
+- **Расширение `CoreAdapter` интерфейса** (`apps/node/internal/core/adapter.go`):
+  ```go
+  // ApplyInbound takes the protocol-specific config as raw JSON (the same
+  // shape the panel pushes via /applyInbounds). Adapter parses what it needs,
+  // regenerates its config file, and reloads/restarts the underlying server.
+  // Idempotent — re-applying the same config is a no-op.
+  ApplyInbound(cfg json.RawMessage) error
+  ```
+
+- **Per-adapter implementations:**
+  - **Xray** (`internal/core/xray/adapter.go`): принимает `XrayInboundCfg` JSON; обновляет внутренний `cfg.Inbound`; вызывает `regenerateAndRestartLocked()` (метод уже существует для AddUser flow). ~1s downtime на рестарт subprocess'а. Если REALITY private key не поменялся — config diff пустой, no restart (idempotency).
+  - **AmneziaWG** (`internal/core/amneziawg/adapter.go`): принимает `AmneziawgInboundCfg`; пишет `/etc/amneziawg/awg0.conf` с новыми Jc/Jmin/.../H4/keys; делает `awg syncconf awg0 <(awg-quick strip /etc/amneziawg/awg0.conf)`. **No connection drops** благодаря syncconf. Fallback `systemctl restart awg-quick@awg0` если syncconf timeout (10s).
+  - **NaiveProxy** (`internal/core/naive/adapter.go`): принимает `NaiveInboundCfg`; регенерит Caddyfile с новым hostname/email/masqueradeRoot; `caddy reload --config /etc/caddy/Caddyfile`. **No drops** (Caddy hot-reload). Сессии живут до timeout.
+  - **Hysteria** (`internal/core/hysteria/adapter.go`): тут хитро — node-agent работает в callback-mode и не управляет hysteria.service напрямую. Опции: (a) extend node-agent чтобы оно systemctl-restart'ило hysteria.service когда меняется config; (b) admin сам делает rebuild через install-node.sh с новыми флагами. Ставлю на (a) — это согласуется с обещанием «zero SSH». Конкретно: `runCmd("systemctl", "restart", "hysteria.service")` после write `/etc/hysteria/config.yaml`.
+
+- **Server.go integration:** `handleApplyInbounds` после атомарного write `inbounds.json` теперь итерирует request.Inbounds и вызывает соответствующий adapter.ApplyInbound по `protocol`. Адаптер не находится → log warn (могут быть legacy DTO с протоколом, который этот node не поднял).
+
+- **Adapter startup integration:** при `Start()` адаптер сначала пытается прочитать `inbounds.json` (если файл есть → парсит свой блок → использует). Env vars остаются как fallback для legacy installs (slice 23.1 era). После slice 24b admin может ставить `install-node.sh` без `--xray-reality-*` флагов — панель запушит config когда придёт.
+
+- **Subprocess shared package** (slice 16) уже даёт graceful Stop+5s+Kill для рестарта — переиспользуем.
+
+- **Тесты:** 
+  - Mocked-CLI tests для AWG `syncconf` reload path (как в slice 19).
+  - Xray adapter tests: ApplyInbound с mock subprocess убеждается что config.json регенерится и subprocess перезапускается.
+  - Naive adapter tests: Caddy reload через injectable `runCmd`.
+  - Server.go test: handleApplyInbounds dispatches к правильному адаптеру.
+
+**Файлы:**
+- EDIT: `apps/node/internal/core/adapter.go` (+ ApplyInbound в интерфейс)
+- EDIT: `apps/node/internal/core/xray/adapter.go` (+ ApplyInbound impl + Start reads inbounds.json)
+- EDIT: `apps/node/internal/core/hysteria/adapter.go` (+ ApplyInbound impl + systemctl runner)
+- EDIT: `apps/node/internal/core/amneziawg/adapter.go` (+ ApplyInbound impl)
+- EDIT: `apps/node/internal/core/naive/adapter.go` (+ ApplyInbound impl)
+- EDIT: `apps/node/internal/server/server.go` (handleApplyInbounds dispatches per-adapter)
+- EDIT: `apps/node/main.go` (no changes? adapters self-bootstrap from inbounds.json)
+- + tests
+
+**Коммиты (~5):**
+1. `feat(node)`: extend CoreAdapter with ApplyInbound + inbounds.json startup path
+2. `feat(node-xray)`: ApplyInbound regenerate + restart
+3. `feat(node-amneziawg)`: ApplyInbound + awg syncconf hot-reload
+4. `feat(node-naive)`: ApplyInbound + caddy reload
+5. `feat(node-hysteria)`: ApplyInbound + systemctl-restart hysteria.service
+
+**Gotchas:**
+- Race между HTTP handler и adapter Start — если первый /applyInbounds приходит до того как адаптеры дочитали `inbounds.json`, можно пропустить config. Решение: в Start() адаптера читать json **под общим mutex'ом** что и ApplyInbound, applyInbound ожидает Start finish.
+- Hysteria's systemctl-restart нужен root в node-agent. Но node-agent уже запущен от root (systemd unit). Так что ОК. Но это создаёт зависимость node-agent ↔ другой systemd unit — стоит явно задокументировать.
+- `awg syncconf` может не подхватить изменения H1-H4 (interface-level params) — потребует full restart. Адаптер должен detect какие fields поменялись и выбирать syncconf vs restart.
+- Каждый ApplyInbound idempotent: если ничего не изменилось — return nil без рестарта. Pure-state diff на стороне адаптера.
+
+#### Срез 25: publicHost / publicPort separation на Inbound
+
+**Цель:** разорвать перегрузку `node.address` — сейчас он одновременно (а) control-plane endpoint для panel→node mTLS и (б) public host в client-URL. Любая попытка поменять `node.address` post-create ломает cert SAN (поймали live на VPS-тесте: addUser fail → fetch failed → весь pipeline стоит). Slice 25 v1: две nullable колонки на Inbound. Slice 30 (cascade) расширит до полноценной Hosts abstraction (один inbound → много host'ов).
+
+**Что вводим:**
+
+- **Schema migration** (`20260506200000_add_inbound_public_host`):
+  ```sql
+  ALTER TABLE "inbounds"
+    ADD COLUMN "public_host" VARCHAR(253),
+    ADD COLUMN "public_port" INTEGER;
+  ```
+
+- **Backend Zod** (`inbounds.schemas.ts`):
+  - `PublicHostSchema` — RFC-1123 hostname regex, max 253 chars.
+  - `BaseFields.publicHost: optional` — empty string transforms to `undefined` (form clear).
+  - `UpdateInboundSchema.publicHost: nullable` — `null` clears, `undefined` keeps current.
+  - Аналогично для `publicPort`.
+
+- **Backend service** (`inbounds.service.ts`): `createInbound` пишет `publicHost ?? null` / `publicPort ?? null`. `updateInbound` использует Prisma's `undefined` semantics: `publicHost === undefined ? undefined : input.publicHost` — так null проходит как «explicit clear».
+
+- **Subscription generator** (`subscription.service.ts`):
+  ```ts
+  const host = ib.publicHost ?? hostFromAddress(ib.node.address);
+  const port = ib.publicPort ?? ib.port;
+  ```
+  Все 4 protocol-эмиттеров используют local `host`/`port`. Меняет sed: `port: ib.port` → `port:` (shorthand с local `port`).
+
+- **Inbound queue → node** (`inbounds.queue.ts`): `fetchEnabledInbounds` НЕ шлёт `publicHost`/`publicPort` через wire — это panel-only концепты для emit URL. Через mTLS уходит только actual listen `port`.
+
+- **Frontend types** (`api.ts`): Inbound получает `publicHost: string | null` + `publicPort: number | null`. Create/Update inputs принимают опциональные значения.
+
+- **Frontend form** (`InboundFormModal.tsx`): два новых TextInput / NumberInput в общей секции под Port. Help text объясняет когда заполнять. Empty string трактуется как clear.
+
+**Что **НЕ** в этом слайсе** (и ждёт slice 30 cascade):
+- One inbound → multiple hosts (`inbound_hosts` отдельной таблицей).
+- Per-host SNI / path / Host header overrides.
+- Cascade-aware host selection.
+
+Текущий slice 25 v1 решает 95% реальных кейсов одним полем. Полная Hosts abstraction (slice 30) — when cascade routing actually arrives.
+
+**Файлы:**
+- NEW: `apps/panel-backend/prisma/migrations/20260506200000_add_inbound_public_host/migration.sql`
+- EDIT: `apps/panel-backend/prisma/schema.prisma` (+ publicHost, publicPort)
+- EDIT: `apps/panel-backend/src/modules/inbounds/inbounds.schemas.ts`
+- EDIT: `apps/panel-backend/src/modules/inbounds/inbounds.service.ts`
+- EDIT: `apps/panel-backend/src/modules/inbounds/inbounds.queue.ts` (no wire propagation)
+- EDIT: `apps/panel-backend/src/modules/subscription/subscription.service.ts` (use override)
+- EDIT: `apps/panel-frontend/src/lib/api.ts`
+- EDIT: `apps/panel-frontend/src/components/InboundFormModal.tsx`
+
+**Коммиты (1):**
+1. `feat(slice-25)`: publicHost / publicPort separation on Inbound
+
+**Tests:** 193/193 passing после миграции test-DB.
+
+**Gotchas:**
+- Migration nullable — existing rows получают NULL, продолжают работать через fallback на `node.address`. Zero-downtime.
+- Empty string в форме vs explicit null в API — UI решает: кладём `null` если empty, иначе trimmed value. Бэкенд treats both equivalently.
+- При import/clone inbound — копируется publicHost/publicPort вместе с config. Может быть нежелательно если новый inbound на другой ноде → admin должен править вручную. Future ergonomics: clear publicHost on clone.
+
 ### Подробности по адаптерам
 
 #### XrayAdapter (срез 17 — первый после Hysteria, потому что самый похожий)
@@ -685,49 +889,226 @@ Mihomo / Singbox / XrayJSON шаблоны — Phase 2 (Срез 21). Subscripti
 
 **Финальный результат:** реальные пользователи могут пользоваться панелью с >1 нодой, есть auto-failover, метрики, бэкапы, Telegram-уведомления.
 
-### Срезы Phase 3 (renumbered after Remnawave gap-analysis 2026-05-05)
+### Срезы Phase 3 (renumbered after Remnawave gap-analysis 2026-05-05; updated after VPS test 2026-05-06)
 
-| # | Название | Что вводим | Сложность |
+Status as of 2026-05-06:
+- Slice 23.1, 24a, 25 — ✅ done.
+- Slice 24b — ⏭️ next (per-adapter live reconfig).
+- Slice 24c (Xray defaults uplift), 26+ — planned.
+
+| # | Название | Status | Что вводим |
 |---|---|---|---|
-| 24 | **Xray defaults uplift + protocol/transport expansion** | XrayAdapter Go-side: `sniffing` for routing-by-protocol, `sockopt` (BBR/TFO/noDelay), `policy.levels.0.statsUserOnline/Uplink/Downlink` + `stats: {}` for **per-user stats** (currently zero counters!), `DNS-OUT` outbound + DNS-leak rule, BLOCK rules (`geoip:private`, port 25, `protocol: bittorrent` via sniffing). Plus: HTTPUpgrade + KCP transports, Trojan + Shadowsocks subprotocols (cipher selector). Carried from slice 23 deferral. | средне |
-| 25 | **Hosts abstraction (inspired by Remnawave split)** | New `inbound_hosts (id, inbound_id, host, port_override?, sni?, path?, host_header?, name)` table. One inbound → many client-facing hosts. Subscription emits one URI per host, not per inbound. Enables cascade (one inbound, multiple node-fronts), CDN-fronting (ws+CDN host vs direct host on same Xray inbound), per-region hostname overrides. Frontend: tab inside Inbound editor for hosts. | средне |
-| 26 | **Squad ACL — wire up dormant `group_inbounds`** | Schema exists from slice 3 but unused. `subscription.service.ts` filters inbounds by user's groups → `group_inbounds`. Frontend: groups CRUD page, drag-and-drop group↔inbound assignment, group multi-select on user form. Migration adds default "All" group with all-inbounds membership for existing users (zero-downtime). | низко |
-| 27 | **Multi-node management UI** | Регионы, capacity per node, sticky user-to-node assignment, health-status dashboard | средне |
-| 28 | **Server-side smart node selection** | GeoIP (MaxMind GeoLite2) + load-aware subscription generation. Панель отдаёт юзеру топ-3 лучших ноды per his geo + текущая нагрузка | средне |
-| 29 | **Subscription `url-test` groups** | Generate `url-test` (Mihomo/Singbox), `burstObservatory + balancer` (Xray) во всех форматах. Client-side auto-failover поверх server-side selection | низко |
-| 30 | **Cascade routing — first-class feature** | `inbound.config.cascade` поле + поддержка в HysteriaAdapter/XrayAdapter/NaiveProxyAdapter. **Без service-user хаков** как у Remnawave — inter-node secrets через keygen. Builds on Hosts (slice 25). | **высоко** |
-| 31 | **Cross-protocol cascade** | Hysteria→Xray, Xray→Hysteria, любая комбинация через socks5/http outbound. Преимущество multi-core архитектуры | средне (после 30) |
-| 32 | **Telegram bot + Webhook notifications** | grammy для бота, generic webhook фреймворк. События: user.expired, user.limited, node.unreachable, traffic.threshold | средне |
-| 33 | **Prometheus metrics + Grafana dashboards** | Экспортим: per-user traffic, per-node bandwidth, queue stats, request latency. Готовые JSON-дашборды в репо | средне |
-| 34 | **Backup/restore + recovery** | CLI-tool `ice-panel-backup`: dump БД + Redis AOF + .env шифрованно. Restore one-shot. Cron автобэкап на S3-compatible (опционально) | низко |
-| 35 | **Security hardening** | npm audit в CI, advanced rate-limit (per-route customization), CSP refinement, input fuzzing tests, OWASP проверка | средне |
-| 36 | **CI/CD via GitHub Actions** | Auto build Docker images на push в main, auto-publish в ghcr.io, deploy-документация для VPS | низко |
-| 37 | **Bull-board + admin observability** | UI на `/admin/queues` для просмотра BullMQ jobs, dashboard со статистикой системы | низко |
-| 38 | **(опц.) AmneziaWG cascade via iptables** | Полноценный multi-hop через WG через `MASQUERADE` rules. Сложнее остальных — отдельный slice если будет спрос | **высоко** (deferred) |
-| 39 | **(опц.) External squads — presentation overrides** | Per-user-bucket branding (custom `Profile-Title`, host-overrides for VIPs, sub-page theming). Inspired by Remnawave external squads. Solves real but narrow VIP-tier UX. | низко (deferred) |
+| 23.1 | Panel-ops hotfix (poller / backfill / refresh-button) | ✅ done | см. подробности выше |
+| 24a | Auto-push wire pipeline panel→node | ✅ done | см. подробности выше |
+| 24b | Auto-push per-adapter live reconfig | ⏭️ next | `CoreAdapter.ApplyInbound`; xray restart, AWG syncconf, Caddy reload, Hysteria SIGHUP |
+| 24c | **Xray defaults uplift + transports/subprotocols** | ⏭️ | per-user stats (`statsUserUplink`/`Downlink` + StatsService gRPC), HTTPUpgrade + KCP transports, Trojan + Shadowsocks subprotocols, sniffing, sockopt-BBR, DNS-OUT, BLOCK rules |
+| 25 | publicHost / publicPort на Inbound | ✅ done | см. подробности выше |
+| 26 | **Squad ACL** — wire up dormant `group_inbounds` | ⏭️ | groups CRUD UI + group↔inbound assignment + subscription filter |
+| 27 | **Multi-node management UI** | ⏭️ | Регионы, capacity per node, health dashboard, sticky user→node |
+| 28 | **Server-side smart node selection** | ⏭️ | GeoIP (MaxMind GeoLite2) + load-aware subscription gen |
+| 29 | **Subscription `url-test` groups** | ⏭️ | Mihomo/Singbox `url-test`, Xray `burstObservatory + balancer`, client-side failover |
+| 30 | **Hosts abstraction (full)** + **Cascade routing** | ⏭️ | `inbound_hosts` table (one inbound → many hosts) + `cascade_config` JSONB + multi-hop через keygen-issued inter-node secrets (NOT fake-user trick) |
+| 31 | **Cross-protocol cascade** | ⏭️ | Hysteria→Xray, Xray→Hysteria через socks5/http outbound |
+| 32 | **Telegram bot + Webhook notifications** | ⏭️ | grammy + HMAC-SHA256 webhook framework |
+| 33 | **Prometheus metrics + Grafana dashboards** | ⏭️ | per-user / per-node / queue / latency exporters + готовые JSON-дашборды |
+| 34 | **Backup / restore CLI** | ⏭️ | `ice-panel-backup` dump BB + Redis AOF + .env шифр., S3-compatible cron |
+| 35 | **Security hardening** | ⏭️ | npm audit в CI, per-route rate-limits, CSP refinement, fuzzing |
+| 36 | **CI/CD via GitHub Actions** | ⏭️ | Auto Docker build на push, ghcr.io publish, deploy docs |
+| 37 | **Bull-board + observability admin** | ⏭️ | `/admin/queues` UI |
+| 38 | (опц.) AmneziaWG cascade via iptables | deferred | Multi-hop WG через MASQUERADE rules |
+| 39 | (опц.) External squads — presentation overrides | deferred | Per-user-bucket branding |
 
-### Подробности по ключевым срезам
+### Подробности по срезам Phase 3
 
-#### Срез 24: Multi-node management UI
-- В админке: страница `/nodes` с фильтрами (по region, status, protocol)
-- Карточка ноды: utilization (current_users / max_users), throughput last 24h, error rate
-- Регионы как отдельная сущность (`regions` таблица): EU, ASIA, US — для группировки
-- Sticky assignment: при создании юзера автоматически выбирается best node в его регионе
+#### Срез 24c: Xray defaults uplift + transports + subprotocols
 
-#### Срез 25: Server-side smart node selection
-- При запросе `GET /sub/{token}` — определяем GeoIP юзера по `request.ip` (Cloudflare/X-Forwarded-For aware)
-- Из доступных юзеру нод (через group → group_inbounds) берём:
-  1. Те что в same region
-  2. Сортируем по `currentUsers / maxUsers` ascending
-  3. Топ-3
-- В подписке отдаём именно их, не все
-- Кэш 60s — повторные запросы за минуту получают ту же подборку
+**Цель:** превратить наш Xray из «работает, но minimal» в полноценный prod-grade core. Главные пункты — **per-user traffic stats** (без них биллинг не работает) и расширение transport/protocol матрицы.
 
-#### Срез 27: Cascade routing
-- В таблицу `inbounds` поле `cascade_config JSONB` (nullable):
+**Что вводим:**
+
+1. **Per-user stats:**
+   - В Xray config добавляем глобальный `stats: {}` блок + `api: { tag: "api", services: ["StatsService"] }` + inbound на 127.0.0.1:8080 с тегом api.
+   - В `policy.levels.0` устанавливаем `statsUserUplink: true`, `statsUserDownlink: true` — счётчики per-user.
+   - Каждому VLESS клиенту в config добавляем `email: <userId>` — пусть Xray использует его как ключ статистики.
+   - Node-side: `xray-grpc-client` package (vendoring proto definitions из `XTLS/Xray-core` repo), Go-методы `QueryStats` (паттерн `user>>>email>>>traffic>>>uplink`/`downlink`).
+   - Polling cron в node-agent (~60s): собирает дельты, отдаёт через расширенный `GET /stats` panel-у. Сейчас он возвращает заглушки; теперь возвращает реальные `UserStats[]`.
+   - Panel-side: уже есть `getStats` worker и `user_traffic` таблица. Расширяем worker писать дельты через UPSERT, использовать `consumptionMultiplier` ноды.
+
+2. **HTTPUpgrade transport** (`network: 'httpupgrade'` в Xray config):
+   - Расширить `XrayInboundCfg`: `network: 'raw'|'xhttp'|'ws'|'grpc'|'httpupgrade'|'kcp'`.
+   - URI-builder обновить: `type=httpupgrade&path=/path&host=cdn.example.com`.
+   - Use case: WebSocket-like, но без overhead'а WS-handshake. Хорош под CDN.
+
+3. **KCP transport** (UDP-based, для lossy networks):
+   - `network: 'kcp'`, дополнительные fields: `mtu`, `tti`, `uplinkCapacity`, `downlinkCapacity`, `congestion`, `seed`.
+   - URI: `type=kcp&seed=<>&headerType=<>`.
+
+4. **Trojan subprotocol:**
+   - Trojan = подобие VLESS, password-based, выглядит как нормальный TLS-сайт. Использует общий transport stack.
+   - Новый Zod schema `TrojanConfigSchema` (password, certs или REALITY).
+   - URI builder `buildTrojanUri`: `trojan://<password>@host:port?security=tls&sni=...#name`.
+   - Singbox + Clash format support.
+
+5. **Shadowsocks subprotocol:**
+   - Cipher selector: `chacha20-ietf-poly1305`, `aes-256-gcm`, `2022-blake3-aes-256-gcm` (SS2022 — современный).
+   - Server password vs per-user password (panel выдаёт per-user).
+   - URI: `ss://<base64(method:password)>@host:port#name`.
+
+6. **Smart routing defaults в Xray config:**
+   - `sniffing: { enabled: true, destOverride: ["http", "tls", "quic"] }` — для routing по протоколам.
+   - `sockopt: { tcpFastOpen: true, tcpCongestion: "bbr", noDelay: true }` — заметный буст throughput.
+   - `outbounds`: `freedom`, `blackhole`, **новый `dns-out`** (`type: dns`).
+   - `routing.rules`: `domain:geosite:private → blackhole`, `port:25 → blackhole`, `protocol:bittorrent → blackhole` (anti-leak), DNS queries → dns-out (anti-DNS-leak).
+
+**Файлы:**
+- EDIT: `apps/panel-backend/src/modules/inbounds/inbounds.schemas.ts` (network enum + httpupgrade/kcp params + Trojan/SS schemas)
+- EDIT: `apps/panel-backend/src/core-adapters/xray/uri.ts` (URI builders for new transports + Trojan + SS)
+- NEW: `apps/panel-backend/src/core-adapters/xray/grpc.ts` или `apps/panel-backend/src/modules/stats/` (panel-side stats ingest)
+- EDIT: `apps/node/internal/core/xray/{config,adapter}.go` (stats config + transports + subprotocols)
+- NEW: `apps/node/internal/core/xray/grpc/` (vendored proto + client)
+- EDIT: `apps/node/internal/core/xray/adapter.go` (`GetStats` calls grpc, returns real bytes)
+- EDIT: `packages/shared/src/transport.ts` (XrayInboundCfg gets new fields; Trojan/SS DTOs)
+- EDIT: `apps/panel-frontend/src/components/InboundFormModal.tsx` (transport-specific forms)
+- + tests (URI builders, grpc client mock)
+
+**Коммиты (~10):**
+1. `feat(xray)`: vendored proto + grpc StatsService client
+2. `feat(node-xray)`: write per-user stats config + email-as-userId
+3. `feat(node-xray)`: GetStats returns real bytes
+4. `feat(panel)`: stats poller + user_traffic UPSERT integration
+5. `feat(xray)`: HTTPUpgrade transport
+6. `feat(xray)`: KCP transport
+7. `feat(xray)`: Trojan subprotocol
+8. `feat(xray)`: Shadowsocks subprotocol (incl. SS2022)
+9. `feat(xray)`: routing defaults — sniffing + sockopt-BBR + DNS-OUT + BLOCK rules
+10. `docs`: mark slice 24c done
+
+**Gotchas:**
+- xray-core gRPC требует matching proto-definitions версии. Vendor — фикс снапшот, обновлять руками раз в quarter (или при крупном breaking change в Xray).
+- `email` field в Xray inbound user — **не тот email юзера в нашей БД**. Это просто строка-идентификатор. Используем `userId` (UUID) тут, не настоящий email.
+- KCP UDP конфликтует с Hysteria если оба на одной ноде (один UDP-port). Validation на уровне Inbound creation: error если UDP-port collision.
+- SS2022 cipher требует Xray ≥ v1.8. Нужно прокинуть version-check в Inbound form.
+- BBR требует `net.core.default_qdisc=fq` + `net.ipv4.tcp_congestion_control=bbr` в sysctl. install-node.sh должен это поставить (slice 24b/24c добавит этот шаг).
+
+#### Срез 26: Squad ACL — wire up dormant `group_inbounds`
+
+**Цель:** оживить уже существующую (со slice 3) таблицу `group_inbounds`. Сейчас все юзеры видят все inbounds в подписке. После slice 26 admin может разделить «trial»-юзеров на их подмножество inbound'ов, «paid» на другое, etc.
+
+**Что вводим:**
+
+- **Backend:** `subscription.service.ts` фильтрует inbounds по `user.groups → group_inbounds`. Если у юзера нет групп — видит все (legacy compat).
+- **Migration:** seed-row «All» group, `INSERT INTO group_inbounds SELECT 'all-group-id', id FROM inbounds` чтобы существующие deploy не сломались. Existing users автоматически join'аются в эту группу через триггер или при first sub fetch.
+- **Frontend** `/groups` page: list / create / edit / delete. На странице группы — drag-and-drop assignments (slot inbounds в группу).
+- **User form:** MultiSelect groups (default `[All]`).
+- **Inbound form:** read-only summary "Visible to N groups" с link на групп-страницу.
+
+**Файлы:**
+- EDIT: `apps/panel-backend/src/modules/subscription/subscription.service.ts` (filter)
+- EDIT: `apps/panel-backend/src/modules/users/users.service.ts` (assign default group on create)
+- NEW: `apps/panel-backend/src/modules/groups/{groups.service,routes,schemas,mapper}.ts`
+- NEW: `apps/panel-backend/prisma/migrations/.../add_default_all_group_seed.sql`
+- NEW: `apps/panel-frontend/src/pages/GroupsPage.tsx` + GroupFormModal + DnDAssignments
+- EDIT: `apps/panel-frontend/src/components/UserFormModal.tsx` (groups MultiSelect)
+
+**Коммиты (~5):**
+1. `feat(panel)`: groups CRUD endpoints + service
+2. `feat(panel)`: subscription filter by groups
+3. `feat(frontend)`: GroupsPage + drag-and-drop group↔inbound
+4. `feat(frontend)`: UserFormModal groups MultiSelect
+5. `docs`: mark slice 26 done
+
+**Gotchas:**
+- Default-«All»-group не должна показываться в form'е как чек-бокс — она implicit. Хранить flag `groups.isDefault` чтобы UI её скрывал.
+- DnD reordering важен на UI для prioritization когда юзер в multiple groups (intersection vs union — берём union по умолчанию).
+- При delete group → юзеры в ней должны fall-through в All, не остаться без подписки. Backend service handles cascade cleanup.
+
+#### Срез 27: Multi-node management UI
+
+**Цель:** scale UI чтобы 10+ нод не превратились в bulk текста. Регионы как concept, capacity warning'и, health-dashboard на одной странице.
+
+**Что вводим:**
+
+- **Schema:** new `regions` table (`id`, `name`, `code`), FK на `nodes.regionId` (nullable, NULL = unspecified).
+- **Schema:** `nodes.maxUsers: int?` (capacity hint для balancer'а в slice 28).
+- **Frontend `/nodes`:**
+  - Filters: region, protocol, status.
+  - Cards (вместо таблицы) для widescreen view: utilization bar `currentUsers / maxUsers`, throughput last 24h sparkline, error rate %, last status message.
+  - Group by region collapse / expand.
+- **Health dashboard at top of page:** `online: 12 / 14 nodes`, `unreachable: 2`, `traffic last 24h: 480 GB`.
+- **Sticky user-to-node assignment:** при create user — backend выбирает best node в региона юзера (если задан), записывает в `users.preferredNodeId`. Subscription generator берёт preferred первой, остальные fallback. Это NOT mandatory routing — просто affinity hint.
+
+**Зависимости:** требует slice 24c (нужны реальные `currentUsers` через stats) для accurate utilization. До 24c — показываем `?` в utilization bar.
+
+#### Срез 28: Server-side smart node selection
+
+**Цель:** при `GET /sub/:token` отдавать клиенту топ-N нод подобранных по latency + load, а не все его доступные. Нужно для real-world deployment'ов с 10+ регионами.
+
+**Что вводим:**
+
+- **GeoIP integration:** MaxMind GeoLite2 City DB (free tier, 500k requests/month). Хранится локально в backend контейнере, обновляется monthly через cron.
+- **Selection algo:**
+  ```ts
+  function selectNodes(user, ip): NodeRow[] {
+    const userGeo = geoip.lookup(ip);
+    const eligible = nodesAccessibleTo(user); // group_inbounds filter
+    const ranked = eligible
+      .map(n => ({ n, score: scoreFor(n, userGeo) }))
+      .sort((a, b) => b.score - a.score);
+    return ranked.slice(0, 3).map(r => r.n);
+  }
+
+  function scoreFor(node, userGeo): number {
+    const sameRegion = node.region.code === userGeo.region ? 100 : 0;
+    const utilization = 1 - (node.currentUsers / node.maxUsers);  // 0..1
+    return sameRegion + utilization * 50;
+  }
+  ```
+- **Cache 60s** — avoid pounding GeoIP DB на каждом sub request. `redis.set(`geoip:${ip}`, region, 60)`.
+- **Frontend:** опционально admin отключает — `user.preferAllNodes: boolean` для кейсов когда юзер хочет видеть все ноды (manual switch).
+
+**Зависимости:** slice 27 (regions), slice 24c (currentUsers).
+
+#### Срез 29: Subscription `url-test` groups
+
+**Цель:** клиент-side auto-failover поверх server-side selection (slice 28). Юзер может перемещаться между странами — и его клиент сам перепрыгнет на ноду с самым низким ping без обновления подписки.
+
+**Что вводим:**
+
+- **Mihomo/Singbox `url-test` proxy group:**
+  ```yaml
+  proxy-groups:
+    - name: Auto
+      type: url-test
+      proxies: [se-xray-01, de-hys2-02, nl-naive-03]
+      url: https://www.gstatic.com/generate_204
+      interval: 300
+      tolerance: 50
+  ```
+- **Xray `burstObservatory` + `balancer`:**
+  ```json
+  "observatory": { "subjectSelector": ["proxy-"], "probeURL": "https://gstatic..." },
+  "routing": { "balancers": [{ "tag": "auto", "selector": ["proxy-"] }] }
+  ```
+- **Generic Clash + Sing-box + xrayjson formatter изменения:** добавить url-test/balancer wrapper.
+
+**Зависимости:** slice 21 multi-format (есть).
+
+#### Срез 30: Hosts abstraction (full) + Cascade routing
+
+**Цель:** разорвать «один inbound → один host» (slice 25 v1) и ввести cascade routing. Это два связанных изменения, делать вместе для целостности.
+
+**Hosts abstraction (полная):**
+- New table `inbound_hosts (id, inbound_id, host, port_override?, sni?, path?, host_header?, name)`.
+- One inbound → many client-facing hosts. Subscription emits one URI per host, не per inbound. Use case: same Xray REALITY inbound, два host'а (один direct IP, второй через CDN-proxy с разным SNI).
+- Frontend: tab inside Inbound editor for hosts. Default first host carries the "primary" flag.
+- Migration: создать row в `inbound_hosts` для каждого existing inbound, копируя `publicHost`/`publicPort`/`port` → host record. Дальше publicHost/publicPort на самом Inbound становятся deprecated (keep for compat, prefer hosts).
+
+**Cascade routing:**
+- New table `node_peer_secrets (id, fromNodeId, toNodeId, sharedSecret)` — keygen-issued credentials для inter-node tunnel.
+- New column `inbound.cascadeConfig JSONB`:
   ```json
   {
-    "via_node_id": "uuid-of-NL-node",
+    "viaNodeId": "uuid-of-NL-node",
     "rules": [
       { "match": "geoip:ru", "action": "direct" },
       { "match": "geosite:bittorrent", "action": "block" },
@@ -735,25 +1116,163 @@ Mihomo / Singbox / XrayJSON шаблоны — Phase 2 (Срез 21). Subscripti
     ]
   }
   ```
-- При sync ноды (`POST /sync` от панели), node-agent читает `cascade_config` и **сам генерирует**:
-  - Outbound config своего ядра (Hysteria YAML / Xray JSON / Caddyfile + naive)
-  - Routing rules
-- **Inter-node credentials** генерятся keygen-модулем (Срез 9), хранятся в `node_peer_secrets` таблице — НЕ как фейк-юзеры
-- Multi-hop поддерживается естественно: A→B→C значит на A в config указан `via: B`, на B указан `via: C`. Каждая нода видит только свой следующий hop
+- При applyInbounds (slice 24a/b) panel включает в payload `cascade_config` + matching `node_peer_secrets`. Node-agent адаптер генерит outbound config с inter-node tunnel:
+  - Hysteria: `outbounds` block with tunnel ref
+  - Xray: `outbounds: [vless://internal-tunnel...]`
+  - NaiveProxy: `route { forward_proxy { upstream } }` Caddy directive
+- Multi-hop: A→B→C. На A в config указан `via: B-secret`. На B inbound с `B-secret` accept, outbound с `via: C-secret`. Каждая нода видит только свой следующий hop, никто не имеет full chain awareness.
 
-#### Срез 28: Cross-protocol cascade
-- Допустим Hysteria-RU → Xray-DE → интернет
-- Hysteria's `outbound.type: socks5` поднимает соединение к Xray-DE через локальный adapter в Xray (Xray слушает socks5 inbound на 127.0.0.1)
-- Адаптеры договариваются через `node_peer_secrets`:
-  - HysteriaAdapter знает: «outbound socks5 → 10.x.x.x:1080 user=service_h2x pass=...»
-  - XrayAdapter на DE-ноде имеет inbound socks5 на :1080 с этими credentials, делает freedom outbound → интернет
-- Прозрачно для админа — он просто выбирает "via NL-Xray" в UI
+**Файлы:** много, см. подробности при подходе к слайсу.
 
-#### Срез 29: Telegram + Webhook notifications
-- Grammy бот регится через `@BotFather` (как в Remnawave)
-- Events list: `user.created`, `user.expired`, `user.limited`, `subscription.requested`, `node.unreachable`, `traffic.threshold_reached`
-- Webhook: HMAC-SHA256 signature header (как Remnawave паттерн)
-- Per-event subscription: разные chat_id для разных событий (`TELEGRAM_NOTIFY_USERS`, `TELEGRAM_NOTIFY_NODES` — паттерн из их docs)
+**Сложность:** **высоко**. Это один из самых архитектурно опасных слайсов — keygen-flow для inter-node, secrets distribution через mTLS, propagation на rebuild. Не браться пока stats + transports (24c) и UI (27-28) не закроют user-facing must-haves.
+
+#### Срез 31: Cross-protocol cascade
+
+**Цель:** Hysteria-RU → Xray-DE → интернет (или любая комбинация). Отличие от slice 30 — там same-protocol multi-hop, тут разные ядра. Use case: пользователь в Hysteria-friendly регионе, exit-нода в Xray-friendly.
+
+**Архитектура:**
+- HysteriaAdapter получает в config `outbound: { type: "socks5", addr: "10.x.x.x:1080", user/pass }` — Hysteria шлёт all traffic в socks5 локально.
+- На inter-node tunnel — XrayAdapter на DE-ноде слушает socks5 inbound на 10.x.x.x:1080 с теми же credentials, делает freedom outbound → internet.
+- Credentials через `node_peer_secrets` (slice 30).
+- В UI admin выбирает в Inbound editor: «Cascade via: <NL-Xray inbound>» (dropdown списка eligible).
+
+**Сложность:** средне (после slice 30 keygen-flow готов).
+
+#### Срез 32: Telegram bot + Webhook notifications
+
+**Цель:** events panel shouts to admin без ручного логина в UI. Готовый паттерн в Remnawave docs — копируем без особой инновации.
+
+**Что вводим:**
+
+- **Bot framework:** `grammy` (TypeScript, реактивный). Регистрация через `@BotFather`.
+- **Events для notifications:**
+  - `user.created` (опционально, мб шумно)
+  - `user.expired` (юзер закончился — может попросить продлить)
+  - `user.limited` (превысил traffic)
+  - `subscription.requested` (sub URL hit — debug only, default off)
+  - `node.unreachable` (нода ушла — admin должен знать сразу)
+  - `node.online` (вернулась — recovery)
+  - `traffic.threshold_reached` (любой юзер проехал 80% quota — early warning)
+- **Per-event chat_id config:**
+  ```env
+  TELEGRAM_NOTIFY_USERS=-100123...   # юзерские события
+  TELEGRAM_NOTIFY_NODES=-100456...   # node events (отдельный chat для on-call)
+  TELEGRAM_NOTIFY_TRAFFIC=-100789... # traffic warnings
+  ```
+- **Webhook framework:** generic. Admin задаёт URL + secret в settings UI; backend шлёт POST с `Authorization: HMAC-SHA256 hex` header. Body — JSON с event name + payload.
+- **Settings UI:** `/settings/notifications` — лист каналов, test button.
+
+**Файлы:**
+- NEW: `apps/panel-backend/src/modules/notifications/{telegram,webhook,service}.ts`
+- NEW: `apps/panel-backend/prisma/migrations/.../add_notification_channels.sql`
+- EDIT: `event-bus.ts` (notification handlers subscribe to all relevant events)
+- NEW: `apps/panel-frontend/src/pages/SettingsNotificationsPage.tsx`
+
+**Зависимости:** event-bus (есть), нет жёстких deps.
+
+#### Срез 33: Prometheus metrics + Grafana dashboards
+
+**Цель:** observability без отдельного APM. `/metrics` endpoint в OpenMetrics-формате, готовые JSON Grafana dashboards в `docs/observability/`.
+
+**Метрики:**
+- `ice_panel_users_total{status}` (active/disabled/expired/limited)
+- `ice_panel_node_status{node,status}` (gauge: 1=online, 0=unreachable)
+- `ice_panel_node_users{node}` (current users per node)
+- `ice_panel_node_traffic_bytes_total{node,direction}` (counter)
+- `ice_panel_user_traffic_bytes_total{user,direction}` (counter, high-cardinality! cap N=top-100)
+- `ice_panel_bullmq_queue_size{queue,state}` (waiting/active/failed)
+- `ice_panel_request_duration_seconds{route,status}` (histogram)
+
+**Dashboards:**
+- "Overview": users / nodes / traffic / queue health
+- "Per-node": throughput, errors, status timeline
+- "Top users": top-20 traffic consumers (anti-abuse view)
+
+**Файлы:**
+- EDIT: `apps/panel-backend/src/app.ts` (add `/metrics` route via `prom-client` lib)
+- NEW: `docs/observability/grafana-dashboards/{overview,per-node,top-users}.json`
+- NEW: `docs/observability/prometheus.yml.example`
+
+**Сложность:** низко (prom-client стандартный, dashboards — экспорт из реального Grafana).
+
+#### Срез 34: Backup / restore CLI
+
+**Цель:** `ice-panel-backup` бинарник делает encrypted dump БД + Redis + .env. Restore one-shot. Optional cron upload to S3-compatible.
+
+**Команды:**
+```
+ice-panel-backup dump --output /backup/ice-2026-05-06.tar.gz.enc --key <passphrase>
+ice-panel-backup restore --input /backup/ice-2026-05-06.tar.gz.enc --key <passphrase>
+ice-panel-backup verify --input <file>  # Decrypt + check structure без полного restore
+```
+
+**Что внутри tarball:**
+- `postgres-dump.sql.gz` (`pg_dump` через docker exec)
+- `redis-aof.rdb.gz` (`redis-cli SAVE`)
+- `env.production.enc` (.env.production)
+- `manifest.json` (timestamp, git SHA panel'a, version)
+
+**Encryption:** `age` (modern, simple). Один passphrase, file output.
+
+**Cron-mode** в panel: `BACKUP_S3_BUCKET=...` `BACKUP_S3_KEY=...` env → BullMQ daily cron job делает backup и uploads через `aws-sdk`/`@aws-sdk/client-s3`.
+
+**Файлы:**
+- NEW: `tools/ice-panel-backup/` (Go или Node CLI; склоняюсь к Go для standalone бинаря)
+- NEW: scripts/backup-restore.md docs
+
+**Сложность:** низко (механика стандартная).
+
+#### Срез 35: Security hardening
+
+**Цель:** проактивная санация перед public release.
+
+**Что делаем:**
+- `npm audit` в CI на каждый PR.
+- Per-route rate-limits на чувствительных endpoint'ах: `/api/auth/login` (5/min уже есть), `/api/auth/register` (3/5min уже есть), `/sub/:token` (60/min anti-abuse), `/api/nodes/:id/bootstrap` (10/min).
+- Content-Security-Policy refinement: текущая дефолтная nginx. Добавить strict CSP без unsafe-inline.
+- Input fuzzing tests: `fast-check` или `vitest`-property-based для critical Zod schemas (Inbound configs, User creation).
+- OWASP Top-10 checklist прохождение: SQL injection (Prisma защищает), XSS (React escape default), CSRF (JWT — stateless, но `SameSite=Lax` cookie если ввести), broken auth (JWT expiry), security misconfig (Caddy + ufw уже tight), components-with-known-vulnerabilities (`npm audit`).
+- Secret rotation flow: `ice-panel-rotate-secrets` CLI команда — re-genrate JWT_SECRET, invalidates all sessions, regen Postgres pwd через `ALTER USER`.
+
+**Сложность:** средне (распределено по нескольким PR).
+
+#### Срез 36: CI/CD via GitHub Actions
+
+**Цель:** push в main → tests → build images → publish ghcr.io. Deploy docs обновляются.
+
+**Workflows:**
+- `.github/workflows/test.yml`:
+  - on: pull_request, push to main
+  - jobs: panel-backend test (postgres-test container), frontend tsc, node go test
+- `.github/workflows/build.yml`:
+  - on: push tag `v*`
+  - jobs: build & push `ghcr.io/0xic3/ice-panel-backend:vX.Y.Z`, ditto frontend & node-agent
+- `.github/workflows/release.yml`:
+  - on: tag
+  - generate changelog, GitHub release with binary artifacts (node-agent for amd64/arm64)
+
+**install-panel.sh** обновится: вместо локального docker build — `docker pull ghcr.io/.../ice-panel-backend:latest`. ~10 мин → ~30 сек deploy.
+
+**Сложность:** низко.
+
+#### Срез 37: Bull-board + admin observability
+
+**Цель:** UI на `/admin/queues` для просмотра BullMQ jobs (active/waiting/failed), плюс system stats dashboard.
+
+**Что вводим:**
+- `@bull-board/fastify` plugin → mounts at `/api/admin/queues`. Защищено `requireAuth`.
+- Frontend `/admin/queues` page: iframe в bull-board UI или native re-implementation на Mantine.
+- Admin overview dashboard: latest 10 audit log entries, system uptime, версия panel'a, версия node-agent (latest known per node).
+
+**Сложность:** низко (bull-board готовый).
+
+#### Срез 38 (deferred): AmneziaWG cascade via iptables
+
+Multi-hop через AWG требует прямой iptables MASQUERADE на промежуточных нодах + careful routing rules. Не нужен пока no-one asks for it. Откладываем до явного request'а.
+
+#### Срез 39 (deferred): External squads — presentation overrides
+
+Per-user-bucket branding (custom Profile-Title, host-overrides for VIPs, sub-page theming). Solves narrow VIP-tier UX. Откладываем — нет реальных VIP-юзеров для тестирования.
 
 ---
 
@@ -779,6 +1298,24 @@ Mihomo / Singbox / XrayJSON шаблоны — Phase 2 (Срез 21). Subscripti
 7. **Event-driven sync.** Любое изменение пользователя/ноды — через событие, не прямой вызов.
 8. **Очереди для всего сетевого.** Cron, REST-вызовы к нодам, рассылки — всё через BullMQ, никаких блокирующих операций в HTTP-хендлерах.
 9. **Reference oracle.** Перед каждым срезом смотрим как у Remnawave, берём что подходит, отбрасываем что не подходит. См. memory `reference_remnawave.md`.
+10. **Автоматизируй боль, а не возможность боли** (lesson from 2026-05-06 VPS test). Если делал руками 3+ раза и заболело — автоматизируй (slice 23.1 родился из этого правила: backfill, refresh-bootstrap, status poller — все три вычислены за один день multi-node-теста). Если ещё не болело — не трогай. Pre-commit hooks, dependabot, observability tooling — всё это не имеет ROI на solo-MVP-фазе.
+
+## Уроки из VPS-теста (2026-05-06)
+
+Записываем баги что поймали за один день multi-node-теста — чтобы не наступать снова.
+
+| # | Bug | Root cause | Fix commit |
+|---|---|---|---|
+| 1 | Hiddify «Unknown parse outbound» на hysteria2 URI | `?#name` (empty query + fragment) ломает sing-box parser | `ffdfc31` drop empty `?` |
+| 2 | sing-box «TLS required» на hysteria2 outbound | Singbox JSON formatter не писал `tls.enabled: true` | `0f59036` add tls.enabled |
+| 3 | install-node.sh fail `mkdir /etc/xray: read-only` | ProtectSystem=strict + ReadWritePaths permits writes only into existing dirs | `9372d7c` pre-create dirs |
+| 4 | Xray REALITY rejects `+/=` в private key | x25519 generator выдавал base64-standard, REALITY parser требует base64url | `9372d7c` `generateRealityKeyPair()` |
+| 5 | Bootstrap-redeem 401 несмотря на public route | `app.addHook` в Fastify плагине scope-leak'ит и применяется к routes ДО хука | `325f85b` per-route `{ onRequest }` |
+| 6 | Hysteria auth rejected for pre-existing user | Ноды добавленные позднее юзеров не получают backfill — only future user.created fans out | slice 23.1 `node.created` event |
+| 7 | mTLS panel→node fetch failed после смены node.address | Cert SAN заморожен на момент create node, новый address != cert host | slice 25 publicHost (architectural fix) + slice 23.1 Refresh-bootstrap (operational workaround) |
+| 8 | Status в UI всегда `UNKNOWN` | Никакой poller не пишет в `nodes.status` | slice 23.1 30s healthcheck cron |
+| 9 | Hiddify VPN sometimes blocks UDP-443 outbound в test environment | Не наш баг, но симптом легко спутать с серверной проблемой | doc'd in install.md troubleshooting |
+| 10 | Linux TTY truncates 4096-byte paste | NODE_PAYLOAD ~6-7 KB обрезался при copy-paste в SSH | `b1a31dc` `--payload-file` flag + Download button + bootstrap-token flow (`fa0d4ea`) |
 
 ---
 

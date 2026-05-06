@@ -86,7 +86,15 @@ Full deploy guide (per-protocol details, troubleshooting, update workflow): **[d
 
 ## Status
 
-🎉 **Phase 2 complete + multi-node multi-protocol VPS-validated** (2026-05-06). Two real VPS (Sweden Xray REALITY + Germany Hysteria 2) under one panel, one subscription URL emits both endpoints, Hiddify connects to both. Slice 23.1 hardened panel-ops on top: node-status poller, `node.created` user backfill, refresh-bootstrap UI. Slice 24 (Xray uplift + per-user stats + auto-push inbound config) is next.
+🎉 **Phase 2 complete + multi-node multi-protocol VPS-validated** (2026-05-06). Two real VPS (Sweden Xray REALITY + Germany Hysteria 2) under one panel, one subscription URL emits both endpoints, Hiddify connects to both. Phase 3 in progress:
+
+- ✅ **Slice 23.1** — panel-ops harden: node-status poller, `node.created` user backfill, Refresh-bootstrap UI button, install-node.sh per-protocol auto-config flags.
+- ✅ **Slice 24a** — auto-push inbound config wire pipeline (panel→node mTLS), atomic `inbounds.json` persistence on the node side.
+- ✅ **Slice 25** — `publicHost` / `publicPort` separation on Inbound (closes the cert-SAN-mismatch gotcha at the architecture level).
+- ⏭️ **Slice 24b** next — per-adapter live reconfig (Xray restart, AWG syncconf, Caddy reload, Hysteria SIGHUP).
+- ⏭️ **Slice 24c** — Xray defaults uplift + transports/subprotocols + per-user traffic stats.
+
+Full plan: [docs/ROADMAP.md](./docs/ROADMAP.md) (v3, 2026-05-06).
 
 See [docs/ROADMAP.md](./docs/ROADMAP.md) for the slice-by-slice progress plan and Phase 3 priorities.
 

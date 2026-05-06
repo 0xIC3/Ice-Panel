@@ -86,7 +86,15 @@ bash <(curl -fsSL .../install-node.sh) --panel-url ... --bootstrap ... --protoco
 
 ## Статус
 
-🎉 **Phase 2 + multi-node multi-protocol валидация на VPS** (2026-05-06). Две реальные VPS (Швеция Xray REALITY + Германия Hysteria 2) под одной панелью, одна subscription URL отдаёт оба endpoint'а, Hiddify коннектится к обоим. Поверх — slice 23.1 (panel-ops harden): node-status poller, backfill юзеров на `node.created`, refresh-bootstrap UI. Дальше slice 24 (Xray uplift + per-user stats + auto-push inbound config).
+🎉 **Phase 2 + multi-node multi-protocol валидация на VPS** (2026-05-06). Две реальные VPS (Швеция Xray REALITY + Германия Hysteria 2) под одной панелью, одна subscription URL отдаёт оба endpoint'а, Hiddify коннектится к обоим. Phase 3 в процессе:
+
+- ✅ **Slice 23.1** — panel-ops harden: node-status poller, backfill юзеров на `node.created`, Refresh-bootstrap UI кнопка, install-node.sh per-protocol auto-config флаги.
+- ✅ **Slice 24a** — auto-push inbound config wire pipeline (панель→нода через mTLS), атомарная persistence `inbounds.json` на ноде.
+- ✅ **Slice 25** — `publicHost` / `publicPort` разделение на Inbound (закрывает cert-SAN-mismatch gotcha на архитектурном уровне).
+- ⏭️ **Slice 24b** — per-adapter live reconfig (Xray restart, AWG syncconf, Caddy reload, Hysteria SIGHUP).
+- ⏭️ **Slice 24c** — Xray defaults uplift + транспорты/субпротоколы + per-user traffic stats.
+
+Полный план: [docs/ROADMAP.md](./docs/ROADMAP.md) (v3, 2026-05-06).
 
 Подробный план срезов и приоритеты Phase 3 — [docs/ROADMAP.md](./docs/ROADMAP.md).
 
