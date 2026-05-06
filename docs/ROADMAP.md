@@ -3,7 +3,7 @@
 > Этот документ — план развития проекта и справочник по используемым технологиям.
 > Обновляется по мере прохождения срезов. Если в коде ушло вперёд — значит документ устарел, обнови его.
 >
-> **Версия:** 3 (2026-05-06) — обновлено после live-валидации multi-node multi-protocol на VPS, slice 23.1 panel-ops harden, slice 24a auto-push wire pipeline, slice 25 publicHost separation.
+> **Версия:** 3.1 (2026-05-06) — slice 24b разбит на 24b1 (interface + Xray real impl, ✅ done) и 24b2/24b3/24b4 (Hysteria / AmneziaWG / Naive real impls — отдельные follow-up commits).
 
 ---
 
@@ -351,7 +351,10 @@ Mihomo / Singbox / XrayJSON шаблоны — Phase 2 (Срез 21). Subscripti
 |---|---|---|---|
 | 23.1 | **Panel-ops hotfix** | ✅ done | node.created → backfillNode job; Refresh-bootstrap UI button (`/api/nodes/:id/bootstrap`); 30s node-status poller; install-node.sh auto-config flags для Hysteria + Xray |
 | 24a | **Auto-push inbound config (wire pipeline)** | ✅ done | `inbound.{created,updated,deleted}` events; BullMQ `inbound-sync` queue with coalesced jobId per node; `NodeTransport.applyInbounds()`; node-agent `/applyInbounds` endpoint with atomic persist to `/etc/ice-panel-node/inbounds.json` |
-| 24b | **Auto-push: per-adapter live reconfig** | ⏭️ next | `CoreAdapter.ApplyInbound(json.RawMessage)`; Xray regen+restart, AWG syncconf, Caddy reload, Hysteria SIGHUP; adapters fall back to `inbounds.json` if env vars absent |
+| 24b1 | **Per-adapter ApplyInbound — interface + Xray real impl** | ✅ done | `CoreAdapter.ApplyInbound(json.RawMessage)` в interface; **Xray: реальная реализация** (parse XrayInboundCfg → diff → regenerate config.json + restart subprocess; idempotent); Hysteria/AWG/Naive: stubs логируют + полагаются на inbounds.json persistence; dispatcher в `handleApplyInbounds` фан-аут по protocol name |
+| 24b2 | **Hysteria ApplyInbound real impl** | ⏭️ next | Rewrite `/etc/hysteria/config.yaml` + `systemctl restart hysteria.service` через injectable runCmd. Kross-systemd-unit зависимость (отдельный hysteria.service вне node-agent) — основной gotcha |
+| 24b3 | **AmneziaWG ApplyInbound real impl** | ⏭️ | Smart diff: H1-H4 (interface-level) → full restart, остальное → `awg syncconf`; idempotency по diff |
+| 24b4 | **NaiveProxy ApplyInbound real impl** | ⏭️ | Regenerate Caddyfile + `caddy reload` через injectable runCmd; no session drops |
 | 24c | **Xray defaults uplift + transports/subprotocols** | ⏭️ | Per-user stats (StatsService gRPC + poller → user_traffic); HTTPUpgrade + KCP transports; Trojan + Shadowsocks subprotocols; sniffing + sockopt-BBR + DNS-OUT + BLOCK rules |
 | 25 | **publicHost / publicPort на Inbound** | ✅ done | Two nullable columns; subscription generator prefers them over hostFromAddress(node.address); UI form fields; closes the cert-SAN gotcha at the architectural level |
 
@@ -681,13 +684,13 @@ Mihomo / Singbox / XrayJSON шаблоны — Phase 2 (Срез 21). Subscripti
 - При отсутствии `NODE_PAYLOAD` env (re-deploy сценарий) node-agent не стартует, но wire endpoint должен быть достижим — поэтому панель делает retry job. Coalesced jobId не блокирует retry если первый завершился rejected.
 - `ApplyInboundsRequest.inbounds` может быть пустым — это валидно (нода без inbound'ов). Слайс 24b будет тиерить down listener'ы при empty array.
 
-#### Срез 24b: Auto-push — per-adapter live reconfig
+#### Срез 24b1: Per-adapter ApplyInbound — interface + Xray real impl ✅
 
-**Цель:** node-agent адаптеры (Xray/Hysteria/AWG/Naive) научаются принимать новый inbound config через `inbounds.json` (или прямой `ApplyInbound` вызов от server.go) и **переконфигурить protocol server без рестарта node-agent'а**. Это финал auto-push цепочки: после slice 24b admin не делает SSH ничего, всё пушится из UI.
+**Status:** done 2026-05-06. Закрыл foundation для slice 24b — interface, dispatcher, и реальная Xray реализация. Hysteria/AmneziaWG/Naive остались stubs до 24b2-4.
 
-**Что вводим:**
+**Что сделано:**
 
-- **Расширение `CoreAdapter` интерфейса** (`apps/node/internal/core/adapter.go`):
+- **`CoreAdapter` интерфейс расширен** (`apps/node/internal/core/adapter.go`):
   ```go
   // ApplyInbound takes the protocol-specific config as raw JSON (the same
   // shape the panel pushes via /applyInbounds). Adapter parses what it needs,
@@ -695,47 +698,117 @@ Mihomo / Singbox / XrayJSON шаблоны — Phase 2 (Срез 21). Subscripti
   // Idempotent — re-applying the same config is a no-op.
   ApplyInbound(cfg json.RawMessage) error
   ```
+  Контракт: goroutine-safe, idempotent, defensive no-op для wrong protocol.
 
-- **Per-adapter implementations:**
-  - **Xray** (`internal/core/xray/adapter.go`): принимает `XrayInboundCfg` JSON; обновляет внутренний `cfg.Inbound`; вызывает `regenerateAndRestartLocked()` (метод уже существует для AddUser flow). ~1s downtime на рестарт subprocess'а. Если REALITY private key не поменялся — config diff пустой, no restart (idempotency).
-  - **AmneziaWG** (`internal/core/amneziawg/adapter.go`): принимает `AmneziawgInboundCfg`; пишет `/etc/amneziawg/awg0.conf` с новыми Jc/Jmin/.../H4/keys; делает `awg syncconf awg0 <(awg-quick strip /etc/amneziawg/awg0.conf)`. **No connection drops** благодаря syncconf. Fallback `systemctl restart awg-quick@awg0` если syncconf timeout (10s).
-  - **NaiveProxy** (`internal/core/naive/adapter.go`): принимает `NaiveInboundCfg`; регенерит Caddyfile с новым hostname/email/masqueradeRoot; `caddy reload --config /etc/caddy/Caddyfile`. **No drops** (Caddy hot-reload). Сессии живут до timeout.
-  - **Hysteria** (`internal/core/hysteria/adapter.go`): тут хитро — node-agent работает в callback-mode и не управляет hysteria.service напрямую. Опции: (a) extend node-agent чтобы оно systemctl-restart'ило hysteria.service когда меняется config; (b) admin сам делает rebuild через install-node.sh с новыми флагами. Ставлю на (a) — это согласуется с обещанием «zero SSH». Конкретно: `runCmd("systemctl", "restart", "hysteria.service")` после write `/etc/hysteria/config.yaml`.
+- **Xray real implementation** (`apps/node/internal/core/xray/adapter.go`):
+  - `xrayInboundCfgWire` локальная struct mirrors `XrayInboundCfg` из `packages/shared/src/transport.ts`.
+  - `ApplyInbound(rawCfg)`: parse JSON → build new `InboundConfig` (сохраняя Tag/ListenHost/ListenPort которые установлены при старте) → diff vs current через `inboundEqual`/`stringSliceEqual` → если идентично, return nil (no restart noise) → иначе swap `a.cfg.Inbound` + вызов `regenerateAndRestartLocked(context.Background())`.
+  - **Idempotency** на уровне field-by-field сравнения, не byte-marshalling — быстрее.
+  - **Background context** для restart — caller's request timeout не убивает xray в процессе bring-up.
 
-- **Server.go integration:** `handleApplyInbounds` после атомарного write `inbounds.json` теперь итерирует request.Inbounds и вызывает соответствующий adapter.ApplyInbound по `protocol`. Адаптер не находится → log warn (могут быть legacy DTO с протоколом, который этот node не поднял).
+- **Stubs для Hysteria/AmneziaWG/Naive:** логируют receipt + возвращают nil. Cfg уже persisted в `inbounds.json` через server.go (slice 24a), так что admin может SSH'ом перезагрузить вручную если очень надо. Real impls — в slice 24b2/24b3/24b4.
 
-- **Adapter startup integration:** при `Start()` адаптер сначала пытается прочитать `inbounds.json` (если файл есть → парсит свой блок → использует). Env vars остаются как fallback для legacy installs (slice 23.1 era). После slice 24b admin может ставить `install-node.sh` без `--xray-reality-*` флагов — панель запушит config когда придёт.
+- **`handleApplyInbounds` dispatcher** (`apps/node/internal/server/server.go`):
+  ```go
+  for _, ib := range req.Inbounds {
+    var matched core.CoreAdapter
+    for _, adapter := range s.cfg.Adapters {
+      if adapter.Name() == string(ib.Protocol) { matched = adapter; break }
+    }
+    if matched == nil {
+      // log warn, persisted but skipped
+      continue
+    }
+    if err := matched.ApplyInbound(ib.Config); err != nil {
+      // log error, count failed
+      failed++
+      continue
+    }
+    applied++
+  }
+  ```
+  Response carries `applied` / `skipped` (no matching adapter) / fails-with-500 если хоть один адаптер вернул error.
 
-- **Subprocess shared package** (slice 16) уже даёт graceful Stop+5s+Kill для рестарта — переиспользуем.
+- **`fakeAdapter`** в `dispatch_test.go` обновлён — добавлен stub `ApplyInbound`. Все node-tests зелёные на WSL (Windows AppControl блокирует server.test.exe но WSL чисто).
 
-- **Тесты:** 
-  - Mocked-CLI tests для AWG `syncconf` reload path (как в slice 19).
-  - Xray adapter tests: ApplyInbound с mock subprocess убеждается что config.json регенерится и subprocess перезапускается.
-  - Naive adapter tests: Caddy reload через injectable `runCmd`.
-  - Server.go test: handleApplyInbounds dispatches к правильному адаптеру.
-
-**Файлы:**
+**Файлы (commit 1):**
 - EDIT: `apps/node/internal/core/adapter.go` (+ ApplyInbound в интерфейс)
-- EDIT: `apps/node/internal/core/xray/adapter.go` (+ ApplyInbound impl + Start reads inbounds.json)
-- EDIT: `apps/node/internal/core/hysteria/adapter.go` (+ ApplyInbound impl + systemctl runner)
-- EDIT: `apps/node/internal/core/amneziawg/adapter.go` (+ ApplyInbound impl)
-- EDIT: `apps/node/internal/core/naive/adapter.go` (+ ApplyInbound impl)
-- EDIT: `apps/node/internal/server/server.go` (handleApplyInbounds dispatches per-adapter)
-- EDIT: `apps/node/main.go` (no changes? adapters self-bootstrap from inbounds.json)
-- + tests
+- EDIT: `apps/node/internal/core/xray/adapter.go` (+ real ApplyInbound + helpers)
+- EDIT: `apps/node/internal/core/hysteria/adapter.go` (stub)
+- EDIT: `apps/node/internal/core/amneziawg/adapter.go` (stub)
+- EDIT: `apps/node/internal/core/naive/adapter.go` (stub)
+- EDIT: `apps/node/internal/server/server.go` (dispatcher)
+- EDIT: `apps/node/internal/server/dispatch_test.go` (fakeAdapter ApplyInbound stub)
 
-**Коммиты (~5):**
-1. `feat(node)`: extend CoreAdapter with ApplyInbound + inbounds.json startup path
-2. `feat(node-xray)`: ApplyInbound regenerate + restart
-3. `feat(node-amneziawg)`: ApplyInbound + awg syncconf hot-reload
-4. `feat(node-naive)`: ApplyInbound + caddy reload
-5. `feat(node-hysteria)`: ApplyInbound + systemctl-restart hysteria.service
+**Коммит:** `feat(slice-24b)`: per-adapter ApplyInbound — Xray live reconfig, others stubbed.
+
+**Gotchas (caught):**
+- Изначально хотел байт-сравнение через JSON marshal — но это медленно при идентичных конфигах (frequently re-pushed). Field-by-field equal быстрее, и stringSliceEqual для slice'ов.
+- Background context для restart — иначе `req.Context()` через 30s timeout мог бы убить xray subprocess в момент bring-up. Нет, не должен — но безопаснее иметь dedicated background.
+- Wire DTO field names (`realityShortIds` lowercase) vs Go convention (`RealityShortIDs`) — JSON tags решают.
+
+**Что НЕ в 24b1** (отложено в 24b2-4):
+- Hysteria/AWG/Naive real impls.
+- Adapter startup-time чтение `inbounds.json` (сейчас env vars fallback). Будет добавлено вместе с real impls — иначе stub'ы будут читать json и ничего не делать.
+
+#### Срез 24b2: Hysteria ApplyInbound real impl ⏭️
+
+**Цель:** убрать последний manual-edit step для Hysteria-нод. Сейчас admin задаёт `--hysteria-domain`/`--hysteria-email` при `install-node.sh`; после первого запуска panel не может изменить domain / masquerade / obfs без SSH.
+
+**Что вводим:**
+
+- В Hysteria adapter:
+  - Хранить `Config.HysteriaConfigPath` (default `/etc/hysteria/config.yaml`).
+  - Хранить `Config.HysteriaServiceName` (default `hysteria.service`).
+  - `ApplyInbound`: parse `HysteriaInboundCfg` → rewrite `/etc/hysteria/config.yaml` с новыми obfs/masquerade/brutal полями (preserving ACME domain/email — эти НЕ в inbound DTO, они install-time константы) → `runCmd("systemctl", "restart", "hysteria.service")`.
+- **Injectable `runCmd`** для тестов: тип `func(ctx context.Context, name string, args ...string) ([]byte, error)`. Default — `exec.Command`. Tests подсовывают mock.
+- **Idempotency**: diff vs последнего применённого `HysteriaInboundCfg` (хранится в adapter в-памяти). Идентично → no-op.
 
 **Gotchas:**
-- Race между HTTP handler и adapter Start — если первый /applyInbounds приходит до того как адаптеры дочитали `inbounds.json`, можно пропустить config. Решение: в Start() адаптера читать json **под общим mutex'ом** что и ApplyInbound, applyInbound ожидает Start finish.
-- Hysteria's systemctl-restart нужен root в node-agent. Но node-agent уже запущен от root (systemd unit). Так что ОК. Но это создаёт зависимость node-agent ↔ другой systemd unit — стоит явно задокументировать.
-- `awg syncconf` может не подхватить изменения H1-H4 (interface-level params) — потребует full restart. Адаптер должен detect какие fields поменялись и выбирать syncconf vs restart.
-- Каждый ApplyInbound idempotent: если ничего не изменилось — return nil без рестарта. Pure-state diff на стороне адаптера.
+- node-agent runs as root → systemctl restart работает. Но это **cross-systemd-unit зависимость** — node-agent тушит другой unit. Документировать в `docs/deploy/install.md`.
+- Если admin не задал `--hysteria-domain`/`--hysteria-email` (callback-only mode) — `/etc/hysteria/config.yaml` отсутствует. ApplyInbound пишет файл с placeholder ACME settings, но без них Hysteria не запустится. Решение: ApplyInbound для Hysteria требует чтобы установка прошла с domain — иначе error «hysteria.service not configured for ACME».
+- Restart вызывает session drops у уже подключённых юзеров (UDP-сессия не survives). Для obfs change это inevitable. Документировать в UI: «Saving will reset Hysteria sessions».
+
+**Коммит:** `feat(node-hysteria)`: ApplyInbound — rewrite config.yaml + systemctl restart.
+
+#### Срез 24b3: AmneziaWG ApplyInbound real impl ⏭️
+
+**Цель:** live reconfig AWG inbound через `awg syncconf` (no-drop) когда возможно, fallback на full restart для interface-level changes.
+
+**Что вводим:**
+
+- `ApplyInbound` parse `AmneziawgInboundCfg`:
+  - **H1-H4 changed** → full `systemctl restart awg-quick@<iface>` (interface-level, requires reload).
+  - **Только peers / S1-S4 / Jc/Jmin/Jmax / postUp/postDown changed** → regenerate config + `awg syncconf <iface> <(awg-quick strip <conf>)`.
+  - **subnet changed** → full restart + IP allocator validation (нельзя менять subnet когда уже выданы IP юзерам — backend отбивает заранее в Zod).
+- Adapter уже имеет `regenerateAndSyncLocked` — переиспользуем + добавляем classifier diff.
+- Idempotency через diff с предыдущим cfg.
+
+**Gotchas:**
+- `subnet` change ломает существующих peers (их IP теперь invalid). UI должен warn. Backend Zod должен отбивать subnet-change на уровне UpdateInbound если есть allocated peers (не должно происходить нормально).
+- `awg syncconf` под root — node-agent уже root.
+- DKMS-fallback (userspace `amneziawg-go`) работает но slower — для него full restart требуется чаще.
+
+**Коммит:** `feat(node-amneziawg)`: ApplyInbound — smart syncconf vs restart по diff.
+
+#### Срез 24b4: Naive ApplyInbound real impl ⏭️
+
+**Цель:** live reconfig NaiveProxy через `caddy reload`.
+
+**Что вводим:**
+
+- `ApplyInbound` parse `NaiveInboundCfg`:
+  - Update `cfg.Inbound.Hostname` / `TLSEmail` / `MasqueradeRoot`.
+  - Call `writeCurrentCaddyfileLocked()` (метод уже есть для users).
+  - `runCmd("caddy", "reload", "--config", a.cfg.ConfigPath, "--adapter", "caddyfile")`.
+- Idempotency через cfg diff.
+
+**Gotchas:**
+- TLS hostname change → Caddy запросит новый LE-cert → может попасть в LE rate limiter (5 certs / 7 days per FQDN). UI warn admin.
+- `caddy reload` graceful — existing connections live until idle/tunnel timeout (~10 min).
+- masqueradeRoot — directory which Caddy serves to non-authenticated probers. Проверка что dir exists в Apply (иначе reload fail).
+
+**Коммит:** `feat(node-naive)`: ApplyInbound — regen Caddyfile + caddy reload.
 
 #### Срез 25: publicHost / publicPort separation на Inbound
 
@@ -892,15 +965,18 @@ Mihomo / Singbox / XrayJSON шаблоны — Phase 2 (Срез 21). Subscripti
 ### Срезы Phase 3 (renumbered after Remnawave gap-analysis 2026-05-05; updated after VPS test 2026-05-06)
 
 Status as of 2026-05-06:
-- Slice 23.1, 24a, 25 — ✅ done.
-- Slice 24b — ⏭️ next (per-adapter live reconfig).
-- Slice 24c (Xray defaults uplift), 26+ — planned.
+- Slice 23.1, 24a, 24b1, 25 — ✅ done.
+- Slice 24b2/24b3/24b4 — ⏭️ next (Hysteria / AmneziaWG / Naive ApplyInbound real impls).
+- Slice 24c (Xray defaults uplift + per-user stats), 26+ — planned.
 
 | # | Название | Status | Что вводим |
 |---|---|---|---|
 | 23.1 | Panel-ops hotfix (poller / backfill / refresh-button) | ✅ done | см. подробности выше |
 | 24a | Auto-push wire pipeline panel→node | ✅ done | см. подробности выше |
-| 24b | Auto-push per-adapter live reconfig | ⏭️ next | `CoreAdapter.ApplyInbound`; xray restart, AWG syncconf, Caddy reload, Hysteria SIGHUP |
+| 24b1 | Per-adapter ApplyInbound interface + Xray real impl | ✅ done | `CoreAdapter.ApplyInbound`; Xray idempotent regen+restart; Hys/AWG/Naive stubs; dispatcher по protocol name |
+| 24b2 | Hysteria ApplyInbound real impl | ⏭️ next | rewrite config.yaml + systemctl restart hysteria.service |
+| 24b3 | AmneziaWG ApplyInbound real impl | ⏭️ | smart awg syncconf vs full restart по diff |
+| 24b4 | Naive ApplyInbound real impl | ⏭️ | regen Caddyfile + caddy reload |
 | 24c | **Xray defaults uplift + transports/subprotocols** | ⏭️ | per-user stats (`statsUserUplink`/`Downlink` + StatsService gRPC), HTTPUpgrade + KCP transports, Trojan + Shadowsocks subprotocols, sniffing, sockopt-BBR, DNS-OUT, BLOCK rules |
 | 25 | publicHost / publicPort на Inbound | ✅ done | см. подробности выше |
 | 26 | **Squad ACL** — wire up dormant `group_inbounds` | ⏭️ | groups CRUD UI + group↔inbound assignment + subscription filter |

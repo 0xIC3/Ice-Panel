@@ -90,8 +90,9 @@ Full deploy guide (per-protocol details, troubleshooting, update workflow): **[d
 
 - ✅ **Slice 23.1** — panel-ops harden: node-status poller, `node.created` user backfill, Refresh-bootstrap UI button, install-node.sh per-protocol auto-config flags.
 - ✅ **Slice 24a** — auto-push inbound config wire pipeline (panel→node mTLS), atomic `inbounds.json` persistence on the node side.
+- ✅ **Slice 24b1** — `CoreAdapter.ApplyInbound` interface + Xray real impl (idempotent regen + restart). Hysteria/AWG/Naive stubbed.
 - ✅ **Slice 25** — `publicHost` / `publicPort` separation on Inbound (closes the cert-SAN-mismatch gotcha at the architecture level).
-- ⏭️ **Slice 24b** next — per-adapter live reconfig (Xray restart, AWG syncconf, Caddy reload, Hysteria SIGHUP).
+- ⏭️ **Slice 24b2/3/4** next — Hysteria / AmneziaWG / Naive ApplyInbound real impls.
 - ⏭️ **Slice 24c** — Xray defaults uplift + transports/subprotocols + per-user traffic stats.
 
 Full plan: [docs/ROADMAP.md](./docs/ROADMAP.md) (v3, 2026-05-06).
