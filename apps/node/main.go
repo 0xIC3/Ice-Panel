@@ -25,6 +25,7 @@ const (
 	defaultXrayConfigPath      = "/etc/xray/config.json"
 	defaultXrayRealityDest     = "www.cloudflare.com:443"
 	defaultXrayRealitySNI      = "www.cloudflare.com"
+	defaultInboundsStorePath   = "/etc/ice-panel-node/inbounds.json"
 	adapterStopShutdownTimeout = 10 * time.Second
 )
 
@@ -59,11 +60,12 @@ func main() {
 	}
 
 	srv, err := server.New(server.Config{
-		Host:     getenv("NODE_HOST", defaultHost),
-		Port:     getenv("NODE_PORT", defaultPort),
-		Payload:  pld,
-		Logger:   logger,
-		Adapters: adapters,
+		Host:              getenv("NODE_HOST", defaultHost),
+		Port:              getenv("NODE_PORT", defaultPort),
+		Payload:           pld,
+		Logger:            logger,
+		Adapters:          adapters,
+		InboundsStorePath: getenv("NODE_INBOUNDS_STORE", defaultInboundsStorePath),
 	})
 	if err != nil {
 		logger.Error("build server", "err", err)

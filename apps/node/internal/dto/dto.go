@@ -2,6 +2,8 @@
 // Field names match the TypeScript DTOs in `packages/shared/src/transport.ts`.
 package dto
 
+import "encoding/json"
+
 // ProtocolName mirrors the union in shared/transport.ts.
 type ProtocolName string
 
@@ -35,6 +37,34 @@ type AddUserRequest struct {
 
 type AddUserResponse struct {
 	OK bool `json:"ok"`
+}
+
+// ───── POST /applyInbounds ─────
+//
+// Panel pushes the FULL set of enabled inbounds bound to this node. Slice 24:
+// replaces the env-var workflow (XRAY_REALITY_*, /etc/hysteria/config.yaml
+// hand-edits) caught as friction during the 2026-05-06 VPS test.
+//
+// The Config field is intentionally raw JSON: each adapter decodes only the
+// shape that matches its protocol. Keeps the dto layer protocol-agnostic and
+// avoids forcing every node-agent build to know every protocol's schema.
+
+type InboundDto struct {
+	ID       string          `json:"id"`
+	Name     string          `json:"name"`
+	Protocol ProtocolName    `json:"protocol"`
+	Port     int             `json:"port"`
+	Config   json.RawMessage `json:"config"`
+}
+
+type ApplyInboundsRequest struct {
+	Inbounds []InboundDto `json:"inbounds"`
+}
+
+type ApplyInboundsResponse struct {
+	OK      bool `json:"ok"`
+	Applied int  `json:"applied"`
+	Skipped int  `json:"skipped"`
 }
 
 // ───── POST /removeUser ─────

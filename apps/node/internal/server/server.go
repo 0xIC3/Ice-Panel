@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -28,6 +30,11 @@ type Config struct {
 	// AddUser / RemoveUser out to all of them and merges Stats. May be empty
 	// (callback-only mode).
 	Adapters []core.CoreAdapter
+	// InboundsStorePath is where /applyInbounds persists the latest pushed
+	// state to disk so it survives node-agent restarts. Default
+	// `/etc/ice-panel-node/inbounds.json`. Empty means in-memory only
+	// (used in tests).
+	InboundsStorePath string
 }
 
 type Server struct {
@@ -102,6 +109,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/healthz", s.handleHealth)
 	mux.HandleFunc("/addUser", s.handleAddUser)
 	mux.HandleFunc("/removeUser", s.handleRemoveUser)
+	mux.HandleFunc("/applyInbounds", s.handleApplyInbounds)
 	mux.HandleFunc("/stats", s.handleStats)
 	return mux
 }
@@ -197,6 +205,82 @@ func (s *Server) handleRemoveUser(w http.ResponseWriter, r *http.Request) {
 
 	s.logger.Info("removeUser ok", "userId", req.UserID)
 	writeJSON(w, http.StatusOK, dto.RemoveUserResponse{OK: true})
+}
+
+// handleApplyInbounds receives the panel's full inbound set for this node
+// and persists it to disk so the next node-agent / adapter restart picks it
+// up. Slice 24 v1 — minimal version: persists + logs, no per-protocol live
+// reconfiguration yet (that's per-adapter follow-up work). Idempotent: the
+// `applied` / `skipped` counters in the response always reflect "everything
+// was overwritten", so the panel can use it as a generic ack.
+func (s *Server) handleApplyInbounds(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "POST only")
+		return
+	}
+	var req dto.ApplyInboundsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error())
+		return
+	}
+
+	if s.cfg.InboundsStorePath != "" {
+		if err := writeInboundsAtomically(s.cfg.InboundsStorePath, req.Inbounds); err != nil {
+			s.logger.Error("persist inbounds failed", "err", err, "path", s.cfg.InboundsStorePath)
+			writeError(w, http.StatusInternalServerError, "PERSIST_FAILED", err.Error())
+			return
+		}
+	}
+
+	for _, ib := range req.Inbounds {
+		s.logger.Info("applyInbounds received",
+			"id", ib.ID, "name", ib.Name, "protocol", ib.Protocol, "port", ib.Port)
+	}
+
+	writeJSON(w, http.StatusOK, dto.ApplyInboundsResponse{
+		OK:      true,
+		Applied: len(req.Inbounds),
+		Skipped: 0,
+	})
+}
+
+// writeInboundsAtomically marshals the inbound set to a temp file in the same
+// directory, then renames it over the destination — so a crash mid-write
+// can't leave the JSON half-overwritten. Mode 0600 because the configs may
+// embed REALITY private keys / WireGuard server keys.
+func writeInboundsAtomically(path string, inbounds []dto.InboundDto) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("mkdir %s: %w", dir, err)
+	}
+
+	body, err := json.MarshalIndent(inbounds, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal: %w", err)
+	}
+
+	tmp, err := os.CreateTemp(dir, ".inbounds.*.json.tmp")
+	if err != nil {
+		return fmt.Errorf("tempfile: %w", err)
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName) // no-op if rename succeeded
+
+	if _, err := tmp.Write(body); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("write: %w", err)
+	}
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("chmod: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close: %w", err)
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		return fmt.Errorf("rename: %w", err)
+	}
+	return nil
 }
 
 func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {

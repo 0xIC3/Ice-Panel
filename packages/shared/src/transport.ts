@@ -38,6 +38,99 @@ export interface AddUserResponse {
   ok: true;
 }
 
+// ───── POST /applyInbounds ─────
+//
+// Panel pushes the FULL set of inbounds bound to this node every time any
+// inbound is created/updated/deleted (or the node itself is registered).
+// Node-agent diffs against current state and regenerates the protocol's
+// config file accordingly. Idempotent — re-sending the same set is a no-op.
+//
+// Replaces the manual `/etc/ice-panel-node/env` editing that admins had to
+// do before slice 24. The XRAY_REALITY_*  / HY_DOMAIN env vars stay
+// supported as a fallback for nodes that haven't received their first
+// applyInbounds yet (or for air-gapped setups).
+
+/** Per-protocol inbound config — discriminated by `protocol`. The shape
+ *  mirrors `apps/panel-backend/src/modules/inbounds/inbounds.schemas.ts`
+ *  but flattened (no Zod refinements). Panel sends, node decodes. */
+export interface InboundDto {
+  /** Stable UUID — node-agent uses it as the protocol-side `tag`. */
+  id: string;
+  /** Human-friendly name (becomes Xray inbound `tag`, Hysteria masquerade
+   *  hint, etc — purely informational on the node side). */
+  name: string;
+  protocol: ProtocolName;
+  /** Listen port (UDP for hysteria/awg, TCP for xray/naive). */
+  port: number;
+  /** Per-protocol settings. The discriminant is `protocol` above. */
+  config:
+    | XrayInboundCfg
+    | HysteriaInboundCfg
+    | AmneziawgInboundCfg
+    | NaiveInboundCfg;
+}
+
+export interface XrayInboundCfg {
+  realityDest: string;            // e.g. "www.cloudflare.com:443"
+  realityServerNames: string[];   // SNI candidates
+  realityShortIds: string[];      // hex strings, 0..16 chars even-length
+  realityPrivateKey: string;      // base64url (REALITY-style, NOT WireGuard base64)
+  realityPublicKey: string;
+  flow: 'xtls-rprx-vision' | 'none';
+  fingerprint: string;            // chrome / firefox / safari / etc
+  network: 'raw' | 'xhttp' | 'ws' | 'grpc';
+  path?: string;                  // ws/xhttp
+  host?: string;                  // ws/xhttp Host header override
+  serviceName?: string;           // grpc
+}
+
+export interface HysteriaInboundCfg {
+  obfsPassword?: string;          // Salamander; empty = no obfuscation
+  masqueradeUrl?: string;
+  brutalUpMbps?: number;
+  brutalDownMbps?: number;
+}
+
+export interface AmneziawgInboundCfg {
+  /** Server WG private key (base64-standard, like `wg genkey`). */
+  privateKey: string;
+  /** Subnet in CIDR notation (e.g. "10.0.0.0/24"). Server takes .1, peers
+   *  .2..N. Panel-side `amneziawg.service` does the per-user allocation. */
+  subnet: string;
+  /** AmneziaWG obfuscation params — see reference_amneziawg.md for ranges. */
+  jc: number;
+  jmin: number;
+  jmax: number;
+  s1: number;
+  s2: number;
+  s3: number;
+  s4: number;
+  h1: number;
+  h2: number;
+  h3: number;
+  h4: number;
+  postUp?: string;                // optional iptables / sysctl tweaks
+  postDown?: string;
+}
+
+export interface NaiveInboundCfg {
+  hostname: string;               // public FQDN; Caddy ACME uses this
+  tlsEmail: string;               // LE account
+  masqueradeRoot?: string;        // dir served when probed (default: /var/www/empty)
+}
+
+export interface ApplyInboundsRequest {
+  inbounds: InboundDto[];
+}
+
+export interface ApplyInboundsResponse {
+  ok: true;
+  /** Number of inbounds actually applied (after the node-side diff). */
+  applied: number;
+  /** Number of inbounds that were already in this state (no-op). */
+  skipped: number;
+}
+
 // ───── POST /removeUser ─────
 
 export interface RemoveUserRequest {

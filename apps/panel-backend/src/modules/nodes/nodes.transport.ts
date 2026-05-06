@@ -5,6 +5,8 @@ import type {
   GetStatsResponse,
   HealthcheckResponse,
   NodeErrorResponse,
+  ApplyInboundsRequest,
+  ApplyInboundsResponse,
 } from '@ice-panel/shared';
 import { bootstrapCa } from '../keygen/keygen.service.js';
 
@@ -116,5 +118,21 @@ export class NodeTransport {
 
   async healthcheck(): Promise<HealthcheckResponse> {
     return this.request<HealthcheckResponse>('GET', '/healthz');
+  }
+
+  /**
+   * Push the FULL inbound set for this node. Idempotent — node-agent diffs
+   * against current state and only restarts/reloads the underlying protocol
+   * server if something actually changed. Empty array is valid (means "this
+   * node has no inbounds yet"); the node-agent will tear down any active
+   * listener it had.
+   */
+  async applyInbounds(req: ApplyInboundsRequest): Promise<ApplyInboundsResponse> {
+    return this.request<ApplyInboundsResponse>('POST', '/applyInbounds', req, {
+      // Re-generating an Xray config + restart can take ~3-5 s; AmneziaWG
+      // syncconf is faster but Caddy reload occasionally hits the LE rate
+      // limiter. 30 s gives slack without making admin clicks feel hung.
+      timeoutMs: 30_000,
+    });
   }
 }

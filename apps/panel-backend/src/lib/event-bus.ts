@@ -16,6 +16,13 @@ export interface DomainEventMap {
   // an empty new node otherwise stays empty until each existing user is
   // mutated again. Caught live during slice-23 VPS test 2026-05-06.
   'node.created':         { nodeId: string; nodeName: string };
+  // inbound.* → push the full inbound set of the affected node to its
+  // node-agent over mTLS, so the protocol server (xray/hysteria/awg/naive)
+  // gets the live config without admin SSH editing /etc/ice-panel-node/env.
+  // Slice 24 — replaces the manual env-editing dance from VPS test 2026-05-06.
+  'inbound.created':      { inboundId: string; nodeId: string };
+  'inbound.updated':      { inboundId: string; nodeId: string };
+  'inbound.deleted':      { inboundId: string; nodeId: string };
 }
 
 type EventHandler<K extends keyof DomainEventMap> = (

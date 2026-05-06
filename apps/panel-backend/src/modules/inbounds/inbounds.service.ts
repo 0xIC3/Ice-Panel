@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Inbound } from '../../generated/prisma/client.js';
 import { prisma } from '../../prisma.js';
+import { eventBus } from '../../lib/event-bus.js';
 import {
   PROTOCOL_CONFIG_SCHEMAS,
   type CreateInboundInput,
@@ -43,8 +44,9 @@ export async function createInbound(input: CreateInboundInput): Promise<Inbound>
   });
   if (!node) throw new NodeNotFoundError();
 
+  let created: Inbound;
   try {
-    return await prisma.inbound.create({
+    created = await prisma.inbound.create({
       data: {
         nodeId: input.nodeId,
         protocol: input.protocol,
@@ -60,6 +62,8 @@ export async function createInbound(input: CreateInboundInput): Promise<Inbound>
     }
     throw err;
   }
+  eventBus.emit('inbound.created', { inboundId: created.id, nodeId: created.nodeId });
+  return created;
 }
 
 export async function listInbounds(query: ListInboundsQuery): Promise<Inbound[]> {
@@ -98,8 +102,9 @@ export async function updateInbound(
     validatedConfig = parsed.data;
   }
 
+  let updated: Inbound;
   try {
-    return await prisma.inbound.update({
+    updated = await prisma.inbound.update({
       where: { id },
       data: {
         name: input.name ?? undefined,
@@ -114,15 +119,26 @@ export async function updateInbound(
     }
     throw err;
   }
+  eventBus.emit('inbound.updated', { inboundId: updated.id, nodeId: updated.nodeId });
+  return updated;
 }
 
 export async function deleteInbound(id: string): Promise<void> {
+  // Look up nodeId BEFORE delete so the event payload still resolves the
+  // node binding — by the time the handler reads from DB the row is gone.
+  const existing = await prisma.inbound.findUnique({
+    where: { id },
+    select: { id: true, nodeId: true },
+  });
+  if (!existing) throw new InboundNotFoundError();
+
   try {
     await prisma.inbound.delete({ where: { id } });
   } catch (err) {
     if (isRecordNotFound(err)) throw new InboundNotFoundError();
     throw err;
   }
+  eventBus.emit('inbound.deleted', { inboundId: existing.id, nodeId: existing.nodeId });
 }
 
 function isUniquePortError(err: unknown): boolean {

@@ -5,7 +5,9 @@ import { prisma, pingDatabase } from './prisma.js';
 import { pingRedis, closeRedis } from './lib/redis.js';
 import { registerUserEventHandlers } from './modules/users/users.events.js';
 import { registerNodeEventHandlers } from './modules/nodes/nodes.events.js';
+import { registerInboundEventHandlers } from './modules/inbounds/inbounds.events.js';
 import { startNodeUsersWorker } from './modules/users/users.queue.js';
+import { startInboundSyncWorker } from './modules/inbounds/inbounds.queue.js';
 import {
   startCronTasksWorker,
   registerCronJobs,
@@ -14,6 +16,7 @@ import { buildApp } from './app.js';
 
 let app: FastifyInstance | null = null;
 let nodeUsersWorker: Worker | null = null;
+let inboundSyncWorker: Worker | null = null;
 let cronTasksWorker: Worker | null = null;
 
 async function start() {
@@ -32,7 +35,9 @@ async function start() {
 
     registerUserEventHandlers();
     registerNodeEventHandlers();
+    registerInboundEventHandlers();
     nodeUsersWorker = startNodeUsersWorker();
+    inboundSyncWorker = startInboundSyncWorker();
     cronTasksWorker = startCronTasksWorker();
 
     app = await buildApp();
@@ -58,6 +63,9 @@ async function shutdown() {
   }
   if (nodeUsersWorker) {
     await nodeUsersWorker.close();
+  }
+  if (inboundSyncWorker) {
+    await inboundSyncWorker.close();
   }
   if (cronTasksWorker) {
     await cronTasksWorker.close();
