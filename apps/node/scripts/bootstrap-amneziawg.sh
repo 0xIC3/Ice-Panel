@@ -68,7 +68,8 @@ else
   DKMS_SRC="/usr/src/amneziawg-${AWG_VER}"
   DKMS_ROOT=$(dirname "$DKMS_CONF")
   rm -rf "$DKMS_SRC"
-  cp -r "$DKMS_ROOT" "$DKMS_SRC"
+  mkdir -p "$DKMS_SRC"
+  cp -r "$DKMS_ROOT"/. "$DKMS_SRC/"
 
   # Remove stale DKMS entries then add/build/install
   dkms remove "amneziawg/${AWG_VER}" --all 2>/dev/null || true
