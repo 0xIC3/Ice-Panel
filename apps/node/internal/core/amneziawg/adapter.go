@@ -2,6 +2,7 @@ package amneziawg
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -192,6 +193,23 @@ func (a *Adapter) Healthy() bool {
 	defer cancel()
 	_, err := a.cfg.runCmd(ctx, a.cfg.AwgBin, "show", iface)
 	return err == nil
+}
+
+// ApplyInbound is a stub for slice 24b. AmneziaWG live reconfig is
+// non-trivial: subnet / keys / obfuscation params (Jc/S/H) all flow through
+// the wire DTO, but H1-H4 are interface-level and require a full
+// `systemctl restart awg-quick@<iface>` (no syncconf path). Real impl:
+//   1. Parse AmneziawgInboundCfg JSON.
+//   2. Diff vs current cfg.Inbound: if only client list changes → syncconf.
+//      If H1-H4 / S1-S4 / privateKey / subnet change → full restart.
+//   3. regenerateAndSyncLocked path already exists (see below).
+//
+// Lands in a follow-up commit once we have a VPS to validate against.
+// For now: persist to inbounds.json (server.go), log, return nil.
+func (a *Adapter) ApplyInbound(cfg json.RawMessage) error {
+	a.logger.Info("amneziawg ApplyInbound stub — persisted to inbounds.json, no live reconfig",
+		"bytes", len(cfg))
+	return nil
 }
 
 // regenerateAndSyncLocked must be called with a.mu held. It writes the

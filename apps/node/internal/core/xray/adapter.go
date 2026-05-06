@@ -2,6 +2,7 @@ package xray
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -139,6 +140,99 @@ func (a *Adapter) Healthy() bool {
 		return true
 	}
 	return a.proc != nil && a.proc.Running()
+}
+
+// xrayInboundCfgWire mirrors `XrayInboundCfg` in packages/shared/src/transport.ts.
+// Field tags match the wire JSON the panel sends via /applyInbounds.
+type xrayInboundCfgWire struct {
+	RealityDest        string   `json:"realityDest"`
+	RealityServerNames []string `json:"realityServerNames"`
+	RealityShortIDs    []string `json:"realityShortIds"`
+	RealityPrivateKey  string   `json:"realityPrivateKey"`
+	RealityPublicKey   string   `json:"realityPublicKey"`
+	Flow               string   `json:"flow"`
+	Fingerprint        string   `json:"fingerprint"`
+	Network            string   `json:"network"`
+	Path               string   `json:"path,omitempty"`
+	Host               string   `json:"host,omitempty"`
+	ServiceName        string   `json:"serviceName,omitempty"`
+}
+
+// ApplyInbound parses the panel-pushed Xray config, swaps it into the live
+// adapter's InboundConfig, and regenerates+restarts xray. Idempotent: if the
+// new InboundConfig is byte-identical to the current one, no restart fires.
+//
+// The wire shape is XrayInboundCfg in packages/shared/src/transport.ts. We
+// keep the parse local here so the adapter owns its protocol's contract —
+// the dispatcher in server.go only routes raw JSON by protocol name.
+func (a *Adapter) ApplyInbound(rawCfg json.RawMessage) error {
+	var wire xrayInboundCfgWire
+	if err := json.Unmarshal(rawCfg, &wire); err != nil {
+		return fmt.Errorf("xray ApplyInbound: parse cfg: %w", err)
+	}
+	if wire.RealityPrivateKey == "" {
+		return fmt.Errorf("xray ApplyInbound: realityPrivateKey is required")
+	}
+
+	newInbound := InboundConfig{
+		Tag:                a.cfg.Inbound.Tag, // keep existing tag — not in wire
+		ListenHost:         a.cfg.Inbound.ListenHost,
+		ListenPort:         a.cfg.Inbound.ListenPort, // listen port is set at install time, not pushed
+		RealityDest:        wire.RealityDest,
+		RealityServerNames: wire.RealityServerNames,
+		RealityPrivateKey:  wire.RealityPrivateKey,
+		RealityShortIDs:    wire.RealityShortIDs,
+		Flow:               wire.Flow,
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	// Idempotency check — same config → noop. Compare struct fields
+	// instead of byte-marshalling for speed; slice equality via reflect.
+	if inboundEqual(a.cfg.Inbound, newInbound) {
+		a.logger.Info("xray ApplyInbound: config unchanged, skipping restart")
+		return nil
+	}
+
+	a.cfg.Inbound = newInbound
+	a.logger.Info("xray ApplyInbound: config changed, regenerating and restarting",
+		"sni", wire.RealityServerNames, "shortIds", len(wire.RealityShortIDs))
+
+	// Use background context for the restart — the request that triggered
+	// this call may have a short deadline and we want xray to keep coming
+	// back up even if the caller times out.
+	return a.regenerateAndRestartLocked(context.Background())
+}
+
+func inboundEqual(a, b InboundConfig) bool {
+	if a.RealityDest != b.RealityDest ||
+		a.RealityPrivateKey != b.RealityPrivateKey ||
+		a.Flow != b.Flow ||
+		a.Tag != b.Tag ||
+		a.ListenHost != b.ListenHost ||
+		a.ListenPort != b.ListenPort {
+		return false
+	}
+	if !stringSliceEqual(a.RealityServerNames, b.RealityServerNames) {
+		return false
+	}
+	if !stringSliceEqual(a.RealityShortIDs, b.RealityShortIDs) {
+		return false
+	}
+	return true
+}
+
+func stringSliceEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // regenerateAndRestartLocked must be called with a.mu held. It writes the

@@ -232,15 +232,47 @@ func (s *Server) handleApplyInbounds(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Dispatch each inbound to the matching adapter by protocol name. Adapters
+	// that don't recognise the protocol return nil (defensive no-op contract).
+	// Slice 24b — Xray has a real reconfig impl; the others are stubs that
+	// log and rely on the persisted inbounds.json for next-restart pickup.
+	applied := 0
+	failed := 0
 	for _, ib := range req.Inbounds {
 		s.logger.Info("applyInbounds received",
 			"id", ib.ID, "name", ib.Name, "protocol", ib.Protocol, "port", ib.Port)
+
+		var matched core.CoreAdapter
+		for _, adapter := range s.cfg.Adapters {
+			if adapter.Name() == string(ib.Protocol) {
+				matched = adapter
+				break
+			}
+		}
+		if matched == nil {
+			s.logger.Warn("applyInbounds: no adapter for protocol — config persisted but not applied live",
+				"protocol", ib.Protocol)
+			continue
+		}
+		if err := matched.ApplyInbound(ib.Config); err != nil {
+			s.logger.Error("adapter ApplyInbound failed",
+				"core", matched.Name(), "inboundId", ib.ID, "err", err)
+			failed++
+			continue
+		}
+		applied++
+	}
+
+	if failed > 0 {
+		writeError(w, http.StatusInternalServerError, "ADAPTER_FAILED",
+			fmt.Sprintf("%d/%d inbounds failed to apply", failed, len(req.Inbounds)))
+		return
 	}
 
 	writeJSON(w, http.StatusOK, dto.ApplyInboundsResponse{
 		OK:      true,
-		Applied: len(req.Inbounds),
-		Skipped: 0,
+		Applied: applied,
+		Skipped: len(req.Inbounds) - applied,
 	})
 }
 

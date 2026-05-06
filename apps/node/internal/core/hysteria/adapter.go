@@ -15,6 +15,7 @@ package hysteria
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -179,6 +180,22 @@ func (a *Adapter) Healthy() bool {
 		}
 	}
 	return true
+}
+
+// ApplyInbound is a stub for slice 24b — Hysteria's runtime config (obfs,
+// masquerade, brutal CC) lives in /etc/hysteria/config.yaml under a separate
+// systemd unit (`hysteria.service`), not under node-agent. Real reconfig
+// requires rewriting that file + `systemctl restart hysteria.service` —
+// node-agent has the privileges (runs as root) but the cross-unit dependency
+// is intentional friction we'll resolve in a follow-up commit.
+//
+// For now, accept the call and log; persistence to inbounds.json (server.go)
+// gives the admin a path to manually reconcile. Once we wire systemctl into
+// the adapter this stub becomes a real impl.
+func (a *Adapter) ApplyInbound(cfg json.RawMessage) error {
+	a.logger.Info("hysteria ApplyInbound stub — config persisted to inbounds.json, manual restart required",
+		"bytes", len(cfg))
+	return nil
 }
 
 // LookupByPassword consults the in-memory state for a given password.

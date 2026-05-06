@@ -1,6 +1,9 @@
 package core
 
-import "context"
+import (
+	"context"
+	"encoding/json"
+)
 
 // CoreAdapter is the central abstraction of Ice-Panel: every proxy core wraps
 // behind this interface, which lets the dispatcher treat them uniformly.
@@ -45,4 +48,25 @@ type CoreAdapter interface {
 	// Used by the panel's healthcheck fan-out and the node-agent /healthz
 	// endpoint to derive overall node status.
 	Healthy() bool
+
+	// ApplyInbound takes the protocol-specific config as raw JSON (the same
+	// shape the panel pushes via /applyInbounds — see dto.InboundDto.Config).
+	// Implementations parse what they need, regenerate their config file, and
+	// reload/restart the underlying server.
+	//
+	// Contract:
+	//   - Idempotent: re-applying the same config is a no-op (no restart).
+	//   - Non-blocking on success: launches reload/restart asynchronously,
+	//     returns once the new config is on disk.
+	//   - Returns an error if the config JSON is malformed for this protocol
+	//     or the regenerate/reload step fails.
+	//   - When called with a config that doesn't match the adapter's protocol
+	//     (e.g. xray cfg pushed to hysteria adapter), implementations should
+	//     return nil — the dispatcher routes by protocol name, but defensive
+	//     no-op is the safer contract.
+	//
+	// Slice 24b — replaces the env-var-only inbound config workflow that
+	// admins had to hand-edit on every change. Panel auto-pushes via
+	// /applyInbounds, dispatcher fans out to the matching adapter.
+	ApplyInbound(cfg json.RawMessage) error
 }

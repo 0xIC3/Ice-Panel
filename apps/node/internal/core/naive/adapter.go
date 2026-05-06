@@ -2,6 +2,7 @@ package naive
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os/exec"
@@ -181,6 +182,21 @@ func (a *Adapter) Healthy() bool {
 		return true
 	}
 	return a.proc != nil && a.proc.Running()
+}
+
+// ApplyInbound is a stub for slice 24b. NaiveProxy live reconfig requires
+// regenerating the Caddyfile with new hostname / tlsEmail / masqueradeRoot
+// and triggering `caddy reload`. Real impl:
+//   1. Parse NaiveInboundCfg JSON.
+//   2. Update a.cfg.Inbound.{Hostname,TLSEmail,MasqueradeRoot}.
+//   3. writeCurrentCaddyfileLocked + caddy reload via injectable runCmd.
+//
+// Lands in a follow-up commit alongside Hysteria/AWG. For now: persist to
+// inbounds.json (server.go), log, return nil.
+func (a *Adapter) ApplyInbound(cfg json.RawMessage) error {
+	a.logger.Info("naive ApplyInbound stub — persisted to inbounds.json, no live reconfig",
+		"bytes", len(cfg))
+	return nil
 }
 
 // regenerateAndReloadLocked must be called with a.mu held. It writes the
