@@ -123,10 +123,22 @@ export async function generateSubscription(
 
   const enabled = new Set(parseEnabledProtocols(user.enabledProtocols));
 
+  // Slice 26 — Squad ACL. Inbounds visible to the user are the UNION of
+  // inbounds attached to every group the user is a member of. If the user
+  // has zero memberships the subscription is empty (createUser auto-adds
+  // them to "All", so this is unreachable through the normal API path —
+  // but we don't want a panic if someone clears memberships via raw SQL).
   const inbounds = await prisma.inbound.findMany({
     where: {
       enabled: true,
       node: { deletedAt: null, status: { not: 'disabled' } },
+      groupInbounds: {
+        some: {
+          group: {
+            members: { some: { userId: user.id } },
+          },
+        },
+      },
     },
     include: { node: { select: { name: true, address: true } } },
     orderBy: [{ node: { createdAt: 'asc' } }, { port: 'asc' }],

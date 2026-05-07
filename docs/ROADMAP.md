@@ -360,6 +360,7 @@ Mihomo / Singbox / XrayJSON шаблоны — Phase 2 (Срез 21). Subscripti
 | 24b4 | **NaiveProxy ApplyInbound real impl** | ⏭️ | Regenerate Caddyfile + `caddy reload` через injectable runCmd; no session drops |
 | 24c | **Xray defaults uplift + transports/subprotocols** | ⏭️ | Per-user stats (StatsService gRPC + poller → user_traffic); HTTPUpgrade + KCP transports; Trojan + Shadowsocks subprotocols; sniffing + sockopt-BBR + DNS-OUT + BLOCK rules |
 | 25 | **publicHost / publicPort на Inbound** | ✅ done | Two nullable columns; subscription generator prefers them over hostFromAddress(node.address); UI form fields; closes the cert-SAN gotcha at the architectural level |
+| 26 | **Squad ACL (group_inbounds wiring)** | 🟡 backend done, frontend TODO | Migration seeds default "All" squad with stable UUID + backfills group_inbounds and group_members. CRUD `/api/squads`. Subscription resolver filters inbounds by squad membership (UNION). User-create defaults to All when no groupIds. Inbound-created event auto-attaches to All. "All" is system-protected (404 on rename/delete). Squad-delete backstops orphan users into All. |
 
 **Carried over from slice 23 (lift to indicated slice):**
 - Group ↔ inbound assignment UI (`group_inbounds` schema exists since slice 3 but is dormant). Lift to slice 26.

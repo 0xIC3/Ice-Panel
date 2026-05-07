@@ -1,4 +1,6 @@
 import { eventBus } from '../../lib/event-bus.js';
+import { prisma } from '../../prisma.js';
+import { ALL_SQUAD_ID } from '../squads/squads.constants.js';
 import { inboundSyncQueue } from './inbounds.queue.js';
 
 /**
@@ -27,6 +29,18 @@ export function registerInboundEventHandlers(): void {
 
   eventBus.on('inbound.created', ({ inboundId, nodeId }) => {
     enqueue(nodeId, `inbound.created ${inboundId}`);
+    // Slice 26 — keep the "All" squad as the universal set: every new
+    // inbound is auto-attached so users in "All" continue to see everything.
+    // Custom squads stay opt-in: admin must explicitly add the inbound.
+    void prisma.groupInbound
+      .upsert({
+        where: { groupId_inboundId: { groupId: ALL_SQUAD_ID, inboundId } },
+        create: { groupId: ALL_SQUAD_ID, inboundId },
+        update: {},
+      })
+      .catch((err: unknown) => {
+        console.error(`[event] failed to attach inbound ${inboundId} to All squad:`, err);
+      });
   });
   eventBus.on('inbound.updated', ({ inboundId, nodeId }) => {
     enqueue(nodeId, `inbound.updated ${inboundId}`);

@@ -1,6 +1,7 @@
 import type { Prisma } from '../../generated/prisma/client.js';
 import { generateUserCredentials } from '../../lib/credentials.js';
 import { eventBus } from '../../lib/event-bus.js';
+import { ALL_SQUAD_ID } from '../squads/squads.constants.js';
 import * as repo from './users.repository.js';
 import type {
   CreateUserInput,
@@ -76,7 +77,13 @@ export async function createUser(input: CreateUserInput): Promise<PublicUserDto>
 
     traffic: { create: {} },
     groupMembers: {
-      create: input.groupIds.map((groupId) => ({ groupId })),
+      // When admin doesn't pick any squads explicitly, drop the user into
+      // the seeded "All" squad — it grants visibility of every inbound and
+      // matches pre-slice-26 behaviour. Slice 26 invariant: every user is in
+      // at least one group, otherwise their subscription would be empty.
+      create: (input.groupIds.length > 0 ? input.groupIds : [ALL_SQUAD_ID]).map(
+        (groupId) => ({ groupId }),
+      ),
     },
   });
 

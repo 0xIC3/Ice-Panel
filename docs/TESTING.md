@@ -375,20 +375,33 @@ Per-slice verification checklists. Use when **closing** a slice or when re-valid
 
 ---
 
-## Slice 26 — Squad ACL (group_inbounds wiring) ⏭️
+## Slice 26 — Squad ACL (group_inbounds wiring) 🟡 backend done, frontend TODO
 
 ### Pre-conditions
 - DB has existing groups + inbounds (через slice 23)
-- Migration ready: seed `All` group + populate `group_inbounds`
+- Migration `20260507180000_seed_all_squad` applied: seed `All` group with stable UUID `00000000-0000-0000-0000-000000000001` + populate `group_inbounds` + `group_members`
 
-### Local checks
-- [ ] Migration apply на dev + test DB → `groups` имеет default «All» row → `group_inbounds` имеет (всеинбаунды × «All»-group) rows
-- [ ] Existing users получают membership в «All»-group
-- [ ] Subscription endpoint возвращает все inbound'ы для user_in_All (zero-downtime compat)
-- [ ] Создать новую group «Trial», assign 1 inbound → user в Trial видит только этот inbound
-- [ ] User в нескольких groups (Trial + VIP) → union inbound'ов
-- [ ] Frontend: GroupsPage CRUD + drag-and-drop работают
-- [ ] Frontend: UserFormModal MultiSelect groups, default `[All]`
+### Backend local checks
+- [x] Migration apply: idempotent INSERT...WHERE NOT EXISTS for All squad + (All × every inbound) + (All × every user)
+- [x] `ALL_SQUAD_ID` const (`apps/panel-backend/src/modules/squads/squads.constants.ts`)
+- [x] Squads CRUD: GET /api/squads, GET /:id, POST, PUT, DELETE (`squads.routes.ts` + `squads.service.ts`)
+- [x] Squad uniqueness: duplicate name on create/rename → 409 NAME_TAKEN
+- [x] "All" squad protected: PUT/DELETE on ALL_SQUAD_ID → 403 PROTECTED
+- [x] Subscription resolver filters by squad: `inbound.groupInbounds.some(group.members.some(userId=user))`
+- [x] User-create with empty `groupIds` → auto-add to All
+- [x] Inbound-created event auto-upserts (All, inbound.id) into `group_inbounds`
+- [x] Squad-delete: cascade clears `group_members` rows; orphaned users (had only this squad) auto-fall-through to All
+
+### Backend integration tests TODO
+- [ ] Run pnpm --filter @ice-panel/panel-backend test (need WSL — Windows shell here can't reach pnpm)
+- [ ] `routes.test.ts` for squads — create + list + duplicate-name + protected All + delete-cascade-orphan-fallback
+- [ ] Subscription test: create user in custom squad with 1 of 3 inbounds → /sub returns only 1
+- [ ] Subscription test: user with no group memberships (raw SQL DELETE) → empty subscription, no panic
+
+### Frontend TODO (separate commit)
+- [ ] `GroupsPage` CRUD UI (table + create/edit modal + inbound multi-select)
+- [ ] `UserFormModal` MultiSelect groups, default `[All]`, "All" shown disabled (auto-include)
+- [ ] api.ts: `listSquads`, `createSquad`, `updateSquad`, `deleteSquad` typed helpers
 
 ### VPS checks
 - [ ] (Не требуется специально — feature чисто backend / UI)
