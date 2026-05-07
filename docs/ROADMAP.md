@@ -3,8 +3,9 @@
 > Этот документ — план развития проекта и справочник по используемым технологиям.
 > Обновляется по мере прохождения срезов. Если в коде ушло вперёд — значит документ устарел, обнови его.
 >
-> **Версия:** 3.3 (2026-05-07) — VPS-тест #2 частично пройден: Xray ✅ (тот же ISP), Hysteria pipeline доказан loopback'ом на VPS, но реальный UDP-трафик от RU мобильного ISP до ice-naive-test не идёт (тротлится/блокируется на пути; Salamander obfs + QUIC-tuning не помогли). Не баг кода — выходит за рамки Phase 1 acceptance. Доимплементили обфускацию Salamander в подписочный pipeline (URI / sing-box / Clash) — для других ISP/VPS-комбо.
-> **Версия:** 3.2 (2026-05-06) — slice 24b разбит на 24b1 (interface + Xray real impl, ✅ done) и 24b2/24b3/24b4 (Hysteria / AmneziaWG / Naive real impls — отдельные follow-up commits). Появился `docs/TESTING.md` с per-slice верификационными чек-листами.
+> **Версия:** 3.4 (2026-05-07) — slice 24b2 (Hysteria ApplyInbound), 24b3 (AmneziaWG ApplyInbound со smart-diff classifier), 26 (Squad ACL backend + frontend) закрыты по коду. VPS-валидация всех трёх отложена до следующего test cycle. ROADMAP свёрнут от дубликатов: единая таблица статуса срезов в Phase 3, без дублирования с Phase 2 carry-over.
+>
+> **Changelog:** v3.3 (2026-05-07) VPS-тест #2 — обфускация Salamander добавлена в subscription pipeline. v3.2 (2026-05-06) slice 24b разбит на 24b1+24b2+24b3+24b4; появился TESTING.md.
 
 > **Companion doc:** [TESTING.md](./TESTING.md) — конкретные чек-листы что и как проверять при закрытии каждого slice'а (local checks / VPS checks / edge cases / done criteria). Обновляется при закрытии slice + при поимке новых багов.
 
@@ -362,10 +363,10 @@ Mihomo / Singbox / XrayJSON шаблоны — Phase 2 (Срез 21). Subscripti
 | 25 | **publicHost / publicPort на Inbound** | ✅ done | Two nullable columns; subscription generator prefers them over hostFromAddress(node.address); UI form fields; closes the cert-SAN gotcha at the architectural level |
 | 26 | **Squad ACL (group_inbounds wiring)** | ✅ done (code) | Migration seeds default "All" squad with stable UUID + backfills group_inbounds and group_members. CRUD `/api/squads`. Subscription resolver filters inbounds by squad membership (UNION). User-create defaults to All. Inbound-created event auto-attaches to All. "All" is system-protected (403 on rename/delete). Squad-delete backstops orphan users into All. Frontend: `SquadsPage` CRUD, `UserFormModal` MultiSelect (All shown disabled-checked). VPS-checks отложены до cycle. |
 
-**Carried over from slice 23 (lift to indicated slice):**
-- Group ↔ inbound assignment UI (`group_inbounds` schema exists since slice 3 but is dormant). Lift to slice 26.
-- ✅ HTTPUpgrade + KCP transports for Xray. Lifted to slice 24c.
-- ✅ Trojan + Shadowsocks subprotocols. Lifted to slice 24c.
+**Carried over from slice 23 (all addressed):**
+- ✅ Group ↔ inbound assignment UI — closed by slice 26
+- ✅ HTTPUpgrade + KCP transports for Xray — lifted to slice 24c
+- ✅ Trojan + Shadowsocks subprotocols — lifted to slice 24c
 
 **Carried over from VPS test 2026-05-06 (all addressed):**
 - ✅ Per-user Xray traffic stats — slice 24c
@@ -755,45 +756,25 @@ Mihomo / Singbox / XrayJSON шаблоны — Phase 2 (Срез 21). Subscripti
 - Hysteria/AWG/Naive real impls.
 - Adapter startup-time чтение `inbounds.json` (сейчас env vars fallback). Будет добавлено вместе с real impls — иначе stub'ы будут читать json и ничего не делать.
 
-#### Срез 24b2: Hysteria ApplyInbound real impl ⏭️
+#### Срез 24b2: Hysteria ApplyInbound real impl ✅ done (code)
 
-**Цель:** убрать последний manual-edit step для Hysteria-нод. Сейчас admin задаёт `--hysteria-domain`/`--hysteria-email` при `install-node.sh`; после первого запуска panel не может изменить domain / masquerade / obfs без SSH.
+Adapter получил поля `Hostname`/`ACMEEmail`/`ListenPort`/`ServiceUnit`/`RunCmd` (install-time identity из env: `HYSTERIA_HOSTNAME`/`HYSTERIA_ACME_EMAIL`/`HYSTERIA_LISTEN_PORT`/`HYSTERIA_SERVICE_UNIT`). New `InboundConfig` хранит панельные поля (`obfsPassword`/`masqueradeUrl`/`brutalUpMbps`/`brutalDownMbps`).
 
-**Что вводим:**
+`ApplyInbound`: parse wire → diff → детерминированный YAML render (~60 строк, без yaml.v3) → atomic tmp+rename write → `RunCmd("systemctl", "restart", ServiceUnit)` через background context. Idempotent (по struct-equality). Empty `ConfigPath` → in-memory accept. Empty `ServiceUnit` → write but skip restart.
 
-- В Hysteria adapter:
-  - Хранить `Config.HysteriaConfigPath` (default `/etc/hysteria/config.yaml`).
-  - Хранить `Config.HysteriaServiceName` (default `hysteria.service`).
-  - `ApplyInbound`: parse `HysteriaInboundCfg` → rewrite `/etc/hysteria/config.yaml` с новыми obfs/masquerade/brutal полями (preserving ACME domain/email — эти НЕ в inbound DTO, они install-time константы) → `runCmd("systemctl", "restart", "hysteria.service")`.
-- **Injectable `runCmd`** для тестов: тип `func(ctx context.Context, name string, args ...string) ([]byte, error)`. Default — `exec.Command`. Tests подсовывают mock.
-- **Idempotency**: diff vs последнего применённого `HysteriaInboundCfg` (хранится в adapter в-памяти). Идентично → no-op.
+13 unit tests (golden render + diff + write+restart + idempotency + malformed JSON + defaults). Commit `664e8ed`. VPS-валидация в следующем cycle.
 
-**Gotchas:**
-- node-agent runs as root → systemctl restart работает. Но это **cross-systemd-unit зависимость** — node-agent тушит другой unit. Документировать в `docs/deploy/install.md`.
-- Если admin не задал `--hysteria-domain`/`--hysteria-email` (callback-only mode) — `/etc/hysteria/config.yaml` отсутствует. ApplyInbound пишет файл с placeholder ACME settings, но без них Hysteria не запустится. Решение: ApplyInbound для Hysteria требует чтобы установка прошла с domain — иначе error «hysteria.service not configured for ACME».
-- Restart вызывает session drops у уже подключённых юзеров (UDP-сессия не survives). Для obfs change это inevitable. Документировать в UI: «Saving will reset Hysteria sessions».
+#### Срез 24b3: AmneziaWG ApplyInbound real impl ✅ done (code)
 
-**Коммит:** `feat(node-hysteria)`: ApplyInbound — rewrite config.yaml + systemctl restart.
+Smart-diff classifier `classifyDiff(old, new) → diffNone/diffSyncconf/diffRestart/diffSubnet`. Strictest-wins precedence:
+- **diffNone** (byte-equal) → no-op
+- **diffSyncconf** (S1-S4 / Jc / Jmin / Jmax) → existing `regenerateAndSyncLocked` path: `awg-quick strip` + `awg syncconf`
+- **diffRestart** (H1-H4 / PrivateKey / ListenPort / Interface) → new `restartInterfaceLocked`: `awg-quick down` + `awg-quick up` (interface-immutable params syncconf не применяет)
+- **diffSubnet** (Address derived from subnet) → reject if peers allocated; without peers → restart
 
-#### Срез 24b3: AmneziaWG ApplyInbound real impl ⏭️
+Wire mirrors `AmneziawgConfigSchema`. `serverPublicKey` принимается, но игнорируется на agent. `serverAddressFromSubnet`: `10.0.0.0/24` → `10.0.0.1/24` через `net.ParseCIDR`.
 
-**Цель:** live reconfig AWG inbound через `awg syncconf` (no-drop) когда возможно, fallback на full restart для interface-level changes.
-
-**Что вводим:**
-
-- `ApplyInbound` parse `AmneziawgInboundCfg`:
-  - **H1-H4 changed** → full `systemctl restart awg-quick@<iface>` (interface-level, requires reload).
-  - **Только peers / S1-S4 / Jc/Jmin/Jmax / postUp/postDown changed** → regenerate config + `awg syncconf <iface> <(awg-quick strip <conf>)`.
-  - **subnet changed** → full restart + IP allocator validation (нельзя менять subnet когда уже выданы IP юзерам — backend отбивает заранее в Zod).
-- Adapter уже имеет `regenerateAndSyncLocked` — переиспользуем + добавляем classifier diff.
-- Idempotency через diff с предыдущим cfg.
-
-**Gotchas:**
-- `subnet` change ломает существующих peers (их IP теперь invalid). UI должен warn. Backend Zod должен отбивать subnet-change на уровне UpdateInbound если есть allocated peers (не должно происходить нормально).
-- `awg syncconf` под root — node-agent уже root.
-- DKMS-fallback (userspace `amneziawg-go`) работает но slower — для него full restart требуется чаще.
-
-**Коммит:** `feat(node-amneziawg)`: ApplyInbound — smart syncconf vs restart по diff.
+24 unit tests. Commit `9963625`. VPS-валидация в следующем cycle.
 
 #### Срез 24b4: Naive ApplyInbound real impl ⏭️
 
@@ -966,24 +947,12 @@ Mihomo / Singbox / XrayJSON шаблоны — Phase 2 (Срез 21). Subscripti
 
 **Финальный результат:** реальные пользователи могут пользоваться панелью с >1 нодой, есть auto-failover, метрики, бэкапы, Telegram-уведомления.
 
-### Срезы Phase 3 (renumbered after Remnawave gap-analysis 2026-05-05; updated after VPS test 2026-05-06)
+### Срезы Phase 3 (27+)
 
-Status as of 2026-05-06:
-- Slice 23.1, 24a, 24b1, 25 — ✅ done.
-- Slice 24b2/24b3/24b4 — ⏭️ next (Hysteria / AmneziaWG / Naive ApplyInbound real impls).
-- Slice 24c (Xray defaults uplift + per-user stats), 26+ — planned.
+Срезы 23.1 / 24a / 24b1 / 24b2 / 24b3 / 24b4 / 24c / 25 / 26 — см. таблицу «Доп. срезы после Phase 2» выше (единый источник истины). Здесь — только Phase 3 properly.
 
 | # | Название | Status | Что вводим |
 |---|---|---|---|
-| 23.1 | Panel-ops hotfix (poller / backfill / refresh-button) | ✅ done | см. подробности выше |
-| 24a | Auto-push wire pipeline panel→node | ✅ done | см. подробности выше |
-| 24b1 | Per-adapter ApplyInbound interface + Xray real impl | ✅ done | `CoreAdapter.ApplyInbound`; Xray idempotent regen+restart; Hys/AWG/Naive stubs; dispatcher по protocol name |
-| 24b2 | Hysteria ApplyInbound real impl | ⏭️ next | rewrite config.yaml + systemctl restart hysteria.service |
-| 24b3 | AmneziaWG ApplyInbound real impl | ⏭️ | smart awg syncconf vs full restart по diff |
-| 24b4 | Naive ApplyInbound real impl | ⏭️ | regen Caddyfile + caddy reload |
-| 24c | **Xray defaults uplift + transports/subprotocols** | ⏭️ | per-user stats (`statsUserUplink`/`Downlink` + StatsService gRPC), HTTPUpgrade + KCP transports, Trojan + Shadowsocks subprotocols, sniffing, sockopt-BBR, DNS-OUT, BLOCK rules |
-| 25 | publicHost / publicPort на Inbound | ✅ done | см. подробности выше |
-| 26 | **Squad ACL** — wire up dormant `group_inbounds` | ⏭️ | groups CRUD UI + group↔inbound assignment + subscription filter |
 | 27 | **Multi-node management UI** | ⏭️ | Регионы, capacity per node, health dashboard, sticky user→node |
 | 28 | **Server-side smart node selection** | ⏭️ | GeoIP (MaxMind GeoLite2) + load-aware subscription gen |
 | 29 | **Subscription `url-test` groups** | ⏭️ | Mihomo/Singbox `url-test`, Xray `burstObservatory + balancer`, client-side failover |
@@ -991,12 +960,23 @@ Status as of 2026-05-06:
 | 31 | **Cross-protocol cascade** | ⏭️ | Hysteria→Xray, Xray→Hysteria через socks5/http outbound |
 | 32 | **Telegram bot + Webhook notifications** | ⏭️ | grammy + HMAC-SHA256 webhook framework |
 | 33 | **Prometheus metrics + Grafana dashboards** | ⏭️ | per-user / per-node / queue / latency exporters + готовые JSON-дашборды |
-| 34 | **Backup / restore CLI** | ⏭️ | `ice-panel-backup` dump BB + Redis AOF + .env шифр., S3-compatible cron |
+| 34 | **Backup / restore CLI** | ⏭️ | `ice-panel-backup` dump БД + Redis AOF + .env шифр., S3-compatible cron |
 | 35 | **Security hardening** | ⏭️ | npm audit в CI, per-route rate-limits, CSP refinement, fuzzing |
 | 36 | **CI/CD via GitHub Actions** | ⏭️ | Auto Docker build на push, ghcr.io publish, deploy docs |
 | 37 | **Bull-board + observability admin** | ⏭️ | `/admin/queues` UI |
 | 38 | (опц.) AmneziaWG cascade via iptables | deferred | Multi-hop WG через MASQUERADE rules |
 | 39 | (опц.) External squads — presentation overrides | deferred | Per-user-bucket branding |
+
+### Коммерческий спринт (без VPS, в любой момент)
+
+Параллельный набор чисто panel/frontend срезов, ориентированных на commercial readiness. Можно делать вне зависимости от VPS-cycle.
+
+| Название | Status | Что вводим |
+|---|---|---|
+| **HTML sub page** | ⏭️ | Красивая HTML-страница для `/sub/<token>` для UA, не понимающих base64 (открыли в браузере) |
+| **API tokens** | ⏭️ | Bearer-токены для интеграций (Telegram-бот, скрипты). Otp-style scope/expiry/revoke |
+| **HWID lock** | ⏭️ | Привязка subscription к device-fingerprint, anti-share между несколькими девайсами |
+| **UX: full subscription URL в UI** | ⏭️ | Показать полный URL юзера в UsersPage с copy-button рядом (сейчас только token rendering) |
 
 ### Подробности по срезам Phase 3
 
@@ -1070,37 +1050,15 @@ Status as of 2026-05-06:
 - SS2022 cipher требует Xray ≥ v1.8. Нужно прокинуть version-check в Inbound form.
 - BBR требует `net.core.default_qdisc=fq` + `net.ipv4.tcp_congestion_control=bbr` в sysctl. install-node.sh должен это поставить (slice 24b/24c добавит этот шаг).
 
-#### Срез 26: Squad ACL — wire up dormant `group_inbounds`
+#### Срез 26: Squad ACL ✅ done (code)
 
-**Цель:** оживить уже существующую (со slice 3) таблицу `group_inbounds`. Сейчас все юзеры видят все inbounds в подписке. После slice 26 admin может разделить «trial»-юзеров на их подмножество inbound'ов, «paid» на другое, etc.
+Migration `20260507180000_seed_all_squad` сидит дефолтный «All» squad с фиксированным UUID `00000000-0000-0000-0000-000000000001` + idempotent backfill `(All × every inbound)` + `(All × every user)`.
 
-**Что вводим:**
+`apps/panel-backend/src/modules/squads/` — CRUD `/api/squads` (GET/POST/PUT/DELETE). «All» защищён 403 PROTECTED на rename/delete. Subscription резолвер фильтрует через nested `inbound.groupInbounds.some(group.members.some(userId=user))` — UNION по squad'ам юзера. User-create без `groupIds` → авто-добавление в All. Inbound-created event auto-upsert'ит в All. Squad-delete cascades + перебрасывает orphan-юзеров в All чтобы их подписка не обнулилась.
 
-- **Backend:** `subscription.service.ts` фильтрует inbounds по `user.groups → group_inbounds`. Если у юзера нет групп — видит все (legacy compat).
-- **Migration:** seed-row «All» group, `INSERT INTO group_inbounds SELECT 'all-group-id', id FROM inbounds` чтобы существующие deploy не сломались. Existing users автоматически join'аются в эту группу через триггер или при first sub fetch.
-- **Frontend** `/groups` page: list / create / edit / delete. На странице группы — drag-and-drop assignments (slot inbounds в группу).
-- **User form:** MultiSelect groups (default `[All]`).
-- **Inbound form:** read-only summary "Visible to N groups" с link на групп-страницу.
+Frontend: `/squads` route, `SquadsPage` CRUD таблица, `SquadFormModal` с inbound MultiSelect (для All — disabled с warning Alert). `UserFormModal` получил Squads MultiSelect (опция All disabled-checked, авто-include). `User.groupIds` теперь возвращается из GET /api/users.
 
-**Файлы:**
-- EDIT: `apps/panel-backend/src/modules/subscription/subscription.service.ts` (filter)
-- EDIT: `apps/panel-backend/src/modules/users/users.service.ts` (assign default group on create)
-- NEW: `apps/panel-backend/src/modules/groups/{groups.service,routes,schemas,mapper}.ts`
-- NEW: `apps/panel-backend/prisma/migrations/.../add_default_all_group_seed.sql`
-- NEW: `apps/panel-frontend/src/pages/GroupsPage.tsx` + GroupFormModal + DnDAssignments
-- EDIT: `apps/panel-frontend/src/components/UserFormModal.tsx` (groups MultiSelect)
-
-**Коммиты (~5):**
-1. `feat(panel)`: groups CRUD endpoints + service
-2. `feat(panel)`: subscription filter by groups
-3. `feat(frontend)`: GroupsPage + drag-and-drop group↔inbound
-4. `feat(frontend)`: UserFormModal groups MultiSelect
-5. `docs`: mark slice 26 done
-
-**Gotchas:**
-- Default-«All»-group не должна показываться в form'е как чек-бокс — она implicit. Хранить flag `groups.isDefault` чтобы UI её скрывал.
-- DnD reordering важен на UI для prioritization когда юзер в multiple groups (intersection vs union — берём union по умолчанию).
-- При delete group → юзеры в ней должны fall-through в All, не остаться без подписки. Backend service handles cascade cleanup.
+Commits `2b08753` (backend) + `346bf06` (frontend). VPS-валидация в следующем cycle.
 
 #### Срез 27: Multi-node management UI
 
@@ -1380,9 +1338,11 @@ Per-user-bucket branding (custom Profile-Title, host-overrides for VIPs, sub-pag
 9. **Reference oracle.** Перед каждым срезом смотрим как у Remnawave, берём что подходит, отбрасываем что не подходит. См. memory `reference_remnawave.md`.
 10. **Автоматизируй боль, а не возможность боли** (lesson from 2026-05-06 VPS test). Если делал руками 3+ раза и заболело — автоматизируй (slice 23.1 родился из этого правила: backfill, refresh-bootstrap, status poller — все три вычислены за один день multi-node-теста). Если ещё не болело — не трогай. Pre-commit hooks, dependabot, observability tooling — всё это не имеет ROI на solo-MVP-фазе.
 
-## Уроки из VPS-теста (2026-05-06)
+## Уроки из VPS-тестов
 
-Записываем баги что поймали за один день multi-node-теста — чтобы не наступать снова.
+Записываем баги что поймали — чтобы не наступать снова. См. также `docs/TESTING.md` (раздел «VPS test cycles — log») с подробными чек-листами проведённых проверок.
+
+### Cycle #1 (2026-05-06) — Phase 2 close + multi-node validation
 
 | # | Bug | Root cause | Fix commit |
 |---|---|---|---|
@@ -1396,6 +1356,19 @@ Per-user-bucket branding (custom Profile-Title, host-overrides for VIPs, sub-pag
 | 8 | Status в UI всегда `UNKNOWN` | Никакой poller не пишет в `nodes.status` | slice 23.1 30s healthcheck cron |
 | 9 | Hiddify VPN sometimes blocks UDP-443 outbound в test environment | Не наш баг, но симптом легко спутать с серверной проблемой | doc'd in install.md troubleshooting |
 | 10 | Linux TTY truncates 4096-byte paste | NODE_PAYLOAD ~6-7 KB обрезался при copy-paste в SSH | `b1a31dc` `--payload-file` flag + Download button + bootstrap-token flow (`fa0d4ea`) |
+
+### Cycle #2 (2026-05-07) — partial: Xray ✅, Hysteria pipeline ✅, real-client ❌ (ISP)
+
+| # | Bug / Finding | Root cause | Fix |
+|---|---|---|---|
+| 11 | Bootstrap command emit `http://` вместо `https://` | Caddy не форвардит `X-Forwarded-Proto` | `ee57599` `PUBLIC_URL` env |
+| 12 | Bootstrap expiry показывает absolute time-of-day | Bad UX — admin неуверен сколько осталось | `b93c418` «expires in N min» |
+| 13 | Node без protocol поля | install-node.sh нужен `--protocol` который не вычисляется без store | `6d2bc53` protocol column + Select |
+| 14 | Hysteria ACME `mkdir acme: read-only fs` | systemd `ProtectSystem=strict` блокирует CWD writes | `WorkingDirectory=/etc/hysteria` в unit |
+| 15 | BullMQ failed-job deduplication | jobId блокирует новые enqueues пока висит в `failed` zset | docs/runbook (Redis cleanup команда в memory) |
+| 16 | hy2 subscription URI не эмитил `obfs=salamander` | Pipeline pass-through `obfsPassword` не проброшен | `ae8d857` плумбинг URI/sing-box/Clash |
+| 17 | hy2 real client `tx: 0` от RU мобильного ISP к ice-naive-test:443/UDP | ISP-уровневый блок/тротлинг QUIC datagrams (Salamander obfs не помог, `disablePathMTUDiscovery` не помог) | **Не баг кода** — pipeline доказан loopback'ом, см. TESTING.md cycle #2 |
+| 18 | bootstrap-hysteria.sh не существовал | Нужен standalone installer чтобы node-agent не должен был сам ставить hysteria | `91e8b1a` |
 
 ---
 
