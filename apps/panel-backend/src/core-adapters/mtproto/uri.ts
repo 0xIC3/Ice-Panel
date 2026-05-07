@@ -63,24 +63,28 @@ export function buildMtprotoTmeUri(
 }
 
 /**
- * Derive a deterministic Fake-TLS MTProto secret from the user's UUID and
- * the inbound's masquerade domain.
+ * Derive a deterministic Fake-TLS MTProto secret for an inbound.
  *
  * Returns a hex string of the form:
- *   ee<32-hex-bytes-from-sha256(uuid)><hex-encoded-domain-ASCII>
+ *   ee<32-hex-bytes-from-sha256(inboundId:domain)><hex-encoded-domain-ASCII>
  *
- * Determinism property: same (uuid, domain) → same secret. That's the
- * coupling that makes "domain change rotates every user's secret" — we
- * exploit it on the agent side too (mtg config rebuild emits the same
- * secret as the panel-side URI builder).
+ * **Single-secret architecture (slice 41):** 9seconds/mtg upstream rejects
+ * multi-secret support — one mtg instance == one secret. We follow that
+ * constraint: secret is derived once per inbound, not per user. Every user
+ * assigned to this inbound's squad receives the SAME URL.
  *
- * Why sha256 and not the raw UUID bytes: UUID v4 is 16 bytes (128 bits)
- * but the secret slot is 32 bytes (256 bits). sha256 stretches; equally
- * any KDF would work, sha256 is just universal.
+ * Inputs to the hash:
+ *   - `inboundId` (UUID, stable across the inbound's lifetime)
+ *   - `domain` (admin-changeable; change rotates the secret)
+ *
+ * Both panel and agent compute the identical value when given the same
+ * (inboundId, domain) pair, so the panel can push a secret over the wire
+ * and the agent can independently re-derive for verification.
  */
-export function mtprotoSecret(uuid: string, domain: string): string {
-  const userBytes = createHash('sha256').update(uuid, 'utf8').digest();
-  const userHex = userBytes.toString('hex');         // 64 hex chars (32 bytes)
+export function mtprotoSecret(inboundId: string, domain: string): string {
+  const seed = `${inboundId}:${domain}`;
+  const seedBytes = createHash('sha256').update(seed, 'utf8').digest();
+  const seedHex = seedBytes.toString('hex'); // 64 hex chars (32 bytes)
   const domainHex = Buffer.from(domain, 'utf8').toString('hex');
-  return `ee${userHex}${domainHex}`;
+  return `ee${seedHex}${domainHex}`;
 }

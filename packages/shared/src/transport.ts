@@ -149,12 +149,17 @@ export interface ShadowsocksInboundCfg {
 }
 
 /**
- * MTProto inbound config (slice 41). The `domain` is the legitimate site
- * mtg masquerades as during Fake-TLS — it gets hex-encoded into every
- * per-user secret. Changing it rotates every user's secret.
+ * MTProto inbound config (slice 41). 9seconds/mtg upstream is single-
+ * secret by design, so we model the inbound (not the user) as the unit
+ * carrying the secret. The panel derives `secret` deterministically
+ * from (inboundId, domain) and pushes it on the wire; the agent could
+ * re-derive but trusts the panel's value to keep both sides in lock-step
+ * even if the derivation logic ever changes.
  */
 export interface MtprotoInboundCfg {
   domain: string;
+  /** `ee<32-hex-bytes><hex-encoded-domain>` — Fake-TLS format. */
+  secret: string;
 }
 
 /**

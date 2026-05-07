@@ -1,6 +1,7 @@
 package mieru
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -24,7 +25,7 @@ func TestInboundValidation(t *testing.T) {
 		mut     func(*InboundConfig)
 		wantErr string
 	}{
-		{"MTU too low", func(c *InboundConfig) { c.MTU = 100 }, "out of range"},
+		{"MTU too low (below 1280 upstream min)", func(c *InboundConfig) { c.MTU = 1000 }, "out of range"},
 		{"MTU too high", func(c *InboundConfig) { c.MTU = 9000 }, "out of range"},
 		{"unknown log level", func(c *InboundConfig) { c.LoggingLevel = "TRACE" }, "not in DEBUG"},
 	}
@@ -39,60 +40,79 @@ func TestInboundValidation(t *testing.T) {
 	}
 }
 
-func TestRenderConfig_PortBindingsTcpAndUdp(t *testing.T) {
-	cfg := InboundConfig{ListenPort: 2012}
-	blob, err := renderConfig(cfg, nil)
-	if err != nil {
-		t.Fatalf("renderConfig: %v", err)
-	}
-	out := string(blob)
-
-	for _, want := range []string{
-		"portBindings:",
-		"  - port: 2012",
-		"    protocol: TCP",
-		"    protocol: UDP",
-	} {
-		if !strings.Contains(out, want) {
-			t.Errorf("missing fragment %q in render:\n%s", want, out)
-		}
-	}
-}
-
-func TestRenderConfig_UsersList(t *testing.T) {
-	cfg := InboundConfig{ListenPort: 2012}
-	users := []User{
-		{Name: "alice", Password: "pw-a"},
-		{Name: "bob", Password: "pw-b"},
-	}
+// renderToMap parses the JSON output and lets tests poke at fields without
+// brittle substring matching.
+func renderToMap(t *testing.T, cfg InboundConfig, users []User) map[string]any {
+	t.Helper()
 	blob, err := renderConfig(cfg, users)
 	if err != nil {
 		t.Fatalf("renderConfig: %v", err)
 	}
-	out := string(blob)
+	var m map[string]any
+	if err := json.Unmarshal(blob, &m); err != nil {
+		t.Fatalf("output is not valid JSON: %v\n%s", err, blob)
+	}
+	return m
+}
 
-	for _, want := range []string{
-		"users:",
-		"  - name: alice",
-		"    password: pw-a",
-		"  - name: bob",
-		"    password: pw-b",
-		"mtu: 1400",
-		"loggingLevel: INFO",
-	} {
-		if !strings.Contains(out, want) {
-			t.Errorf("missing fragment %q in render:\n%s", want, out)
-		}
+func TestRenderConfig_OutputIsJson(t *testing.T) {
+	blob, err := renderConfig(InboundConfig{ListenPort: 2012}, nil)
+	if err != nil {
+		t.Fatalf("renderConfig: %v", err)
+	}
+	// Must parse as JSON. mita's `apply config` rejects YAML.
+	var m map[string]any
+	if err := json.Unmarshal(blob, &m); err != nil {
+		t.Errorf("output is not valid JSON: %v\n%s", err, blob)
+	}
+}
+
+func TestRenderConfig_PortBindingsTcpAndUdp(t *testing.T) {
+	m := renderToMap(t, InboundConfig{ListenPort: 2012}, nil)
+	pb := m["portBindings"].([]any)
+	if len(pb) != 2 {
+		t.Fatalf("expected 2 port bindings (TCP+UDP), got %d", len(pb))
+	}
+	tcp := pb[0].(map[string]any)
+	udp := pb[1].(map[string]any)
+	if tcp["port"] != float64(2012) || tcp["protocol"] != "TCP" {
+		t.Errorf("TCP binding: %+v", tcp)
+	}
+	if udp["port"] != float64(2012) || udp["protocol"] != "UDP" {
+		t.Errorf("UDP binding: %+v", udp)
+	}
+}
+
+func TestRenderConfig_UsersList(t *testing.T) {
+	users := []User{
+		{Name: "alice", Password: "pw-a"},
+		{Name: "bob", Password: "pw-b"},
+	}
+	m := renderToMap(t, InboundConfig{ListenPort: 2012}, users)
+	got := m["users"].([]any)
+	if len(got) != 2 {
+		t.Fatalf("expected 2 users, got %d", len(got))
+	}
+	a := got[0].(map[string]any)
+	if a["name"] != "alice" || a["password"] != "pw-a" {
+		t.Errorf("user[0] mismatch: %+v", a)
+	}
+	if m["mtu"] != float64(1400) {
+		t.Errorf("mtu: got %v want 1400", m["mtu"])
+	}
+	if m["loggingLevel"] != "INFO" {
+		t.Errorf("loggingLevel: got %v want INFO", m["loggingLevel"])
 	}
 }
 
 func TestRenderConfig_EmptyUsersList(t *testing.T) {
-	blob, err := renderConfig(InboundConfig{}, nil)
-	if err != nil {
-		t.Fatalf("renderConfig: %v", err)
+	m := renderToMap(t, InboundConfig{}, nil)
+	users, ok := m["users"].([]any)
+	if !ok {
+		t.Fatalf("users key missing or wrong type: %v", m["users"])
 	}
-	if !strings.Contains(string(blob), "users: []") {
-		t.Errorf("empty users should render as `users: []`:\n%s", blob)
+	if len(users) != 0 {
+		t.Errorf("empty users should render as []; got %d entries", len(users))
 	}
 }
 

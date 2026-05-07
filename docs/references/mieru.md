@@ -22,36 +22,54 @@ Trade-off: Mieru's traffic doesn't *look like* anything legitimate. It looks lik
 
 ## Server: `mita`
 
-`mita` is the server daemon. CLI structure:
+`mita` is the server daemon. Verified CLI subcommands (per `docs/operation.md`):
 
 ```
-mita apply config <path-to-yaml>   # load/replace config
-mita start                          # start the proxy daemon
-mita stop                           # stop
-mita status                         # health check
-mita reload                         # SIGHUP-equivalent
+mita apply config <path-to-json>    # load JSON config, store as protobuf internally
+mita describe config                 # display current settings
+mita start                           # launch the proxy daemon
+mita stop                            # halt the daemon
+mita status                          # service status
+mita reload                          # graceful reload of users/logging (no traffic interruption)
+mita get connections                 # list active connections
+mita get users                       # last-active + 1d/30d up/down per user
+mita get quotas                      # per-user usage limits and consumed
+mita get metrics                     # generic metrics dump
 ```
 
-Server config (`/etc/mita/server.yaml`):
+For per-user stats integration in our adapter we want `mita get users` (returns the per-user up/down totals) — earlier draft of this doc said `mita get-metrics --output json` which doesn't exist as a single command.
 
-```yaml
-portBindings:
-  - port: 2012
-    protocol: TCP
-  - port: 2012
-    protocol: UDP
+## ⚠️ CORRECTION (2026-05-07): config is JSON, not YAML
 
-users:
-  - name: alice
-    password: "<base64-32-bytes>"
-  - name: bob
-    password: "<base64-32-bytes>"
+Earlier draft claimed YAML. It's wrong — verified against
+`enfein/mieru/docs/operation.md`. Configs are written as JSON files and
+applied via `mita apply config <path.json>`. mita then stores its own
+encoded copy as protobuf at `/etc/mita/server.conf.pb`; we never touch
+that file directly.
 
-mtu: 1400
-loggingLevel: INFO
+Server config (`/etc/mita/server.json`):
+
+```json
+{
+  "portBindings": [
+    { "port": 2012, "protocol": "TCP" },
+    { "port": 2012, "protocol": "UDP" }
+  ],
+  "users": [
+    { "name": "alice", "password": "<password>" },
+    { "name": "bob", "password": "<password>" }
+  ],
+  "mtu": 1400,
+  "loggingLevel": "INFO"
+}
 ```
 
-Multi-user is **flat list of (name, password) pairs**. No per-user quota / expiry / concurrent-connection limit at the protocol level — those are panel-side concerns.
+Multi-user is **flat list of (name, password) pairs** in `users` array. Per-user features upstream supports but we don't surface today:
+- `allowPrivateIP` — bool, lets user reach private LAN ranges
+- `allowLoopbackIP` — bool, lets user reach 127.0.0.0/8
+- `quotas: [{days, megabytes}]` — per-user traffic caps. Could integrate with our `users.trafficLimitBytes` in a future commit; today we cap globally on the panel side and just hand mita the user list.
+
+**MTU minimum upstream is 1280** (was 576 in an earlier draft of this doc — wrong, verified per upstream).
 
 ## Per-user model — what fits CoreAdapter
 
@@ -66,16 +84,17 @@ Pattern matches Naive (Caddyfile rewrite + `caddy reload`) very closely. **`mita
 
 ## Stats / per-user accounting
 
-`mita` exposes a **gRPC management endpoint** (Unix socket by default at `/var/run/mita.sock`):
+Upstream provides per-user stats via three CLI subcommands:
 
 ```
-mita get-metrics                    # all users
-mita get-metrics --user <name>      # single user
+mita get users      # last-active timestamps + 1-day and 30-day up/down totals per user
+mita get quotas     # daily/weekly limits + current usage per user
+mita get metrics    # generic metrics dump (format unverified — to inspect on a real install)
 ```
 
-Per-user counters: bytes-in, bytes-out, active-connection-count.
+**Implication for our adapter:** `GetStats` should shell out to `mita get users` and parse. Output format isn't documented as JSON in the upstream README — likely human-readable table that we'd parse, OR we hit `mita get metrics` for a more structured dump. **Verify on first VPS install** which one yields JSON.
 
-**Implication for our adapter:** GetStats shells out to `mita get-metrics --output json`, parses, returns `core.UserStats[]`. Same pattern as xray's `xray api statsquery`. Soft-fail on error (don't starve other adapters). Confirm output format before slice 40 — could be JSON or could be human-formatted text needing a parser.
+For now (slice 40 v1) the adapter reports tracked userIDs with zero counters; real metric scraping is a follow-up.
 
 ## URI format
 

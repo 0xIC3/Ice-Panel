@@ -155,7 +155,9 @@ func buildAdapters(logger *slog.Logger) []core.CoreAdapter {
 	if os.Getenv("MITA_BINARY") != "" {
 		mieruCfg := mieru.Config{
 			BinaryPath: os.Getenv("MITA_BINARY"),
-			ConfigPath: getenv("MITA_CONFIG", "/etc/mita/server.yaml"),
+			// mita reads JSON via `mita apply config <path.json>` (it then
+			// stores its own protobuf-encoded copy at /etc/mita/server.conf.pb).
+			ConfigPath: getenv("MITA_CONFIG", "/etc/mita/server.json"),
 			Inbound: mieru.InboundConfig{
 				ListenPort:   getenvInt("MITA_PORT", 2012),
 				MTU:          getenvInt("MITA_MTU", 1400),

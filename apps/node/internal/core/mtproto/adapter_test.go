@@ -13,8 +13,14 @@ import (
 func newConfigOnlyAdapter(t *testing.T) *Adapter {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	domain := "www.cloudflare.com"
 	return New(Config{
-		Inbound: InboundConfig{Domain: "www.cloudflare.com", ListenPort: 443, StatsPort: 3129},
+		Inbound: InboundConfig{
+			Domain:     domain,
+			Secret:     DeriveSecret("inbound-1", domain),
+			ListenPort: 443,
+			StatsPort:  3129,
+		},
 	}, logger)
 }
 
@@ -25,55 +31,42 @@ func TestNameMatchesProtocol(t *testing.T) {
 	}
 }
 
-func TestAddUserDerivesSecret(t *testing.T) {
-	a := newConfigOnlyAdapter(t)
-	uuid := "cabc78ae-94e3-4a16-936a-133d059acfac"
-	if err := a.AddUser(core.User{UserID: "u-1", XrayUUID: uuid}); err != nil {
-		t.Fatalf("AddUser: %v", err)
-	}
-	want := DeriveSecret(uuid, "www.cloudflare.com")
-	if got := a.users["u-1"]; got != want {
-		t.Errorf("user secret: got %q want %q", got, want)
-	}
-}
-
-func TestAddUserSkipsWhenNoUUID(t *testing.T) {
+// Per single-secret architecture, AddUser/RemoveUser are bookkeeping no-ops
+// — mtg has no per-user concept.
+func TestAddUser_BookkeepingOnly(t *testing.T) {
 	a := newConfigOnlyAdapter(t)
 	if err := a.AddUser(core.User{UserID: "u-1"}); err != nil {
 		t.Fatalf("AddUser: %v", err)
 	}
-	if len(a.users) != 0 {
-		t.Errorf("user without XrayUUID should not be tracked")
+	if _, ok := a.users["u-1"]; !ok {
+		t.Errorf("AddUser should track userID for GetStats reporting")
 	}
 }
 
-func TestAddUserBeforeDomain_StoresSentinel(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	a := New(Config{}, logger) // no Domain
-	if err := a.AddUser(core.User{UserID: "u-1", XrayUUID: "uuid-1"}); err != nil {
-		t.Fatalf("AddUser: %v", err)
-	}
-	if a.users["u-1"] != "" {
-		t.Errorf("expected sentinel empty secret when domain unknown, got %q", a.users["u-1"])
-	}
-}
-
-func TestRemoveUser(t *testing.T) {
+func TestRemoveUser_BookkeepingOnly(t *testing.T) {
 	a := newConfigOnlyAdapter(t)
-	_ = a.AddUser(core.User{UserID: "u-1", XrayUUID: "uuid-1"})
+	_ = a.AddUser(core.User{UserID: "u-1"})
 	if err := a.RemoveUser("u-1"); err != nil {
 		t.Fatalf("RemoveUser: %v", err)
 	}
-	if len(a.users) != 0 {
-		t.Errorf("user not removed")
+	if _, ok := a.users["u-1"]; ok {
+		t.Errorf("RemoveUser did not clear userID")
 	}
 }
 
 func TestApplyInbound_RejectsMissingDomain(t *testing.T) {
 	a := newConfigOnlyAdapter(t)
-	body, _ := json.Marshal(map[string]any{})
+	body, _ := json.Marshal(map[string]any{"secret": "ee01"})
 	if err := a.ApplyInbound(body); err == nil || !strings.Contains(err.Error(), "domain is required") {
 		t.Errorf("expected domain-required error, got %v", err)
+	}
+}
+
+func TestApplyInbound_RejectsMissingSecret(t *testing.T) {
+	a := newConfigOnlyAdapter(t)
+	body, _ := json.Marshal(map[string]any{"domain": "www.cloudflare.com"})
+	if err := a.ApplyInbound(body); err == nil || !strings.Contains(err.Error(), "secret is required") {
+		t.Errorf("expected secret-required error, got %v", err)
 	}
 }
 
@@ -84,33 +77,37 @@ func TestApplyInbound_RejectsMalformedJSON(t *testing.T) {
 	}
 }
 
-func TestApplyInbound_DomainChangeClearsUsers(t *testing.T) {
+func TestApplyInbound_DomainAndSecretChangeUpdatesAdapter(t *testing.T) {
 	a := newConfigOnlyAdapter(t)
-	_ = a.AddUser(core.User{UserID: "u-1", XrayUUID: "uuid-1"})
-	if len(a.users) != 1 {
-		t.Fatalf("setup: user not added")
-	}
-
-	body, _ := json.Marshal(map[string]any{"domain": "www.google.com"})
+	newDomain := "www.google.com"
+	newSecret := DeriveSecret("inbound-1", newDomain)
+	body, _ := json.Marshal(map[string]any{
+		"domain": newDomain,
+		"secret": newSecret,
+	})
 	if err := a.ApplyInbound(body); err != nil {
 		t.Fatalf("ApplyInbound: %v", err)
 	}
-	// Domain change rotates secrets — users cleared, panel re-pushes.
-	if len(a.users) != 0 {
-		t.Errorf("domain change should clear users (panel re-pushes), got %d", len(a.users))
-	}
-	if a.cfg.Inbound.Domain != "www.google.com" {
+	if a.cfg.Inbound.Domain != newDomain {
 		t.Errorf("Domain not updated: %q", a.cfg.Inbound.Domain)
+	}
+	if a.cfg.Inbound.Secret != newSecret {
+		t.Errorf("Secret not updated: %q", a.cfg.Inbound.Secret)
+	}
+	if !a.started {
+		t.Errorf("started should be true after regenerate")
 	}
 }
 
-func TestApplyInbound_SameDomain_NoUsersWithSentinel_NoOp(t *testing.T) {
+func TestApplyInbound_NoOpOnIdenticalConfig(t *testing.T) {
 	a := newConfigOnlyAdapter(t)
-	body, _ := json.Marshal(map[string]any{"domain": "www.cloudflare.com"})
+	domain := a.cfg.Inbound.Domain
+	secret := a.cfg.Inbound.Secret
+	body, _ := json.Marshal(map[string]any{"domain": domain, "secret": secret})
 	if err := a.ApplyInbound(body); err != nil {
 		t.Fatalf("ApplyInbound: %v", err)
 	}
 	if a.started {
-		t.Errorf("same-domain ApplyInbound with no pending users should not have started")
+		t.Errorf("identical apply should not have started")
 	}
 }

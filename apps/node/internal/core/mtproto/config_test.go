@@ -6,11 +6,11 @@ import (
 )
 
 func TestDeriveSecret_DeterministicAndShape(t *testing.T) {
-	uuid := "cabc78ae-94e3-4a16-936a-133d059acfac"
+	inboundID := "inbound-uuid-1"
 	domain := "www.cloudflare.com"
 
-	a := DeriveSecret(uuid, domain)
-	b := DeriveSecret(uuid, domain)
+	a := DeriveSecret(inboundID, domain)
+	b := DeriveSecret(inboundID, domain)
 	if a != b {
 		t.Errorf("DeriveSecret should be deterministic: %q vs %q", a, b)
 	}
@@ -25,11 +25,20 @@ func TestDeriveSecret_DeterministicAndShape(t *testing.T) {
 }
 
 func TestDeriveSecret_DomainChangeRotates(t *testing.T) {
-	uuid := "cabc78ae-94e3-4a16-936a-133d059acfac"
-	a := DeriveSecret(uuid, "www.cloudflare.com")
-	b := DeriveSecret(uuid, "www.google.com")
+	a := DeriveSecret("inbound-1", "www.cloudflare.com")
+	b := DeriveSecret("inbound-1", "www.google.com")
 	if a == b {
-		t.Errorf("Domain change MUST rotate the secret (32-byte prefix preserved but suffix differs)")
+		t.Errorf("Domain change MUST rotate the secret")
+	}
+	// Both head AND tail differ — head because the seed `inboundID:domain`
+	// includes the domain, tail because the domain hex is appended.
+}
+
+func TestDeriveSecret_DifferentInboundsDifferentSecrets(t *testing.T) {
+	a := DeriveSecret("inbound-1", "www.cloudflare.com")
+	b := DeriveSecret("inbound-2", "www.cloudflare.com")
+	if a == b {
+		t.Errorf("Different inbound IDs must produce different secrets")
 	}
 }
 
@@ -42,10 +51,15 @@ func TestInboundValidation(t *testing.T) {
 		{"missing domain", func(c *InboundConfig) { c.Domain = "" }, "Domain is required"},
 		{"slash in domain", func(c *InboundConfig) { c.Domain = "evil/path" }, "forbidden"},
 		{"colon in domain", func(c *InboundConfig) { c.Domain = "h:p" }, "forbidden"},
+		{"missing secret", func(c *InboundConfig) { c.Secret = "" }, "Secret is required"},
+		{"secret without ee prefix", func(c *InboundConfig) { c.Secret = "deadbeef" }, "must start with"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg := InboundConfig{Domain: "www.cloudflare.com"}
+			cfg := InboundConfig{
+				Domain: "www.cloudflare.com",
+				Secret: DeriveSecret("inbound-1", "www.cloudflare.com"),
+			}
 			tc.mut(&cfg)
 			if err := cfg.validate(); err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 				t.Errorf("validate: got %v want error containing %q", err, tc.wantErr)
@@ -67,52 +81,51 @@ func TestInboundDefaults(t *testing.T) {
 	}
 }
 
-func TestRenderConfig_TomlShape(t *testing.T) {
-	cfg := InboundConfig{Domain: "www.cloudflare.com", ListenPort: 443, StatsPort: 3129}
-	secret1 := DeriveSecret("uuid-a", cfg.Domain)
-	secret2 := DeriveSecret("uuid-b", cfg.Domain)
-	blob, err := renderConfig(cfg, []string{secret1, secret2})
+func TestRenderConfig_TomlShape_MatchesUpstream(t *testing.T) {
+	// Schema verified against 9seconds/mtg/example.config.toml on
+	// 2026-05-07. Critical: SINGLE `secret = "..."` (mtg rejects
+	// `secrets = [...]` arrays); stats are nested in `[stats.prometheus]`,
+	// NOT a flat `stats-bind-to` key.
+	domain := "www.cloudflare.com"
+	secret := DeriveSecret("inbound-1", domain)
+	cfg := InboundConfig{
+		Domain: domain, Secret: secret, ListenPort: 443, StatsPort: 3129,
+	}
+	blob, err := renderConfig(cfg)
 	if err != nil {
 		t.Fatalf("renderConfig: %v", err)
 	}
 	out := string(blob)
 
 	for _, want := range []string{
+		`secret = "` + secret + `"`,
 		`bind-to = "0.0.0.0:443"`,
-		`stats-bind-to = "127.0.0.1:3129"`,
-		`network-timeout = "10s"`,
-		`secrets = [`,
-		secret1,
-		secret2,
+		`prefer-ip = "prefer-ipv4"`,
+		`[stats.prometheus]`,
+		`enabled = true`,
+		`bind-to = "127.0.0.1:3129"`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing fragment %q in render:\n%s", want, out)
 		}
 	}
-}
 
-func TestRenderConfig_EmptySecrets(t *testing.T) {
-	cfg := InboundConfig{Domain: "www.cloudflare.com"}
-	blob, err := renderConfig(cfg, nil)
-	if err != nil {
-		t.Fatalf("renderConfig: %v", err)
-	}
-	if !strings.Contains(string(blob), `secrets = []`) {
-		t.Errorf("empty secrets should render as `secrets = []`:\n%s", blob)
-	}
-}
-
-func TestSortedSecrets_Deterministic(t *testing.T) {
-	users := map[string]string{
-		"u-c": "ee03",
-		"u-a": "ee01",
-		"u-b": "ee02",
-	}
-	got := sortedSecrets(users)
-	want := []string{"ee01", "ee02", "ee03"}
-	for i, v := range want {
-		if got[i] != v {
-			t.Errorf("position %d: got %q want %q", i, got[i], v)
+	// Anti-regression: must NOT emit the array form mtg rejects, nor the
+	// flat stats key from an earlier broken iteration.
+	for _, banned := range []string{
+		`secrets = [`,
+		`stats-bind-to = "`,
+		`network-timeout = "`,
+	} {
+		if strings.Contains(out, banned) {
+			t.Errorf("forbidden fragment %q in render (upstream schema mismatch):\n%s", banned, out)
 		}
+	}
+}
+
+func TestRenderConfig_RequiresSecret(t *testing.T) {
+	_, err := renderConfig(InboundConfig{Domain: "www.cloudflare.com"})
+	if err == nil || !strings.Contains(err.Error(), "Secret is required") {
+		t.Errorf("expected Secret-required error, got %v", err)
 	}
 }

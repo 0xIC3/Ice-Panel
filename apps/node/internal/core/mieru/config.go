@@ -2,21 +2,28 @@
 // the `mita` server binary (enfein/mieru). Slice 40.
 //
 // Architecture:
-//   - mita is a single Go binary; we spawn it as a subprocess with a
-//     YAML config.
-//   - Multi-user via a flat `users:` list in the YAML; reload via
-//     `mita apply config <path>` graceful — existing sessions survive.
+//   - mita is a single Go binary running as its own systemd unit; the
+//     adapter doesn't spawn it directly. mita stores its config as
+//     binary protobuf at `/etc/mita/server.conf.pb`; admins (and us)
+//     update it by writing a JSON config and invoking
+//     `mita apply config <path.json>`.
+//   - Multi-user via a `users` array inside the JSON; mita's `reload`
+//     subcommand applies user-list changes without dropping sessions.
 //   - Per-user creds: name = panel username, password = xrayUuid (no
 //     extra credential surface).
+//
+// Verified against `enfein/mieru/docs/operation.md` (and
+// `docs/server-install.md`) on 2026-05-07. Config is JSON, NOT YAML —
+// an earlier iteration of this file emitted YAML and was wrong.
 package mieru
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 )
 
 // User represents one mita user (name + password).
@@ -54,8 +61,10 @@ func (c *InboundConfig) withDefaults() InboundConfig {
 }
 
 func (c *InboundConfig) validate() error {
-	if c.MTU != 0 && (c.MTU < 576 || c.MTU > 1500) {
-		return fmt.Errorf("MTU %d out of range (576-1500)", c.MTU)
+	// Upstream minimum is 1280 (per docs/operation.md); 1500 is the
+	// hard ceiling for typical Ethernet path-MTU.
+	if c.MTU != 0 && (c.MTU < 1280 || c.MTU > 1500) {
+		return fmt.Errorf("MTU %d out of range (1280-1500)", c.MTU)
 	}
 	if c.LoggingLevel != "" {
 		switch c.LoggingLevel {
@@ -67,44 +76,59 @@ func (c *InboundConfig) validate() error {
 	return nil
 }
 
-// renderConfig produces a deterministic mita YAML config.
-//
-// Reference: docs/references/mieru.md, server-side example.
+// portBinding mirrors mita's JSON config schema.
+type portBinding struct {
+	Port     int    `json:"port"`
+	Protocol string `json:"protocol"` // "TCP" or "UDP"
+}
+
+// jsonUser is what mita's `users` array element looks like. We only
+// emit the required fields; mita supports `allowPrivateIP`,
+// `allowLoopbackIP`, and `quotas[]` per-user, but the panel doesn't
+// surface those today.
+type jsonUser struct {
+	Name     string `json:"name"`
+	Password string `json:"password"`
+}
+
+type serverConfig struct {
+	PortBindings []portBinding `json:"portBindings"`
+	Users        []jsonUser    `json:"users"`
+	MTU          int           `json:"mtu"`
+	LoggingLevel string        `json:"loggingLevel"`
+}
+
+// renderConfig produces a deterministic mita JSON config. mita applies
+// the file via `mita apply config <path.json>` and stores the result
+// internally as protobuf at `/etc/mita/server.conf.pb` — we never see
+// or touch that file directly.
 func renderConfig(inbound InboundConfig, users []User) ([]byte, error) {
 	if err := inbound.validate(); err != nil {
 		return nil, err
 	}
 	cfg := inbound.withDefaults()
 
-	var b strings.Builder
-	b.WriteString("portBindings:\n")
-	fmt.Fprintf(&b, "  - port: %d\n", cfg.ListenPort)
-	b.WriteString("    protocol: TCP\n")
-	fmt.Fprintf(&b, "  - port: %d\n", cfg.ListenPort)
-	b.WriteString("    protocol: UDP\n")
-	b.WriteString("\n")
-
-	if len(users) > 0 {
-		b.WriteString("users:\n")
-		for _, u := range users {
-			if u.Name == "" {
-				return nil, errors.New("mieru: empty user name")
-			}
-			if u.Password == "" {
-				return nil, errors.New("mieru: empty user password")
-			}
-			fmt.Fprintf(&b, "  - name: %s\n", u.Name)
-			fmt.Fprintf(&b, "    password: %s\n", u.Password)
+	jsonUsers := make([]jsonUser, 0, len(users))
+	for _, u := range users {
+		if u.Name == "" {
+			return nil, errors.New("mieru: empty user name")
 		}
-	} else {
-		b.WriteString("users: []\n")
+		if u.Password == "" {
+			return nil, errors.New("mieru: empty user password")
+		}
+		jsonUsers = append(jsonUsers, jsonUser{Name: u.Name, Password: u.Password})
 	}
-	b.WriteString("\n")
 
-	fmt.Fprintf(&b, "mtu: %d\n", cfg.MTU)
-	fmt.Fprintf(&b, "loggingLevel: %s\n", cfg.LoggingLevel)
-
-	return []byte(b.String()), nil
+	doc := serverConfig{
+		PortBindings: []portBinding{
+			{Port: cfg.ListenPort, Protocol: "TCP"},
+			{Port: cfg.ListenPort, Protocol: "UDP"},
+		},
+		Users:        jsonUsers,
+		MTU:          cfg.MTU,
+		LoggingLevel: cfg.LoggingLevel,
+	}
+	return json.MarshalIndent(doc, "", "  ")
 }
 
 // writeConfig atomically writes mita's YAML. Mode 0o600 — file contains

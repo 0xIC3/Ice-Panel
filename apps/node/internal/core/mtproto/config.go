@@ -1,12 +1,30 @@
 // Package mtproto implements CoreAdapter for the Telegram MTProto proxy
 // via 9seconds/mtg. Slice 41.
 //
-// Architecture:
-//   - mtg is a relay — Telegram's MTProto encryption is preserved end-to-end.
-//   - Multi-user via secrets list in TOML config; SIGHUP reloads.
-//   - Per-user secret deterministically derived from (xrayUuid, domain) so
-//     panel and agent compute the same secret without explicit synchronisation.
-//   - Fake-TLS mode mandatory — current TG clients reject anything else.
+// IMPORTANT — single-secret architecture
+// =======================================
+// 9seconds/mtg deliberately rejects multi-secret support upstream
+// (quote from author: "I think that multiple secrets solve no problems
+// and just complex software"). One mtg instance == one secret.
+//
+// We follow that constraint: every inbound has ONE secret, derived
+// deterministically from (inboundId, domain). Every panel user assigned
+// to that inbound's squad receives the SAME URI. Consequences:
+//
+//   - No per-user traffic accounting on the agent side. mtg's Prometheus
+//     stats are global, not per-user.
+//   - No force-kick of one user — removing them from the panel just stops
+//     emitting their URI. Already-saved URIs still work for the lifetime
+//     of mtg + that secret.
+//   - Domain change rotates the secret — invalidates every cached URI
+//     across every user.
+//   - For per-user MTProto isolation, run multiple mtg inbounds (one per
+//     user-bucket) on different ports. This adapter doesn't manage that
+//     — it's a panel-side modelling choice.
+//
+// Verified against `9seconds/mtg/example.config.toml` and README on
+// 2026-05-07. An earlier iteration of this file emitted a `secrets = [...]`
+// array which mtg rejects.
 package mtproto
 
 import (
@@ -16,18 +34,19 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 )
 
-// InboundConfig holds per-instance settings.
+// InboundConfig holds per-inbound settings.
 type InboundConfig struct {
-	// Domain is the masquerade target for Fake-TLS handshake. Hex-encoded
-	// into every per-user secret. Changing it rotates ALL secrets.
+	// Domain is the masquerade target for Fake-TLS handshake.
 	Domain string
 
-	// ListenPort is the public TCP port mtg binds to. Default 443 — TG
-	// clients try this port first heuristically.
+	// Secret is the single mtg secret in mtg's hex format
+	// `ee<32-byte-secret-hex><domain-hex>`. Derive via DeriveSecret().
+	Secret string
+
+	// ListenPort is the public TCP port mtg binds to. Default 443.
 	ListenPort int
 
 	// StatsPort is the loopback Prometheus endpoint port. Default 3129.
@@ -57,54 +76,60 @@ func (c *InboundConfig) validate() error {
 			return fmt.Errorf("Domain contains forbidden char: %q", c.Domain)
 		}
 	}
+	if c.Secret == "" {
+		return errors.New("Secret is required")
+	}
+	if !strings.HasPrefix(c.Secret, "ee") {
+		return fmt.Errorf("Secret must start with `ee` (Fake-TLS marker), got %q", c.Secret[:min(len(c.Secret), 4)])
+	}
 	return nil
 }
 
-// DeriveSecret matches the panel-side `mtprotoSecret(uuid, domain)` exactly
-// — both compute `ee<sha256(uuid)[:32].hex><domain.hex>`. That determinism
-// is the contract that lets us update the agent's secrets list without the
-// panel having to push them explicitly.
-func DeriveSecret(uuid, domain string) string {
-	h := sha256.Sum256([]byte(uuid))
+// DeriveSecret produces the per-inbound mtg secret deterministically.
+//
+// Format (Fake-TLS): `ee<32-hex-bytes-from-sha256(seed)><hex-encoded-domain>`
+//
+// We pass `seed = inboundId` so each inbound gets a unique secret without
+// any extra credential storage. Same (inboundId, domain) → same secret;
+// domain change rotates the secret tail; deleting and recreating the
+// inbound rotates the head. Both panel and agent compute the same value.
+func DeriveSecret(inboundID, domain string) string {
+	h := sha256.Sum256([]byte(inboundID + ":" + domain))
 	return "ee" + hex.EncodeToString(h[:]) + hex.EncodeToString([]byte(domain))
 }
 
-// renderConfig produces the mtg TOML config. Format reference:
-// https://github.com/9seconds/mtg/blob/master/example.config.toml
+// renderConfig produces the mtg TOML config. Schema verified against
+// `9seconds/mtg/example.config.toml` on 2026-05-07.
 //
-// We hand-write TOML rather than pulling in `pelletier/go-toml` because the
-// surface is tiny (5 keys + secrets list) and string generation gives us
-// deterministic output for golden-test friendly diffing.
-func renderConfig(inbound InboundConfig, secrets []string) ([]byte, error) {
+// We hand-write the TOML rather than pulling in `pelletier/go-toml`
+// because the surface is small and string output is byte-stable for
+// golden-test friendly diffing. Only keys we actually use are emitted —
+// mtg accepts a minimal config and uses defaults for everything else.
+func renderConfig(inbound InboundConfig) ([]byte, error) {
 	if err := inbound.validate(); err != nil {
 		return nil, err
 	}
 	cfg := inbound.withDefaults()
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "secret = \"\"\n") // legacy single-secret mode disabled
+	fmt.Fprintf(&b, "secret = \"%s\"\n", cfg.Secret)
 	fmt.Fprintf(&b, "bind-to = \"0.0.0.0:%d\"\n", cfg.ListenPort)
-	fmt.Fprintf(&b, "stats-bind-to = \"127.0.0.1:%d\"\n", cfg.StatsPort)
-	fmt.Fprintf(&b, "network-timeout = \"10s\"\n")
-	fmt.Fprintf(&b, "buffer-size = \"16Kb\"\n")
-	fmt.Fprintf(&b, "prefer-ip = \"ipv4\"\n")
+	fmt.Fprintf(&b, "concurrency = 8192\n")
+	fmt.Fprintf(&b, "prefer-ip = \"prefer-ipv4\"\n")
 	b.WriteString("\n")
 
-	if len(secrets) > 0 {
-		b.WriteString("secrets = [\n")
-		for _, s := range secrets {
-			fmt.Fprintf(&b, "  \"%s\",\n", s)
-		}
-		b.WriteString("]\n")
-	} else {
-		b.WriteString("secrets = []\n")
-	}
+	// Prometheus stats — nested table, NOT a flat `stats-bind-to` key.
+	// (An earlier iteration of this file got that wrong.)
+	b.WriteString("[stats.prometheus]\n")
+	b.WriteString("enabled = true\n")
+	fmt.Fprintf(&b, "bind-to = \"127.0.0.1:%d\"\n", cfg.StatsPort)
+	b.WriteString("metric-prefix = \"mtg\"\n")
 
 	return []byte(b.String()), nil
 }
 
 // writeConfig atomically writes the TOML to disk. Mode 0o600 — file
-// contains every user's MTProto secret.
+// contains the inbound's MTProto secret.
 func writeConfig(path string, blob []byte) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -121,13 +146,9 @@ func writeConfig(path string, blob []byte) error {
 	return nil
 }
 
-// sortedSecrets returns secrets in deterministic order so renderConfig is
-// byte-stable across user-map iterations.
-func sortedSecrets(in map[string]string) []string {
-	out := make([]string, 0, len(in))
-	for _, s := range in {
-		out = append(out, s)
+func min(a, b int) int {
+	if a < b {
+		return a
 	}
-	sort.Strings(out)
-	return out
+	return b
 }

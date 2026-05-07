@@ -266,12 +266,14 @@ export async function generateSubscription(
         // No standardised URI format for AmneziaWG; clients fetch ?format=wgconf.
         uri: '',
       });
-    } else if (ib.protocol === 'mtproto' && user.xrayUuid) {
-      // Slice 41 — Telegram MTProto. Per-user secret deterministically
-      // derived from (xrayUuid, domain). Domain change rotates every
-      // user's secret — flagged in admin UI.
+    } else if (ib.protocol === 'mtproto') {
+      // Slice 41 — Telegram MTProto via 9seconds/mtg. Architectural note:
+      // mtg is intentionally single-secret upstream. So every user
+      // assigned to this inbound's squad receives the SAME secret + URL.
+      // We derive once per inbound from (inboundId, domain). Domain
+      // change rotates the secret. No per-user accounting available.
       const cfg = ib.config as unknown as { domain: string };
-      const secret = mtprotoSecret(user.xrayUuid, cfg.domain);
+      const secret = mtprotoSecret(ib.id, cfg.domain);
       endpoints.push({
         protocol: 'mtproto',
         nodeName,

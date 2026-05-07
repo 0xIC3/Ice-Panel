@@ -2,6 +2,7 @@ import { Queue, Worker, type Job } from 'bullmq';
 import type { ApplyInboundsRequest, InboundDto, ProtocolName } from '@ice-panel/shared';
 import { redis } from '../../lib/redis.js';
 import { prisma } from '../../prisma.js';
+import { mtprotoSecret } from '../../core-adapters/mtproto/index.js';
 import { NodeTransport, NodeRequestError } from '../nodes/nodes.transport.js';
 
 // ───── Job data shapes ─────
@@ -87,18 +88,36 @@ async function fetchEnabledInbounds(nodeId: string): Promise<InboundDto[]> {
     },
     orderBy: { port: 'asc' },
   });
-  return rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    protocol: r.protocol as ProtocolName,
-    // The node-agent gets the actual listen port (what xray/hysteria binds
-    // to). publicPort is purely for client-URL emission and lives only on
-    // the panel side, so we don't ship it across the wire.
-    port: r.port,
-    // Prisma returns Json as `unknown`; the panel-side service has already
-    // validated the shape via Zod when the inbound was created/updated.
-    config: r.config as InboundDto['config'],
-  }));
+  return rows.map((r) => {
+    let config = r.config as InboundDto['config'];
+    // Slice 41 — mtproto: derive the per-inbound secret from (inboundId,
+    // domain) and inject into the wire DTO. The agent uses panel's value
+    // verbatim (could re-derive but trusts the panel to keep lock-step).
+    // Why here and not in inbounds.service.ts: the secret depends on the
+    // assigned ID, which Prisma generates only at create-time. Computing
+    // at fetch-time avoids storing it in the DB.
+    if (r.protocol === 'mtproto') {
+      const cfg = config as { domain?: string };
+      if (cfg && cfg.domain) {
+        config = {
+          ...cfg,
+          secret: mtprotoSecret(r.id, cfg.domain),
+        } as InboundDto['config'];
+      }
+    }
+    return {
+      id: r.id,
+      name: r.name,
+      protocol: r.protocol as ProtocolName,
+      // The node-agent gets the actual listen port (what xray/hysteria binds
+      // to). publicPort is purely for client-URL emission and lives only on
+      // the panel side, so we don't ship it across the wire.
+      port: r.port,
+      // Prisma returns Json as `unknown`; the panel-side service has already
+      // validated the shape via Zod when the inbound was created/updated.
+      config,
+    };
+  });
 }
 
 /**

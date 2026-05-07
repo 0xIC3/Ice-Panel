@@ -1,31 +1,34 @@
 import { describe, expect, it } from 'vitest';
 import { buildMtprotoUri, buildMtprotoTmeUri, mtprotoSecret } from './uri.js';
 
-describe('mtprotoSecret', () => {
+describe('mtprotoSecret (single-secret-per-inbound model)', () => {
   it('produces ee + 64 hex bytes (sha256) + domain hex', () => {
-    const s = mtprotoSecret('cabc78ae-94e3-4a16-936a-133d059acfac', 'www.cloudflare.com');
+    const s = mtprotoSecret('inbound-uuid-1', 'www.cloudflare.com');
     expect(s.startsWith('ee')).toBe(true);
-    // ee (2) + sha256 (64) + 'www.cloudflare.com'.length * 2 = 36 → total 102
     expect(s).toHaveLength(2 + 64 + 'www.cloudflare.com'.length * 2);
-    // last bytes are domain hex-encoded
     const domainHex = Buffer.from('www.cloudflare.com', 'utf8').toString('hex');
     expect(s.endsWith(domainHex)).toBe(true);
   });
 
-  it('is deterministic', () => {
-    const a = mtprotoSecret('uuid', 'www.example.com');
-    const b = mtprotoSecret('uuid', 'www.example.com');
+  it('is deterministic for same (inboundId, domain)', () => {
+    const a = mtprotoSecret('inbound-1', 'www.example.com');
+    const b = mtprotoSecret('inbound-1', 'www.example.com');
     expect(a).toBe(b);
   });
 
-  it('domain change rotates the secret tail', () => {
-    const a = mtprotoSecret('uuid', 'www.cloudflare.com');
-    const b = mtprotoSecret('uuid', 'www.google.com');
+  it('different inbound IDs yield different secrets', () => {
+    const a = mtprotoSecret('inbound-1', 'www.cloudflare.com');
+    const b = mtprotoSecret('inbound-2', 'www.cloudflare.com');
     expect(a).not.toBe(b);
-    // sha256(uuid) prefix should still be identical (first 2+64 chars)
-    expect(a.slice(0, 66)).toBe(b.slice(0, 66));
-    // tail differs
-    expect(a.slice(66)).not.toBe(b.slice(66));
+  });
+
+  it('domain change rotates the entire secret', () => {
+    const a = mtprotoSecret('inbound-1', 'www.cloudflare.com');
+    const b = mtprotoSecret('inbound-1', 'www.google.com');
+    expect(a).not.toBe(b);
+    // Both head and tail differ — head because the seed includes the
+    // domain, tail because the domain is appended.
+    expect(a.slice(0, 66)).not.toBe(b.slice(0, 66));
   });
 });
 

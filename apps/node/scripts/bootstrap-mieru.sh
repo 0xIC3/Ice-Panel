@@ -79,9 +79,9 @@ echo "    Version: $LATEST_TAG"
 echo
 echo "Set the following in /etc/ice-panel-node/env then restart node-agent:"
 echo "    MITA_BINARY=$INSTALL_DIR/mita"
-echo "    MITA_CONFIG=/etc/mita/server.yaml"
+echo "    MITA_CONFIG=/etc/mita/server.json"
 echo "    MITA_PORT=2012"
-echo "    MITA_MTU=1400        # drop to 1280 on PPPoE / weird VPN paths"
+echo "    MITA_MTU=1400        # min 1280 — drop to 1280 on PPPoE / weird VPN paths"
 echo "Then: systemctl restart ice-panel-node"
 echo
 warn "If your distro doesn't ship a mita systemd unit by default, the .deb"

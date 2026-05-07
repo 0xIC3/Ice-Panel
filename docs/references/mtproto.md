@@ -66,30 +66,57 @@ ee0123456789abcdef0123456789abcdef777777772e636c6f7564666c6172652e636f6d
 
 mtg generates these via `mtg generate-secret tls --hex <domain>`. We can do the same generation server-side in the panel (sha256 of `user.xrayUuid` truncated to 32 bytes, then hex-prepended `ee` + hex(domain)). Reusing UUID-derived secrets means no extra credential column in `users`.
 
-## Multi-user via mtg
+## ⚠️ CORRECTION (2026-05-07): mtg is single-secret upstream
 
-mtg supports **secret rotation** at runtime via its `replace-secret` and `add-secret` commands — but **multi-user-as-secrets-list** is via static config:
+**Earlier draft of this doc was wrong.** It claimed mtg supports a `secrets = [...]` array for multi-user. It does not.
 
-```yaml
-secret-mode: secure          # or 'tls' for Fake-TLS
-secrets:
-  - "ee01...777777772e..."
-  - "ee02...777777772e..."
-  - "ee03...777777772e..."
+Verified against `9seconds/mtg/example.config.toml` and the upstream README, the author's documented stance is:
 
-bind-to: "0.0.0.0:443"
+> "I think that multiple secrets solve no problems and just complex software."
 
-# Optional: anti-DPI tuning
-prefer-ip: "ipv4"
-domain-fronting-port: 443
-network-timeout: 10s
+One mtg instance = ONE secret. That's the entire user model upstream.
+
+If you want multiple secrets, the upstream README points at the **`dolonet/mtg-multi`** fork — separate maintainer, lags upstream security fixes.
+
+### Architecture our slice 41 actually ships
+
+Single-secret-per-inbound. Every Ice-Panel user assigned to an inbound's squad receives the **same** URI:
+
+```toml
+secret = "ee0123abcd...777777772e636c6f7564666c6172652e636f6d"
+bind-to = "0.0.0.0:443"
+concurrency = 8192
+prefer-ip = "prefer-ipv4"
+
+[stats.prometheus]
+enabled = true
+bind-to = "127.0.0.1:3129"
+metric-prefix = "mtg"
 ```
 
-Each `ee<32-hex>` prefix matches one user. mtg dispatches by leading bytes; identifies user-by-secret on every packet, routes to TG.
+Note exact upstream key shapes:
+- `secret` — singular, top-level, NOT `secrets = [...]`
+- `prefer-ip` accepts `"prefer-ipv4"` / `"prefer-ipv6"` (NOT `"ipv4"`)
+- Prometheus stats live in nested **`[stats.prometheus]`** table, NOT a flat `stats-bind-to` key
+- Network timeout is nested **`[network.timeout]` { tcp, http, idle, handshake }**, NOT a flat `network-timeout` key
 
-**Add user:** append to `secrets:` list, send SIGHUP to reload, no session drop on existing users (user's secret still in list).
+### Per-inbound secret derivation we use
 
-**Remove user:** delete from list, SIGHUP. Existing user's session is dropped on next packet (mtg can't find their secret → reject). Good — actual force-kick semantics, unlike Naive.
+```ts
+secret = "ee" + sha256(inboundId + ":" + domain).hex + Buffer.from(domain).toString("hex")
+```
+
+Both panel and agent compute identical values. Domain change rotates the secret. Different inbound IDs yield different secrets, so admins running two MTProto inbounds (e.g. for two squads) get isolated secrets without any panel-side credential storage.
+
+### Trade-offs of single-secret model
+
+| Property | Effect |
+|---|---|
+| **Per-user accounting** | ❌ None upstream. mtg Prometheus emits global counters, not per-secret. Our adapter reports tracked userIDs as "online" with zero bytes. |
+| **Force-kick one user** | ❌ Impossible. Removing a user from the panel just stops emitting their URI; if they cached the URL, they keep working until secret rotation. |
+| **Domain change** | ✅ Rotates secret → invalidates every cached URI for this inbound. Effectively a force-kick-everyone. |
+| **Per-user isolation** | Workaround: create N inbound rows for N user-buckets, each on a different port. Panel side handles the routing via squads. |
+| **CLI subcommands** | `mtg run config.toml` (verified). `simple-run`, `generate-secret`, `doctor`, `access` also exist. |
 
 ## Subscription URI format
 
