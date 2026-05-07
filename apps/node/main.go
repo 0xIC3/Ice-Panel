@@ -107,6 +107,7 @@ func buildAdapters(logger *slog.Logger) []core.CoreAdapter {
 		if cfg.BinaryPath == "" {
 			cfg.BinaryPath = os.Getenv("XRAY_BINARY")
 			cfg.ConfigPath = getenv("XRAY_CONFIG", defaultXrayConfigPath)
+			cfg.Inbound.ApiPort = getenvInt("XRAY_API_PORT", 8080)
 		}
 		adapters = append(adapters, xray.New(cfg, logger))
 		logger.Info("xray adapter registered")
@@ -128,6 +129,7 @@ func buildXrayConfig() (xray.Config, bool) {
 		ConfigPath: getenv("XRAY_CONFIG", defaultXrayConfigPath),
 		Inbound: xray.InboundConfig{
 			ListenPort:         getenvInt("XRAY_PORT", defaultXrayPort),
+			ApiPort:            getenvInt("XRAY_API_PORT", 8080),
 			RealityDest:        getenv("XRAY_REALITY_DEST", defaultXrayRealityDest),
 			RealityServerNames: serverNames,
 			RealityPrivateKey:  privateKey,

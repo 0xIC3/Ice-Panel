@@ -184,19 +184,43 @@ func (a *Adapter) Healthy() bool {
 	return a.proc != nil && a.proc.Running()
 }
 
-// ApplyInbound is a stub for slice 24b. NaiveProxy live reconfig requires
-// regenerating the Caddyfile with new hostname / tlsEmail / masqueradeRoot
-// and triggering `caddy reload`. Real impl:
-//   1. Parse NaiveInboundCfg JSON.
-//   2. Update a.cfg.Inbound.{Hostname,TLSEmail,MasqueradeRoot}.
-//   3. writeCurrentCaddyfileLocked + caddy reload via injectable runCmd.
+// ApplyInbound parses panel-pushed Naive config, diffs vs the live
+// cfg.Inbound, and on change rewrites the Caddyfile + triggers `caddy reload`.
+// Reload is graceful — no in-flight session drop, but ALREADY-CONNECTED
+// clients keep their session until idle/tunnel timeout (~10 min) — that's
+// upstream NaiveProxy behaviour, not something we can shortcut.
 //
-// Lands in a follow-up commit alongside Hysteria/AWG. For now: persist to
-// inbounds.json (server.go), log, return nil.
-func (a *Adapter) ApplyInbound(cfg json.RawMessage) error {
-	a.logger.Info("naive ApplyInbound stub — persisted to inbounds.json, no live reconfig",
-		"bytes", len(cfg))
-	return nil
+// Idempotent: byte-equivalent input → no-op (no rewrite, no reload).
+//
+// Hostname change is the gotcha: Caddy will request a fresh Let's Encrypt
+// cert for the new FQDN, and LE rate-limits 5 cert-issuances per 7 days per
+// FQDN. The adapter doesn't enforce that — UI should warn admins. If the
+// limit is hit, `caddy reload` succeeds but new TLS handshakes fail until
+// the cooldown.
+func (a *Adapter) ApplyInbound(rawCfg json.RawMessage) error {
+	var wire inboundCfgWire
+	if err := json.Unmarshal(rawCfg, &wire); err != nil {
+		return fmt.Errorf("naive ApplyInbound: parse cfg: %w", err)
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	newInbound := wire.toInboundConfig(a.cfg.Inbound.ListenPort)
+	if inboundEqual(a.cfg.Inbound, newInbound) {
+		a.logger.Info("naive ApplyInbound: config unchanged, skipping reload")
+		return nil
+	}
+
+	a.cfg.Inbound = newInbound
+	a.logger.Info("naive ApplyInbound: config changed, regenerating Caddyfile",
+		"hostname", newInbound.Hostname,
+		"masqueradeRoot", newInbound.MasqueradeRoot)
+
+	// Background context — caller's request may have a short deadline,
+	// but we want caddy to come back up even if the caller times out
+	// (matches the xray/hysteria/awg adapter pattern).
+	return a.regenerateAndReloadLocked(context.Background())
 }
 
 // regenerateAndReloadLocked must be called with a.mu held. It writes the

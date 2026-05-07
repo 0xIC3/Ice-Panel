@@ -77,12 +77,22 @@ func TestRenderConfigShape(t *testing.T) {
 	}
 
 	inbounds, ok := parsed["inbounds"].([]any)
-	if !ok || len(inbounds) != 1 {
-		t.Fatalf("expected 1 inbound, got %v", parsed["inbounds"])
+	// Slice 24c: render now emits two inbounds — the public VLESS one and a
+	// dedicated `api-in` (dokodemo-door on 127.0.0.1:8080) that exposes
+	// StatsService for `xray api statsquery`. Find the VLESS inbound by tag.
+	if !ok || len(inbounds) != 2 {
+		t.Fatalf("expected 2 inbounds (vless + api-in), got %v", parsed["inbounds"])
 	}
-	inb := inbounds[0].(map[string]any)
-	if inb["protocol"] != "vless" {
-		t.Errorf("protocol: got %v want vless", inb["protocol"])
+	var inb map[string]any
+	for _, raw := range inbounds {
+		m := raw.(map[string]any)
+		if m["protocol"] == "vless" {
+			inb = m
+			break
+		}
+	}
+	if inb == nil {
+		t.Fatalf("vless inbound not found in render output")
 	}
 	stream := inb["streamSettings"].(map[string]any)
 	if stream["network"] != "raw" {
@@ -95,6 +105,21 @@ func TestRenderConfigShape(t *testing.T) {
 	clients := settings["clients"].([]any)
 	if len(clients) != 2 {
 		t.Errorf("clients: got %d want 2", len(clients))
+	}
+
+	// Slice 24c — verify stats wiring is present
+	if _, ok := parsed["stats"]; !ok {
+		t.Errorf("stats block missing from rendered config")
+	}
+	api, ok := parsed["api"].(map[string]any)
+	if !ok || api["tag"] != "api" {
+		t.Errorf("api block missing/wrong: %v", parsed["api"])
+	}
+	policy := parsed["policy"].(map[string]any)
+	levels := policy["levels"].(map[string]any)
+	level0 := levels["0"].(map[string]any)
+	if level0["statsUserUplink"] != true || level0["statsUserDownlink"] != true {
+		t.Errorf("policy.levels.0 missing per-user stats flags: %v", level0)
 	}
 }
 

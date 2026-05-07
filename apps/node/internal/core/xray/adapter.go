@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os/exec"
 	"sort"
 	"sync"
 
@@ -28,7 +29,18 @@ type Config struct {
 	// Inbound is the static REALITY+VLESS settings; slice 23 will move these
 	// into the inbounds table per node.
 	Inbound InboundConfig
+
+	// RunCmd is the injectable command runner used by GetStats to invoke
+	// `xray api statsquery -server 127.0.0.1:<ApiPort> -pattern user -reset`.
+	// Defaults to os/exec; tests inject a fake to assert behaviour without
+	// shelling out.
+	RunCmd RunCmdFunc
 }
+
+// RunCmdFunc executes an external command synchronously and returns its
+// combined output. Mirrors the type used by Hysteria/AmneziaWG/Naive
+// adapters for consistency.
+type RunCmdFunc func(ctx context.Context, name string, args ...string) ([]byte, error)
 
 type Adapter struct {
 	cfg    Config
@@ -43,11 +55,18 @@ type Adapter struct {
 
 // New builds an adapter; nothing is spawned until Start is called.
 func New(cfg Config, logger *slog.Logger) *Adapter {
+	if cfg.RunCmd == nil {
+		cfg.RunCmd = defaultRunCmd
+	}
 	return &Adapter{
 		cfg:    cfg,
 		logger: logger,
 		users:  make(map[string]xrayClient),
 	}
+}
+
+func defaultRunCmd(ctx context.Context, name string, args ...string) ([]byte, error) {
+	return exec.CommandContext(ctx, name, args...).CombinedOutput()
 }
 
 func (a *Adapter) Name() string { return Name }
@@ -120,16 +139,63 @@ func (a *Adapter) RemoveUser(userID string) error {
 	return a.regenerateAndRestartLocked(context.Background())
 }
 
-// GetStats returns a list of tracked users with zero counters.
-// Slice 17 does not implement gRPC stats query — Phase 3 optimisation.
+// GetStats reports per-user byte counters via Xray's StatsService.
+//
+// Slice 24c: shells out to `xray api statsquery -reset` over the loopback
+// gRPC inbound (see config.go's renderConfig). The `-reset` flag drains
+// counters on read so the panel ingests deltas — never has to track
+// "what was the value last time" itself.
+//
+// Degradation: in config-only mode (no BinaryPath), or when xray hasn't
+// finished bringing up the api inbound yet, returns the tracked user list
+// with zero counters instead of erroring. The panel's ingest worker treats
+// zero-byte deltas as no-op, so a transient stats failure doesn't corrupt
+// `user_traffic`.
 func (a *Adapter) GetStats() (*core.Stats, error) {
 	a.mu.Lock()
-	defer a.mu.Unlock()
+	binary := a.cfg.BinaryPath
+	apiPort := a.cfg.Inbound.ApiPort
+	if apiPort == 0 {
+		apiPort = 8080 // mirror withDefaults
+	}
 	users := make([]core.UserStats, 0, len(a.users))
 	for id := range a.users {
 		users = append(users, core.UserStats{UserID: id})
 	}
-	return &core.Stats{Users: users}, nil
+	run := a.cfg.RunCmd
+	a.mu.Unlock()
+
+	if binary == "" || run == nil {
+		// Config-only mode: report tracked users with zero counters.
+		return &core.Stats{Users: users}, nil
+	}
+
+	counters, err := queryUserStats(context.Background(), run, binary, apiPort)
+	if err != nil {
+		// Soft-fail — log and return zero counters. Hard error would block
+		// the panel's stats poller and starve every other adapter on this
+		// node from delivering its numbers.
+		a.logger.Warn("xray GetStats: statsquery failed, reporting zero counters", "err", err)
+		return &core.Stats{Users: users}, nil
+	}
+
+	out := make([]core.UserStats, 0, len(users))
+	var totalIn, totalOut int64
+	for _, u := range users {
+		c := counters[u.UserID]
+		out = append(out, core.UserStats{
+			UserID:   u.UserID,
+			BytesIn:  c.UplinkBytes,
+			BytesOut: c.DownlinkBytes,
+		})
+		totalIn += c.UplinkBytes
+		totalOut += c.DownlinkBytes
+	}
+	return &core.Stats{
+		Users:         out,
+		TotalBytesIn:  totalIn,
+		TotalBytesOut: totalOut,
+	}, nil
 }
 
 // Healthy reports whether the subprocess is running. In config-only mode
@@ -180,9 +246,10 @@ func (a *Adapter) ApplyInbound(rawCfg json.RawMessage) error {
 	}
 
 	newInbound := InboundConfig{
-		Tag:                a.cfg.Inbound.Tag, // keep existing tag — not in wire
-		ListenHost:         a.cfg.Inbound.ListenHost,
-		ListenPort:         a.cfg.Inbound.ListenPort, // listen port is set at install time, not pushed
+		Tag:                a.cfg.Inbound.Tag,        // keep existing tag — not in wire
+		ListenHost:         a.cfg.Inbound.ListenHost, // install-time identity
+		ListenPort:         a.cfg.Inbound.ListenPort, // install-time identity
+		ApiPort:            a.cfg.Inbound.ApiPort,    // install-time identity (slice 24c stats)
 		RealityDest:        wire.RealityDest,
 		RealityServerNames: wire.RealityServerNames,
 		RealityPrivateKey:  wire.RealityPrivateKey,

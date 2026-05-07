@@ -37,6 +37,13 @@ type InboundConfig struct {
 
 	// Flow controls Vision (xtls-rprx-vision) on the client side; empty disables.
 	Flow string
+
+	// ApiPort is the loopback port the gRPC StatsService listens on. Default
+	// 8080. Slice 24c — adapter shells out to `xray api statsquery
+	// -server 127.0.0.1:<ApiPort>` to read+drain per-user byte counters.
+	// MUST stay on 127.0.0.1 (renderConfig hardcodes the listen host) —
+	// exposing it externally would let anyone read+reset all counters.
+	ApiPort int
 }
 
 func (c *InboundConfig) withDefaults() InboundConfig {
@@ -52,6 +59,9 @@ func (c *InboundConfig) withDefaults() InboundConfig {
 	}
 	if out.Flow == "" {
 		out.Flow = "xtls-rprx-vision"
+	}
+	if out.ApiPort == 0 {
+		out.ApiPort = 8080
 	}
 	return out
 }
@@ -82,6 +92,21 @@ type xrayClient struct {
 // renderConfig produces a complete Xray config.json blob for the given users.
 // Marshaled as indented JSON for human-readability when an operator needs to
 // inspect what the adapter wrote.
+//
+// Slice 24c — per-user stats. The config now wires up Xray's StatsService:
+//
+//   - `stats: {}` enables internal counter collection
+//   - `policy.levels."0".statsUserUplink/Downlink: true` tells Xray to count
+//     bytes per client (Xray uses the client's `email` field as the stat key,
+//     and we set email = userId so panel can correlate)
+//   - A dedicated `api` inbound on 127.0.0.1:8080 (loopback only) exposes
+//     the gRPC StatsService — the adapter shells out to `xray api statsquery
+//     -server 127.0.0.1:8080 -pattern user -reset` to read+drain counters.
+//   - A `routing.rules` entry pins traffic from the api inbound to the api
+//     outbound; without it Xray would refuse the loopback management calls.
+//
+// The api inbound MUST stay on 127.0.0.1 — exposing it externally would
+// give anyone the ability to read all traffic counters and reset them.
 func renderConfig(inbound InboundConfig, users []xrayClient) ([]byte, error) {
 	if err := inbound.validate(); err != nil {
 		return nil, err
@@ -90,6 +115,23 @@ func renderConfig(inbound InboundConfig, users []xrayClient) ([]byte, error) {
 	doc := map[string]any{
 		"log": map[string]any{
 			"loglevel": "info",
+		},
+		"stats": map[string]any{},
+		"api": map[string]any{
+			"tag":      "api",
+			"services": []string{"StatsService", "HandlerService"},
+		},
+		"policy": map[string]any{
+			"levels": map[string]any{
+				"0": map[string]any{
+					"statsUserUplink":   true,
+					"statsUserDownlink": true,
+				},
+			},
+			"system": map[string]any{
+				"statsInboundUplink":   true,
+				"statsInboundDownlink": true,
+			},
 		},
 		"inbounds": []map[string]any{
 			{
@@ -114,9 +156,27 @@ func renderConfig(inbound InboundConfig, users []xrayClient) ([]byte, error) {
 					},
 				},
 			},
+			{
+				"tag":      "api-in",
+				"listen":   "127.0.0.1",
+				"port":     cfg.ApiPort,
+				"protocol": "dokodemo-door",
+				"settings": map[string]any{
+					"address": "127.0.0.1",
+				},
+			},
 		},
 		"outbounds": []map[string]any{
 			{"protocol": "freedom", "tag": "direct"},
+		},
+		"routing": map[string]any{
+			"rules": []map[string]any{
+				{
+					"type":        "field",
+					"inboundTag":  []string{"api-in"},
+					"outboundTag": "api",
+				},
+			},
 		},
 	}
 	return json.MarshalIndent(doc, "", "  ")

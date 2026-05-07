@@ -298,7 +298,18 @@ Per-slice verification checklists. Use when **closing** a slice or when re-valid
 
 ---
 
-## Slice 24b4 — Naive ApplyInbound real impl ⏭️
+## Slice 24b4 — Naive ApplyInbound real impl ✅ (code) / ⏭️ (VPS)
+
+### Local checks
+- [x] Wire `inboundCfgWire` parses (hostname / tlsEmail / masqueradeRoot)
+- [x] `inboundEqual` byte-equality
+- [x] `toInboundConfig(listenPort)` preserves install-time port
+- [x] `ApplyInbound` no-op on identical (no caddy reload)
+- [x] Hostname / masqueradeRoot / tlsEmail change → exactly 1 `caddy reload --config <path> --adapter caddyfile` call
+- [x] Malformed JSON → parse error, no CLI
+- [x] Config-only mode (CaddyBin="") → writes Caddyfile, skips reload
+
+### Old plan (kept for VPS-cycle reference)
 
 ### Pre-conditions
 - VPS с NaiveProxy-нодой (Caddy fork, ~2 GB RAM минимум для xcaddy)
@@ -330,7 +341,29 @@ Per-slice verification checklists. Use when **closing** a slice or when re-valid
 
 ---
 
-## Slice 24c — Xray defaults uplift ⏭️
+## Slice 24c — Xray defaults uplift 🟡 part 1 done
+
+### Part 1 (per-user stats) — local checks
+- [x] `xray.InboundConfig` получил поле `ApiPort` (default 8080)
+- [x] `renderConfig` эмитит `stats:{}`, `api:{tag,services:[StatsService,HandlerService]}`, `policy.levels.0.statsUserUplink/Downlink:true`, второй inbound `api-in` (dokodemo-door 127.0.0.1:<ApiPort>), `routing.rules` pin api inbound → api outbound
+- [x] Pre-existing `TestRenderConfigShape` обновлён под новую форму (vless + api-in)
+- [x] `RunCmdFunc` injectable + `defaultRunCmd` (os/exec)
+- [x] `queryUserStats` shell-out на `xray api statsquery -server 127.0.0.1:<port> -pattern user -reset`
+- [x] Парсер агрегирует uplink+downlink по userId, skip'ает malformed entries
+- [x] `parseStatName`/`parseInt64String` — 7 case'ов
+- [x] `GetStats` soft-fail (warn + zero counters) при error/config-only mode
+- [x] `ApiPort` сохраняется в ApplyInbound (install-time identity)
+- [x] env: `XRAY_API_PORT` (default 8080)
+
+### Part 2 (transports + subprotocols) — TODO
+- [ ] HTTPUpgrade transport (`network: 'httpupgrade'`)
+- [ ] KCP transport (`network: 'kcp'`, mtu/tti/uplinkCapacity)
+- [ ] Trojan subprotocol + Zod schema + URI builder
+- [ ] Shadowsocks (incl SS2022) subprotocol
+- [ ] sniffing + sockopt-BBR + DNS-OUT + BLOCK rules в config render
+- [ ] Frontend transport-specific форма для каждого
+
+### Original Pre-conditions (kept for VPS-cycle reference)
 
 ### Pre-conditions
 - VPS с Xray-нодой (REALITY working с slice 24b1)

@@ -363,8 +363,8 @@ Mihomo / Singbox / XrayJSON шаблоны — Phase 2 (Срез 21). Subscripti
 | 24b1 | **Per-adapter ApplyInbound — interface + Xray real impl** | ✅ done | `CoreAdapter.ApplyInbound(json.RawMessage)` в interface; **Xray: реальная реализация** (parse XrayInboundCfg → diff → regenerate config.json + restart subprocess; idempotent); Hysteria/AWG/Naive: stubs логируют + полагаются на inbounds.json persistence; dispatcher в `handleApplyInbounds` фан-аут по protocol name |
 | 24b2 | **Hysteria ApplyInbound real impl** | ✅ done (code) | Rewrite `/etc/hysteria/config.yaml` + `systemctl restart hysteria-server.service` через injectable `RunCmd`. New `InboundConfig` (obfsPassword/masqueradeUrl/brutalUp/Down). Deterministic YAML render, atomic tmp+rename write, idempotent diff. Hostname/ACMEEmail из env (`HYSTERIA_HOSTNAME`/`HYSTERIA_ACME_EMAIL`). VPS-checks отложены до следующего cycle. |
 | 24b3 | **AmneziaWG ApplyInbound real impl** | ✅ done (code) | Smart-diff classifier: `diffNone/diffSyncconf/diffRestart/diffSubnet`. S1-S4/Jc/Jmin/Jmax → `awg syncconf` (existing path). H1-H4/PrivateKey/ListenPort → `awg-quick down/up`. Subnet change c allocated peers → reject; без peers → restart. Wire JSON mirrors `AmneziawgConfigSchema`. VPS-checks отложены до cycle. |
-| 24b4 | **NaiveProxy ApplyInbound real impl** | ⏭️ | Regenerate Caddyfile + `caddy reload` через injectable runCmd; no session drops |
-| 24c | **Xray defaults uplift + transports/subprotocols** | ⏭️ | Per-user stats (StatsService gRPC + poller → user_traffic); HTTPUpgrade + KCP transports; Trojan + Shadowsocks subprotocols; sniffing + sockopt-BBR + DNS-OUT + BLOCK rules |
+| 24b4 | **NaiveProxy ApplyInbound real impl** | ✅ done (code) | Wire `inboundCfgWire` (hostname/tlsEmail/masqueradeRoot) → diff vs `cfg.Inbound` → если изменилось, regenerate Caddyfile + graceful `caddy reload --config <path> --adapter caddyfile` через injectable `runCmd`. Idempotent. ListenPort — install-time identity, не из wire. Config-only mode (без CaddyBin) пишет файл без reload. VPS-checks отложены до cycle. |
+| 24c | **Xray defaults uplift + transports/subprotocols** | 🟡 part 1 done (per-user stats) | ✅ Per-user stats: render config теперь содержит `stats:{}`, `policy.levels.0.statsUserUplink/Downlink`, dedicated `api-in` (dokodemo-door на 127.0.0.1:8080) для StatsService. `GetStats` shell-out на `xray api statsquery -reset` + parser. Soft-fail при недоступности api. ⏭️ TODO: HTTPUpgrade + KCP transports, Trojan + Shadowsocks subprotocols, sniffing + sockopt-BBR + DNS-OUT + BLOCK rules. |
 | 25 | **publicHost / publicPort на Inbound** | ✅ done | Two nullable columns; subscription generator prefers them over hostFromAddress(node.address); UI form fields; closes the cert-SAN gotcha at the architectural level |
 | 26 | **Squad ACL (group_inbounds wiring)** | ✅ done (code) | Migration seeds default "All" squad with stable UUID + backfills group_inbounds and group_members. CRUD `/api/squads`. Subscription resolver filters inbounds by squad membership (UNION). User-create defaults to All. Inbound-created event auto-attaches to All. "All" is system-protected (403 on rename/delete). Squad-delete backstops orphan users into All. Frontend: `SquadsPage` CRUD, `UserFormModal` MultiSelect (All shown disabled-checked). VPS-checks отложены до cycle. |
 
@@ -781,24 +781,15 @@ Wire mirrors `AmneziawgConfigSchema`. `serverPublicKey` принимается, 
 
 24 unit tests. Commit `9963625`. VPS-валидация в следующем cycle.
 
-#### Срез 24b4: Naive ApplyInbound real impl ⏭️
+#### Срез 24b4: Naive ApplyInbound real impl ✅ done (code)
 
-**Цель:** live reconfig NaiveProxy через `caddy reload`.
+Wire `inboundCfgWire` зеркалит `NaiveConfigSchema` (hostname / tlsEmail / masqueradeRoot). `ListenPort` остаётся install-time identity (не в wire — Caddyfile root `:<port>` берётся из adapter Config).
 
-**Что вводим:**
+`ApplyInbound`: parse → diff (`inboundEqual`) → если изменилось, swap `a.cfg.Inbound` + `regenerateAndReloadLocked` (existing path; graceful `caddy reload --config <path> --adapter caddyfile` через injectable runCmd). Idempotent. Config-only mode (без `CaddyBin`) пишет Caddyfile, но не вызывает reload.
 
-- `ApplyInbound` parse `NaiveInboundCfg`:
-  - Update `cfg.Inbound.Hostname` / `TLSEmail` / `MasqueradeRoot`.
-  - Call `writeCurrentCaddyfileLocked()` (метод уже есть для users).
-  - `runCmd("caddy", "reload", "--config", a.cfg.ConfigPath, "--adapter", "caddyfile")`.
-- Idempotency через cfg diff.
+7 unit tests (equality + wire roundtrip + idempotency + 3 тригер-теста (hostname / masqueradeRoot / tlsEmail) + malformed JSON + config-only mode). VPS-валидация в следующем cycle.
 
-**Gotchas:**
-- TLS hostname change → Caddy запросит новый LE-cert → может попасть в LE rate limiter (5 certs / 7 days per FQDN). UI warn admin.
-- `caddy reload` graceful — existing connections live until idle/tunnel timeout (~10 min).
-- masqueradeRoot — directory which Caddy serves to non-authenticated probers. Проверка что dir exists в Apply (иначе reload fail).
-
-**Коммит:** `feat(node-naive)`: ApplyInbound — regen Caddyfile + caddy reload.
+**Gotcha (документировать в UI):** hostname change → Caddy запросит свежий LE-cert → можно влететь в LE rate-limit (5 issuances / 7 days / FQDN). Reload в этом случае success, но новые TLS handshakes failes до cooldown'а. Backend не enforce-ит это; warn в admin UI.
 
 #### Срез 25: publicHost / publicPort separation на Inbound
 

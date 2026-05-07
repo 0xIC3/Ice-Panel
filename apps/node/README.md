@@ -41,6 +41,7 @@ skipped cleanly so single-protocol nodes don't pay for Xray.
 | `XRAY_REALITY_DEST` | `www.cloudflare.com:443` | TLS handshake target the inbound forwards mismatched probes to. |
 | `XRAY_PORT` | `443` | TCP port the Xray inbound listens on. |
 | `XRAY_BINARY` | (none) | Path to `xray` executable. Empty → config-only mode (writes `config.json` but doesn't spawn xray). |
+| `XRAY_API_PORT` | `8080` | Loopback port for the gRPC StatsService inbound (slice 24c). The adapter shells out to `xray api statsquery -server 127.0.0.1:<port>` to read+drain per-user byte counters every poll. Always binds 127.0.0.1 — never expose externally. |
 | `XRAY_CONFIG` | `/etc/xray/config.json` | Path the adapter writes the generated config to. |
 
 ### NaiveProxy adapter (slice 20, in progress)
