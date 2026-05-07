@@ -465,6 +465,61 @@ Per-slice verification checklists. Use when **closing** a slice or when re-valid
 
 ---
 
+## Slice 40 — Mieru stealth proxy ✅ (code) / ⏭️ (VPS)
+
+### Local checks
+- [x] `ProtocolName` extended with `'mieru'` (panel Zod, shared transport, frontend types)
+- [x] `MieruConfigSchema` (mtu 576-1500, default 1400)
+- [x] `MieruInboundCfg` shared wire type
+- [x] `buildMieruProfileJson` — JSON profile shape matching mita client expectations (TCP+UDP bindings by default)
+- [x] `buildMieruUri` — `mieru://` pseudo-URI for plain-list subscription emission
+- [x] URI tests — 5 cases (profile shape, protocols/mtu overrides, URI userinfo encoding)
+- [x] `MieruSubscriptionEndpoint` type
+- [x] `subscription.service.ts` emit branch — username from panel, password from xrayUuid
+- [x] Node `internal/core/mieru/` — config (deterministic YAML render with TCP+UDP port bindings), adapter (Start invokes `mita apply config` + `mita reload`, AddUser/RemoveUser graceful, ApplyInbound on MTU change)
+- [x] Validation rejects MTU out-of-range and unknown logging levels
+- [x] Render rejects empty user name / empty password
+- [x] Adapter integration tests with recordingRunner verify `mita apply config` + `mita reload` calls
+- [x] `bootstrap-mieru.sh` — `.deb` install + smoke test
+- [x] `main.go` registers when `MITA_BINARY` env set
+- [x] Frontend: protocol Select option, MTU NumberInput section, info Alert
+- [x] UsersPage badge color (grape)
+
+### TODO (separate commits)
+- [ ] `?format=mieru-json` subscription route returning the JSON profile directly
+- [ ] Real `mita get-metrics --output json` parsing in `GetStats` (currently zero counters)
+- [ ] VPS validation: real mieru client connects through panel-issued profile
+
+---
+
+## Slice 41 — MTProto Telegram proxy ✅ (code) / ⏭️ (VPS)
+
+### Local checks
+- [x] `ProtocolName` extended with `'mtproto'`
+- [x] `MtprotoConfigSchema` (domain, hostname-only regex)
+- [x] `MtprotoInboundCfg` shared wire type
+- [x] `mtprotoSecret(uuid, domain)` — deterministic `ee<sha256(uuid).hex><domain.hex>`
+- [x] `buildMtprotoUri` — `tg://proxy?server=...&port=...&secret=...#name`
+- [x] `buildMtprotoTmeUri` — `https://t.me/proxy?...` web-bouncer form (no fragment — t.me strips)
+- [x] URI tests — 5 cases (secret shape, determinism, domain-rotation behaviour, two URI forms)
+- [x] `MtprotoSubscriptionEndpoint` type with `secret`, `domain`, `tmeUri` fields
+- [x] `subscription.service.ts` — emit branch derives secret + emits both URI forms
+- [x] Node `internal/core/mtproto/` — `DeriveSecret` mirror of panel's helper (both sides compute identical secret), TOML render для mtg config (deterministic, sorted secrets list), adapter with AddUser/RemoveUser/ApplyInbound
+- [x] Domain change in `ApplyInbound` clears users — panel re-pushes (documented contract)
+- [x] Pre-domain AddUser caches with sentinel `""` secret (handled gracefully)
+- [x] Validation rejects empty domain / domain with `/` / `:`
+- [x] `bootstrap-mtg.sh` — release tarball install, /etc/mtg setup
+- [x] `main.go` registers when `MTG_BINARY` env set; deferred-domain mode until first ApplyInbound
+- [x] Frontend: protocol Select option, Domain TextInput, two info Alerts (rotation warning + Telegram-only reminder)
+- [x] UsersPage badge color (cyan)
+
+### TODO (separate commits)
+- [ ] `subprocess.Signal()` helper to enable real SIGHUP-based graceful reload (currently always hard-restart)
+- [ ] Real Prometheus scraping in `GetStats` (counters keyed by sha256 of secret; need in-memory `secretHash → userId` map)
+- [ ] VPS validation: real Telegram client connects through panel-issued URL
+
+---
+
 ## Slice 26 — Squad ACL (group_inbounds wiring) 🟡 backend done, frontend TODO
 
 ### Pre-conditions

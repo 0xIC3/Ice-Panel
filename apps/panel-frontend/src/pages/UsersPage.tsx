@@ -117,6 +117,8 @@ const PROTOCOL_COLORS: Record<string, string> = {
   amneziawg: 'teal',
   naive: 'orange',
   shadowsocks: 'pink',
+  mtproto: 'cyan',
+  mieru: 'grape',
 };
 
 const GB = 1_073_741_824;

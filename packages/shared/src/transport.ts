@@ -9,7 +9,14 @@
  * may eventually need string encoding; revisit when quotas exceed ~8 PB.
  */
 
-export type ProtocolName = 'hysteria' | 'xray' | 'amneziawg' | 'naive' | 'shadowsocks';
+export type ProtocolName =
+  | 'hysteria'
+  | 'xray'
+  | 'amneziawg'
+  | 'naive'
+  | 'shadowsocks'
+  | 'mtproto'
+  | 'mieru';
 
 export interface ProtocolCredentials {
   hysteriaPassword?: string;
@@ -68,7 +75,9 @@ export interface InboundDto {
     | HysteriaInboundCfg
     | AmneziawgInboundCfg
     | NaiveInboundCfg
-    | ShadowsocksInboundCfg;
+    | ShadowsocksInboundCfg
+    | MtprotoInboundCfg
+    | MieruInboundCfg;
 }
 
 export interface XrayInboundCfg {
@@ -137,6 +146,23 @@ export interface ShadowsocksInboundCfg {
     | 'chacha20-ietf-poly1305'
     | 'aes-256-gcm'
     | 'aes-128-gcm';
+}
+
+/**
+ * MTProto inbound config (slice 41). The `domain` is the legitimate site
+ * mtg masquerades as during Fake-TLS — it gets hex-encoded into every
+ * per-user secret. Changing it rotates every user's secret.
+ */
+export interface MtprotoInboundCfg {
+  domain: string;
+}
+
+/**
+ * Mieru inbound config (slice 40). MTU caps the inner-payload size; per-
+ * user creds derive from `user.xrayUuid`.
+ */
+export interface MieruInboundCfg {
+  mtu: number;
 }
 
 export interface ApplyInboundsRequest {

@@ -4,12 +4,16 @@ import { allocatePeer } from '../amneziawg/amneziawg.service.js';
 import { buildNaiveUri } from '../../core-adapters/naive/index.js';
 import {
   buildHysteriaUri,
+  buildMieruUri,
+  buildMtprotoTmeUri,
+  buildMtprotoUri,
   buildShadowsocksUri,
   buildSubscriptionJson,
   buildTrojanRealityUri,
   buildVlessRealityUri,
   encodePlainList,
   hostFromAddress,
+  mtprotoSecret,
   type ShadowsocksMethod,
   type SubscriptionEndpoint,
   type SubscriptionJsonResponse,
@@ -261,6 +265,43 @@ export async function generateSubscription(
         h4: cfg.obfuscation.h4,
         // No standardised URI format for AmneziaWG; clients fetch ?format=wgconf.
         uri: '',
+      });
+    } else if (ib.protocol === 'mtproto' && user.xrayUuid) {
+      // Slice 41 — Telegram MTProto. Per-user secret deterministically
+      // derived from (xrayUuid, domain). Domain change rotates every
+      // user's secret — flagged in admin UI.
+      const cfg = ib.config as unknown as { domain: string };
+      const secret = mtprotoSecret(user.xrayUuid, cfg.domain);
+      endpoints.push({
+        protocol: 'mtproto',
+        nodeName,
+        host,
+        port,
+        secret,
+        domain: cfg.domain,
+        uri: buildMtprotoUri({ secret, host, port, name: nodeName }),
+        tmeUri: buildMtprotoTmeUri({ secret, host, port }),
+      });
+    } else if (ib.protocol === 'mieru' && user.xrayUuid) {
+      // Slice 40 — Mieru. Username = panel username for log-readability;
+      // password = xrayUuid (no extra credential surface).
+      const cfg = ib.config as unknown as { mtu: number };
+      endpoints.push({
+        protocol: 'mieru',
+        nodeName,
+        host,
+        port,
+        username: user.username,
+        password: user.xrayUuid,
+        mtu: cfg.mtu,
+        uri: buildMieruUri({
+          username: user.username,
+          password: user.xrayUuid,
+          host,
+          port,
+          mtu: cfg.mtu,
+          name: nodeName,
+        }),
       });
     } else if (ib.protocol === 'shadowsocks' && user.xrayUuid) {
       // Slice 24d — Shadowsocks (SS2022). Per-user password reuses

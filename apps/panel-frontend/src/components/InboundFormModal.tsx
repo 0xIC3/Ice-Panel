@@ -92,6 +92,12 @@ interface FormValues {
     | 'chacha20-ietf-poly1305'
     | 'aes-256-gcm'
     | 'aes-128-gcm';
+
+  // MTProto (slice 41)
+  mtgDomain: string;
+
+  // Mieru (slice 40)
+  mieruMtu: number | '';
 }
 
 const TSPU_PRESET = { jc: 4, jmin: 40, jmax: 89, s1: 72, s2: 56, s3: 32, s4: 16 };
@@ -147,6 +153,9 @@ function defaults(rule: Inbound | null, defaultNodeId: string): FormValues {
     naiveMasquerade: '/var/www/html',
 
     ssMethod: '2022-blake3-aes-256-gcm',
+
+    mtgDomain: 'www.cloudflare.com',
+    mieruMtu: 1400,
   };
 
   if (!rule) return base;
@@ -209,6 +218,16 @@ function defaults(rule: Inbound | null, defaultNodeId: string): FormValues {
       return {
         ...base,
         ssMethod: ((cfg.method as FormValues['ssMethod']) ?? base.ssMethod),
+      };
+    case 'mtproto':
+      return {
+        ...base,
+        mtgDomain: (cfg.domain as string) ?? base.mtgDomain,
+      };
+    case 'mieru':
+      return {
+        ...base,
+        mieruMtu: ((cfg.mtu as number) ?? base.mieruMtu),
       };
     default:
       return base;
@@ -338,6 +357,16 @@ export function InboundFormModal({ opened, onClose, inbound, nodes, onSubmit, lo
           method: values.ssMethod,
         };
         break;
+      case 'mtproto':
+        config = {
+          domain: values.mtgDomain,
+        };
+        break;
+      case 'mieru':
+        config = {
+          mtu: values.mieruMtu === '' ? 1400 : Number(values.mieruMtu),
+        };
+        break;
     }
 
     // Slice 25: empty string → null (clears the override on update, omits
@@ -400,6 +429,8 @@ export function InboundFormModal({ opened, onClose, inbound, nodes, onSubmit, lo
               { value: 'amneziawg', label: 'AmneziaWG' },
               { value: 'naive', label: 'NaiveProxy' },
               { value: 'shadowsocks', label: 'Shadowsocks 2022' },
+              { value: 'mtproto', label: 'MTProto (Telegram-only, mtg)' },
+              { value: 'mieru', label: 'Mieru (stealth proxy)' },
             ]}
             disabled={isEdit}
             allowDeselect={false}
@@ -703,6 +734,55 @@ export function InboundFormModal({ opened, onClose, inbound, nodes, onSubmit, lo
                   Per-user password reuses each user's <Code>xrayUuid</Code> — no
                   separate credential to manage. Make sure SS users have <Code>xray</Code>
                   enabled in their protocol list (the same UUID drives both).
+                </Text>
+              </Alert>
+            </Stack>
+          )}
+
+          {form.values.protocol === 'mtproto' && (
+            <Stack>
+              <TextInput
+                label="Masquerade domain"
+                placeholder="www.cloudflare.com"
+                description="Legitimate site mtg masquerades as during Fake-TLS handshake. Hex-baked into every per-user secret."
+                required
+                {...form.getInputProps('mtgDomain')}
+              />
+              <Alert color="yellow" variant="light">
+                <Text size="sm">
+                  Changing the domain rotates EVERY user's secret. Their existing
+                  subscription URLs stop working — they need a fresh sub fetch.
+                  Plan ahead before saving.
+                </Text>
+              </Alert>
+              <Alert color="blue" variant="light">
+                <Text size="sm">
+                  MTProto is <b>Telegram-only</b>. Make sure users have <Code>mtproto</Code>
+                  in their enabled protocols. Per-user secret derives from each
+                  user's <Code>xrayUuid</Code> — no separate credential.
+                </Text>
+              </Alert>
+            </Stack>
+          )}
+
+          {form.values.protocol === 'mieru' && (
+            <Stack>
+              <NumberInput
+                label="MTU"
+                placeholder="1400"
+                description="Inner-payload size cap. Default 1400. Drop to 1280 on PPPoE / weird VPN paths."
+                min={576}
+                max={1500}
+                allowDecimal={false}
+                allowNegative={false}
+                {...form.getInputProps('mieruMtu')}
+              />
+              <Alert color="blue" variant="light">
+                <Text size="sm">
+                  Mieru clients (mieru-cli, GoMieru-Android, mieru-iOS) consume a
+                  JSON profile. Subscription endpoint serves this via{' '}
+                  <Code>?format=mieru-json</Code>. Per-user creds reuse
+                  username + xrayUuid — no separate password.
                 </Text>
               </Alert>
             </Stack>

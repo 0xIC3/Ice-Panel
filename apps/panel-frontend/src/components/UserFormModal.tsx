@@ -34,6 +34,8 @@ const PROTOCOL_OPTIONS: { value: ProtocolName; label: string }[] = [
   { value: 'amneziawg', label: 'AmneziaWG' },
   { value: 'naive', label: 'NaiveProxy' },
   { value: 'shadowsocks', label: 'Shadowsocks 2022' },
+  { value: 'mtproto', label: 'MTProto (Telegram-only)' },
+  { value: 'mieru', label: 'Mieru (stealth proxy)' },
 ];
 
 interface FormValues {

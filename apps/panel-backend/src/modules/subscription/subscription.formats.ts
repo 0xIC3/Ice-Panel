@@ -16,6 +16,19 @@ export {
   type ShadowsocksUriOpts,
   type ShadowsocksMethod,
 } from '../../core-adapters/shadowsocks/index.js';
+export {
+  buildMtprotoUri,
+  buildMtprotoTmeUri,
+  mtprotoSecret,
+  type MtprotoUriOpts,
+} from '../../core-adapters/mtproto/index.js';
+export {
+  buildMieruUri,
+  buildMieruProfileJson,
+  type MieruUriOpts,
+  type MieruProfileOpts,
+  type MieruProfileJson,
+} from '../../core-adapters/mieru/index.js';
 
 /**
  * Strip the optional `:port` suffix from a `host[:port]` string. Returns
@@ -118,12 +131,32 @@ export interface ShadowsocksSubscriptionEndpoint extends SubscriptionEndpointBas
   password: string;
 }
 
+export interface MtprotoSubscriptionEndpoint extends SubscriptionEndpointBase {
+  protocol: 'mtproto';
+  /** Per-user Fake-TLS secret (hex, `ee<32-bytes><domain-hex>`). */
+  secret: string;
+  /** The masquerade domain — useful for non-URI formats that want it
+   *  surfaced separately from the embedded hex. */
+  domain: string;
+  /** `https://t.me/proxy?...` — clickable in any browser/messenger. */
+  tmeUri: string;
+}
+
+export interface MieruSubscriptionEndpoint extends SubscriptionEndpointBase {
+  protocol: 'mieru';
+  username: string;
+  password: string;
+  mtu: number;
+}
+
 export type SubscriptionEndpoint =
   | HysteriaSubscriptionEndpoint
   | XraySubscriptionEndpoint
   | AmneziawgSubscriptionEndpoint
   | NaiveSubscriptionEndpoint
-  | ShadowsocksSubscriptionEndpoint;
+  | ShadowsocksSubscriptionEndpoint
+  | MtprotoSubscriptionEndpoint
+  | MieruSubscriptionEndpoint;
 
 export interface SubscriptionJsonResponse {
   user: {

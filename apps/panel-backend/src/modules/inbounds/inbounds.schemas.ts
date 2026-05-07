@@ -134,6 +134,34 @@ export const ShadowsocksConfigSchema = z.object({
   method: ShadowsocksMethodSchema.default('2022-blake3-aes-256-gcm'),
 });
 
+/**
+ * MTProto Telegram-proxy config (slice 41). Uses `9seconds/mtg` server.
+ *
+ * Single tunable today: `domain` — the legitimate site mtg masquerades
+ * as during Fake-TLS handshake. Any reachable, plausible site works
+ * (`www.cloudflare.com`, `www.google.com`, etc). Changing domain rotates
+ * every user's secret because the domain is hex-baked into each per-user
+ * secret string — UI must warn before save.
+ */
+export const MtprotoConfigSchema = z.object({
+  domain: z
+    .string()
+    .min(1)
+    .max(253)
+    .regex(/^[a-zA-Z0-9.-]+$/, 'Hostname only (no scheme, no path)')
+    .default('www.cloudflare.com'),
+});
+
+/**
+ * Mieru stealth-proxy config (slice 40). Uses `enfein/mieru` server (`mita`).
+ *
+ * MTU is the only commonly-tuned knob. Default 1400 leaves headroom on
+ * most paths; admins on PPPoE / weird VPNs may drop to 1280.
+ */
+export const MieruConfigSchema = z.object({
+  mtu: z.number().int().min(576).max(1500).default(1400),
+});
+
 // Discriminated union over `protocol`. Used for create/update body validation.
 export const InboundConfigByProtocol = z.discriminatedUnion('protocol', [
   z.object({ protocol: z.literal('hysteria'), config: HysteriaConfigSchema }),
@@ -141,6 +169,8 @@ export const InboundConfigByProtocol = z.discriminatedUnion('protocol', [
   z.object({ protocol: z.literal('amneziawg'), config: AmneziawgConfigSchema }),
   z.object({ protocol: z.literal('naive'), config: NaiveConfigSchema }),
   z.object({ protocol: z.literal('shadowsocks'), config: ShadowsocksConfigSchema }),
+  z.object({ protocol: z.literal('mtproto'), config: MtprotoConfigSchema }),
+  z.object({ protocol: z.literal('mieru'), config: MieruConfigSchema }),
 ]);
 
 // Public-facing host the panel emits in client URIs. Must be a hostname or
@@ -196,11 +226,13 @@ export const PROTOCOL_CONFIG_SCHEMAS = {
   amneziawg: AmneziawgConfigSchema,
   naive: NaiveConfigSchema,
   shadowsocks: ShadowsocksConfigSchema,
+  mtproto: MtprotoConfigSchema,
+  mieru: MieruConfigSchema,
 } as const;
 
 export const ListInboundsQuerySchema = z.object({
   nodeId: z.uuid().optional(),
-  protocol: z.enum(['hysteria', 'xray', 'amneziawg', 'naive', 'shadowsocks']).optional(),
+  protocol: z.enum(['hysteria', 'xray', 'amneziawg', 'naive', 'shadowsocks', 'mtproto', 'mieru']).optional(),
 });
 export type ListInboundsQuery = z.infer<typeof ListInboundsQuerySchema>;
 

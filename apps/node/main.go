@@ -12,6 +12,8 @@ import (
 
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core/hysteria"
+	"github.com/0xIC3/Ice-Panel/apps/node/internal/core/mieru"
+	"github.com/0xIC3/Ice-Panel/apps/node/internal/core/mtproto"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core/shadowsocks"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core/xray"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/payload"
@@ -131,6 +133,37 @@ func buildAdapters(logger *slog.Logger) []core.CoreAdapter {
 		}
 		adapters = append(adapters, shadowsocks.New(ssCfg, logger))
 		logger.Info("shadowsocks adapter registered")
+	}
+
+	// Slice 41 — MTProto via 9seconds/mtg. Adapter waits for the panel to
+	// push a Domain via ApplyInbound; until then it sits inert.
+	if os.Getenv("MTG_BINARY") != "" {
+		mtgCfg := mtproto.Config{
+			BinaryPath: os.Getenv("MTG_BINARY"),
+			ConfigPath: getenv("MTG_CONFIG", "/etc/mtg/config.toml"),
+			Inbound: mtproto.InboundConfig{
+				ListenPort: getenvInt("MTG_PORT", 443),
+				StatsPort:  getenvInt("MTG_STATS_PORT", 3129),
+				Domain:     os.Getenv("MTG_DOMAIN"), // empty → deferred until ApplyInbound
+			},
+		}
+		adapters = append(adapters, mtproto.New(mtgCfg, logger))
+		logger.Info("mtproto adapter registered")
+	}
+
+	// Slice 40 — Mieru via enfein/mieru's `mita` server.
+	if os.Getenv("MITA_BINARY") != "" {
+		mieruCfg := mieru.Config{
+			BinaryPath: os.Getenv("MITA_BINARY"),
+			ConfigPath: getenv("MITA_CONFIG", "/etc/mita/server.yaml"),
+			Inbound: mieru.InboundConfig{
+				ListenPort:   getenvInt("MITA_PORT", 2012),
+				MTU:          getenvInt("MITA_MTU", 1400),
+				LoggingLevel: getenv("MITA_LOG_LEVEL", "INFO"),
+			},
+		}
+		adapters = append(adapters, mieru.New(mieruCfg, logger))
+		logger.Info("mieru adapter registered")
 	}
 
 	return adapters
