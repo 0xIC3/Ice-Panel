@@ -109,6 +109,7 @@ export interface User {
   lifetimeTrafficBytes: number;
   trafficLimitStrategy: TrafficLimitStrategy;
   lastTrafficResetAt: string | null;
+  lastOnlineAt: string | null;
   subscriptionToken: string;
   subRevokedAt: string | null;
   hwidDeviceLimit: number | null;
@@ -138,6 +139,8 @@ export interface CreateUserInput {
   description?: string | null;
   tag?: string | null;
   email?: string | null;
+  telegramId?: string | null;
+  hwidDeviceLimit?: number | null;
   enabledProtocols?: ProtocolName[];
   /** Slice 26 — squad membership. Empty/undefined → backend auto-adds to All. */
   groupIds?: string[];
@@ -151,6 +154,8 @@ export interface UpdateUserInput {
   description?: string | null;
   tag?: string | null;
   email?: string | null;
+  telegramId?: string | null;
+  hwidDeviceLimit?: number | null;
   enabledProtocols?: ProtocolName[];
   /** Slice 26 — replaces the full squad set when provided. */
   groupIds?: string[];

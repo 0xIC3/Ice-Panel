@@ -19,6 +19,8 @@ export interface PublicUserDto {
   lifetimeTrafficBytes: number;
   trafficLimitStrategy: string;
   lastTrafficResetAt: string | null;
+  /** When the user last connected (touched any node). null = never online. */
+  lastOnlineAt: string | null;
 
   // Subscription URL
   subscriptionToken: string;
@@ -75,6 +77,7 @@ export function mapUserToPublic(
     lastTrafficResetAt: traffic?.lastTrafficResetAt
       ? traffic.lastTrafficResetAt.toISOString()
       : null,
+    lastOnlineAt: traffic?.onlineAt ? traffic.onlineAt.toISOString() : null,
 
     subscriptionToken: user.subscriptionToken,
     subRevokedAt: user.subRevokedAt ? user.subRevokedAt.toISOString() : null,
