@@ -248,7 +248,7 @@ function SquadCard({
   onDelete: () => void;
 }) {
   const isAll = squad.id === ALL_SQUAD_ID;
-  const inboundCount = squad.inboundIds.length;
+  const profileCount = squad.profileIds.length;
   const memberCount = squad.memberCount;
 
   return (
@@ -319,9 +319,9 @@ function SquadCard({
       <Group gap="xs" mb="md">
         <CountBadge
           icon={<IconLink size={12} />}
-          value={inboundCount}
+          value={profileCount}
           color="indigo"
-          tooltip="Inbound'ов"
+          tooltip="Профилей"
         />
         <CountBadge
           icon={<IconUsers size={12} />}
