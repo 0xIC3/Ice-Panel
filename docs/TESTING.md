@@ -458,9 +458,9 @@ Per-slice verification checklists. Use when **closing** a slice or when re-valid
 - [x] Adapter unit tests — 14 cases covering Name, AddUser/RemoveUser, ApplyInbound paths, parser, stats soft-fail
 - [x] Config render tests — 5 cases (validation, defaults, inbound shape, stats wiring, routing defaults, api-in loopback)
 
-### TODO (separate commits)
-- [ ] singbox formatter — emit `{type: 'shadowsocks', server, server_port, method, password}` outbound
-- [ ] clash formatter — emit `{name, type: ss, server, port, cipher, password}` proxy
+### Subscription format support (post-24d follow-up)
+- [x] singbox formatter — `{type: 'shadowsocks', server, server_port, method, password}` outbound emitted; Trojan branched (`type: trojan` with password instead of uuid, no flow); ws/httpupgrade/grpc transport blocks for VLESS/Trojan
+- [x] clash formatter — `{type: ss, cipher, password, udp: true}` proxy; Trojan (`type: trojan` with password); transport-specific opts (ws-opts/httpupgrade-opts/grpc-opts); raw → `network: tcp` (Clash terminology)
 - [ ] VPS validation: real SS2022 client (Shadowrocket/Outline/sing-box) connects through ice-panel-issued URI
 
 ---

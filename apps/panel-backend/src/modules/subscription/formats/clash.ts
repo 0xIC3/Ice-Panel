@@ -1,13 +1,15 @@
 import type { SubscriptionEndpoint } from '../subscription.formats.js';
 
 /**
- * Clash YAML subscription formatter (targets Clash Meta — covers VLESS+REALITY
- * and Hysteria2 native types).
+ * Clash YAML subscription formatter (targets Clash Meta / Mihomo — covers
+ * VLESS+REALITY, Hysteria2, Trojan+REALITY, and Shadowsocks native types).
  *
  * Scope:
- *   - hysteria → `type: hysteria2`
- *   - xray (VLESS+REALITY+Vision) → `type: vless` with `reality-opts`
- *   - amneziawg/naive are NOT emitted: classic Clash has no native support
+ *   - hysteria              → `type: hysteria2`
+ *   - xray (VLESS+REALITY)  → `type: vless` with `reality-opts`
+ *   - xray (Trojan+REALITY) → `type: trojan` with `reality-opts` (slice 24c part 3a)
+ *   - shadowsocks           → `type: ss` with cipher + password (slice 24d)
+ *   - amneziawg / naive are NOT emitted: classic Clash has no native support
  *     and Clash Meta's experimental wireguard/naive support diverges per
  *     fork. AmneziaWG users get the wg-quick `.conf` format; Naive users
  *     get the naive+https URI directly.
@@ -50,22 +52,77 @@ export function buildClashYaml(endpoints: SubscriptionEndpoint[]): string {
       proxies.push(lines.join('\n'));
     } else if (e.protocol === 'xray') {
       proxyNames.push(name);
+      // Slice 24c part 3a — Trojan subprotocol shares REALITY but switches
+      // proxy type and the auth field.
+      const isTrojan = e.subprotocol === 'trojan';
+      // Slice 24c part 2 — Clash Meta `network` field accepts the same
+      // transport names as our wire (raw is "tcp" in clash terminology).
+      const network = e.network === 'raw' || !e.network ? 'tcp' : e.network;
+
+      const block = [
+        `  - name: ${yamlString(name)}`,
+        `    type: ${isTrojan ? 'trojan' : 'vless'}`,
+        `    server: ${e.host}`,
+        `    port: ${e.port}`,
+        isTrojan
+          ? `    password: ${yamlString(e.uuid)}`
+          : `    uuid: ${e.uuid}`,
+        `    network: ${network}`,
+        `    tls: true`,
+        `    udp: true`,
+        `    servername: ${yamlString(e.sni)}`,
+      ];
+      // Vision flow is VLESS-only — Clash Meta rejects `flow:` on Trojan.
+      if (!isTrojan && e.flow) {
+        block.push(`    flow: ${yamlString(e.flow)}`);
+      }
+      block.push(
+        `    client-fingerprint: ${yamlString(e.fingerprint)}`,
+        `    reality-opts:`,
+        `      public-key: ${yamlString(e.publicKey)}`,
+        `      short-id: ${yamlString(e.shortId)}`,
+      );
+      // Transport-specific options for ws/grpc/httpupgrade. Clash Meta
+      // schema names mirror the upstream xray ones, with httpupgrade
+      // landing in `network: 'http-upgrade'` (note the dash) on some
+      // older Mihomo builds. We emit the canonical underscore-less form
+      // — modern Mihomo (≥1.18) accepts it.
+      if (network === 'ws' || network === 'http-upgrade' || network === 'httpupgrade') {
+        const optsKey = network === 'grpc' ? 'grpc-opts' : `${network}-opts`;
+        const opts: string[] = [];
+        if (e.path) opts.push(`      path: ${yamlString(e.path)}`);
+        if (e.hostHeader) {
+          if (network === 'ws') {
+            opts.push(`      headers:`);
+            opts.push(`        Host: ${yamlString(e.hostHeader)}`);
+          } else {
+            opts.push(`      host: ${yamlString(e.hostHeader)}`);
+          }
+        }
+        if (opts.length > 0) {
+          block.push(`    ${optsKey}:`);
+          block.push(...opts);
+        }
+      }
+      if (network === 'grpc' && e.serviceName) {
+        block.push(`    grpc-opts:`);
+        block.push(`      grpc-service-name: ${yamlString(e.serviceName)}`);
+      }
+
+      proxies.push(block.join('\n'));
+    } else if (e.protocol === 'shadowsocks') {
+      // Slice 24d — Clash Meta uses `type: ss` with a `cipher` field that
+      // matches our `method` exactly (clash and xray share the SS2022 names).
+      proxyNames.push(name);
       proxies.push(
         [
           `  - name: ${yamlString(name)}`,
-          `    type: vless`,
+          `    type: ss`,
           `    server: ${e.host}`,
           `    port: ${e.port}`,
-          `    uuid: ${e.uuid}`,
-          `    network: tcp`,
-          `    tls: true`,
+          `    cipher: ${yamlString(e.method)}`,
+          `    password: ${yamlString(e.password)}`,
           `    udp: true`,
-          `    servername: ${yamlString(e.sni)}`,
-          `    flow: ${yamlString(e.flow)}`,
-          `    client-fingerprint: ${yamlString(e.fingerprint)}`,
-          `    reality-opts:`,
-          `      public-key: ${yamlString(e.publicKey)}`,
-          `      short-id: ${yamlString(e.shortId)}`,
         ].join('\n'),
       );
     }

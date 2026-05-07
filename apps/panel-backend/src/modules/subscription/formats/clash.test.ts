@@ -22,7 +22,24 @@ const xrayEp: SubscriptionEndpoint = {
   sni: 'www.cloudflare.com',
   flow: 'xtls-rprx-vision',
   fingerprint: 'chrome',
+  network: 'raw',
   uri: 'vless://...',
+};
+
+const trojanEp: SubscriptionEndpoint = {
+  ...xrayEp,
+  subprotocol: 'trojan',
+  uri: 'trojan://...',
+};
+
+const ssEp: SubscriptionEndpoint = {
+  protocol: 'shadowsocks',
+  nodeName: 'eu-1',
+  host: 'n1.example.com',
+  port: 8388,
+  method: '2022-blake3-aes-256-gcm',
+  password: 'cabc78ae-94e3-4a16-936a-133d059acfac',
+  uri: 'ss://...',
 };
 
 describe('buildClashYaml', () => {
@@ -85,5 +102,78 @@ describe('buildClashYaml', () => {
 
   it('output ends with a newline', () => {
     expect(buildClashYaml([hysteriaEp]).endsWith('\n')).toBe(true);
+  });
+
+  // ───── Slice 24c part 3a — Trojan subprotocol ─────
+
+  it('emits a trojan proxy entry when subprotocol=trojan', () => {
+    const out = buildClashYaml([trojanEp]);
+    expect(out).toContain('type: trojan');
+    expect(out).toContain('password: 11111111-2222-3333-4444-555555555555');
+    expect(out).not.toContain('uuid:'); // Trojan uses password, not uuid
+    expect(out).not.toContain('flow:'); // Vision flow VLESS-only
+    // REALITY block still emitted
+    expect(out).toContain('reality-opts:');
+    expect(out).toContain('public-key: pubkey-base64url');
+  });
+
+  // ───── Slice 24d — Shadowsocks ─────
+
+  it('emits a shadowsocks (ss) proxy entry with cipher + password + udp', () => {
+    const out = buildClashYaml([ssEp]);
+    expect(out).toContain('- name: eu-1-shadowsocks');
+    expect(out).toContain('type: ss');
+    expect(out).toContain('server: n1.example.com');
+    expect(out).toContain('port: 8388');
+    expect(out).toContain('cipher: 2022-blake3-aes-256-gcm');
+    expect(out).toContain('password: cabc78ae-94e3-4a16-936a-133d059acfac');
+    expect(out).toContain('udp: true');
+    // SS doesn't have TLS / REALITY blocks
+    expect(out).not.toContain('tls: true');
+    expect(out).not.toContain('reality-opts:');
+  });
+
+  it('mixed sub: ss alongside hysteria + vless lands in url-test group', () => {
+    const out = buildClashYaml([hysteriaEp, xrayEp, ssEp]);
+    expect(out).toMatch(/- eu-1-hysteria/);
+    expect(out).toMatch(/- eu-1-xray/);
+    expect(out).toMatch(/- eu-1-shadowsocks/);
+  });
+
+  // ───── Slice 24c part 2 — transports ─────
+
+  it('emits ws-opts with path + Host header for ws network', () => {
+    const out = buildClashYaml([
+      { ...xrayEp, network: 'ws' as const, path: '/api', hostHeader: 'cdn.example.com' },
+    ]);
+    expect(out).toContain('network: ws');
+    expect(out).toContain('ws-opts:');
+    expect(out).toContain('path: /api');
+    expect(out).toContain('Host: cdn.example.com');
+  });
+
+  it('emits httpupgrade-opts for httpupgrade network', () => {
+    const out = buildClashYaml([
+      { ...xrayEp, network: 'httpupgrade' as const, path: '/u', hostHeader: 'cdn.example.com' },
+    ]);
+    expect(out).toContain('network: httpupgrade');
+    expect(out).toContain('httpupgrade-opts:');
+    expect(out).toContain('path: /u');
+    expect(out).toContain('host: cdn.example.com');
+  });
+
+  it('emits grpc-opts with grpc-service-name for grpc network', () => {
+    const out = buildClashYaml([
+      { ...xrayEp, network: 'grpc' as const, serviceName: 'GunSvc' },
+    ]);
+    expect(out).toContain('network: grpc');
+    expect(out).toContain('grpc-opts:');
+    expect(out).toContain('grpc-service-name: GunSvc');
+  });
+
+  it('emits network: tcp on raw (Clash terminology)', () => {
+    const out = buildClashYaml([xrayEp]); // network: 'raw'
+    expect(out).toContain('network: tcp');
+    expect(out).not.toContain('network: raw');
   });
 });

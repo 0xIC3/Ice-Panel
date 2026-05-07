@@ -5,11 +5,16 @@ import type { SubscriptionEndpoint } from '../subscription.formats.js';
  *
  * Targets Sing-box itself, Hiddify-Next, NekoBox-iOS, NekoBox-Android.
  *
- * Scope mirrors the Clash formatter: hysteria2 + vless+REALITY+Vision only.
- * AmneziaWG/Naive get their own native formats (wg-quick conf and the
- * naive+https URI respectively). Adding them here would require sing-box's
- * `wireguard` outbound (which lacks the AmneziaWG obfuscation params) or
- * a `naive` outbound that doesn't exist upstream.
+ * Scope:
+ *   - hysteria2          (slice 21)
+ *   - xray vless+REALITY (slice 21, slice 24c part 2 transports)
+ *   - xray trojan+REALITY (slice 24c part 3a)
+ *   - shadowsocks (SS2022 + legacy AEAD) (slice 24d)
+ *
+ * AmneziaWG/Naive are NOT emitted: AmneziaWG users get the wg-quick `.conf`
+ * format; Naive users get the `naive+https` URI directly. Adding them here
+ * would require sing-box's `wireguard` outbound (which lacks the AmneziaWG
+ * obfuscation params) or a `naive` outbound that doesn't exist upstream.
  *
  * Output shape — minimal valid sing-box config:
  *   - `log`: standard
@@ -49,13 +54,48 @@ export function buildSingboxJson(endpoints: SubscriptionEndpoint[]): string {
       });
     } else if (e.protocol === 'xray') {
       proxyTags.push(tag);
+
+      // Slice 24c part 3a — branch outbound type on subprotocol. Trojan
+      // shares REALITY but uses a password and no Vision flow.
+      const isTrojan = e.subprotocol === 'trojan';
+
+      // Slice 24c part 2 — transport selector. Reality+Vision canonical is
+      // `raw`; clients accept omitted transport for raw, but other transports
+      // need an explicit `transport` block per sing-box schema.
+      const transport =
+        e.network === 'ws'
+          ? {
+              transport: {
+                type: 'ws',
+                ...(e.path ? { path: e.path } : {}),
+                ...(e.hostHeader ? { headers: { Host: e.hostHeader } } : {}),
+              },
+            }
+          : e.network === 'httpupgrade'
+            ? {
+                transport: {
+                  type: 'httpupgrade',
+                  ...(e.path ? { path: e.path } : {}),
+                  ...(e.hostHeader ? { host: e.hostHeader } : {}),
+                },
+              }
+            : e.network === 'grpc'
+              ? {
+                  transport: {
+                    type: 'grpc',
+                    service_name: e.serviceName ?? '',
+                  },
+                }
+              : {};
+
       outbounds.push({
-        type: 'vless',
+        type: isTrojan ? 'trojan' : 'vless',
         tag,
         server: e.host,
         server_port: e.port,
-        uuid: e.uuid,
-        flow: e.flow,
+        ...(isTrojan
+          ? { password: e.uuid }                      // Trojan: UUID is the password
+          : { uuid: e.uuid, ...(e.flow ? { flow: e.flow } : {}) }), // VLESS
         tls: {
           enabled: true,
           server_name: e.sni,
@@ -66,6 +106,23 @@ export function buildSingboxJson(endpoints: SubscriptionEndpoint[]): string {
             short_id: e.shortId,
           },
         },
+        ...transport,
+      });
+    } else if (e.protocol === 'shadowsocks') {
+      // Slice 24d — Shadowsocks 2022 (and legacy AEAD). No TLS layer; the
+      // AEAD ciphertext is the disguise. method+password drives the outbound.
+      proxyTags.push(tag);
+      outbounds.push({
+        type: 'shadowsocks',
+        tag,
+        server: e.host,
+        server_port: e.port,
+        method: e.method,
+        password: e.password,
+        // SS2022 supports UDP relay; sing-box defaults `network: tcp` so
+        // we must enable UDP explicitly to match what the server emits.
+        network: 'tcp',
+        udp_over_tcp: false,
       });
     }
   }
