@@ -1,4 +1,5 @@
 import { prisma } from '../../prisma.js';
+import { collectSystemMetrics, type SystemMetrics } from './system-metrics.js';
 
 const ONLINE_NOW_WINDOW_MS = 3 * 60 * 1000;
 const TOP_USERS_LIMIT = 5;
@@ -23,11 +24,10 @@ export interface DashboardOverview {
     last24hHourly: { hour: string; bytes: number }[];
   };
   system: {
-    totalRamBytes: number | null;
-    usedRamBytes: number | null;
     onlineNodeCount: number;
     totalNodeCount: number;
   };
+  host: SystemMetrics;
   nodes: {
     id: string;
     name: string;
@@ -246,8 +246,6 @@ async function nodeMetrics(): Promise<{
   return {
     nodes: nodeRows,
     system: {
-      totalRamBytes: null,
-      usedRamBytes: null,
       onlineNodeCount,
       totalNodeCount: nodes.length,
     },
@@ -337,19 +335,22 @@ async function recentEvents(): Promise<DashboardOverview['recentEvents']> {
 }
 
 export async function getOverview(): Promise<DashboardOverview> {
-  const [users, traffic, nodesAndSystem, byProtocol, topUsers, events] = await Promise.all([
-    userMetrics(),
-    trafficMetrics(),
-    nodeMetrics(),
-    protocolMetrics(),
-    topUsersToday(),
-    recentEvents(),
-  ]);
+  const [users, traffic, nodesAndSystem, byProtocol, topUsers, events, host] =
+    await Promise.all([
+      userMetrics(),
+      trafficMetrics(),
+      nodeMetrics(),
+      protocolMetrics(),
+      topUsersToday(),
+      recentEvents(),
+      collectSystemMetrics(),
+    ]);
 
   return {
     users,
     traffic,
     system: nodesAndSystem.system,
+    host,
     nodes: nodesAndSystem.nodes,
     byProtocol,
     topUsersToday: topUsers,

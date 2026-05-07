@@ -4,6 +4,7 @@ import {
   Card,
   Group,
   Paper,
+  Progress,
   ScrollArea,
   SimpleGrid,
   Stack,
@@ -21,6 +22,9 @@ import {
   IconCalendar,
   IconChartArea,
   IconClock,
+  IconCpu,
+  IconDatabase,
+  IconDeviceDesktopAnalytics,
   IconNetwork,
   IconServer2,
   IconTrendingUp,
@@ -254,6 +258,9 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
         </SimpleGrid>
       </Card>
 
+      {/* Host system metrics */}
+      <SystemHealth host={data.host} />
+
       {/* Two-column row: nodes + protocols */}
       <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="md">
         <Card withBorder padding="lg" radius="md">
@@ -462,6 +469,129 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
       </Group>
     </Stack>
   );
+}
+
+function SystemHealth({ host }: { host: DashboardOverview['host'] }) {
+  const cpuPct = host.cpu.samplePercent;
+  const cpuColor = cpuPct > 85 ? 'red' : cpuPct > 60 ? 'yellow' : 'teal';
+  const memColor =
+    host.memory.usedPercent > 90 ? 'red' : host.memory.usedPercent > 75 ? 'yellow' : 'teal';
+  const diskColor = host.disk
+    ? host.disk.usedPercent > 90
+      ? 'red'
+      : host.disk.usedPercent > 80
+        ? 'yellow'
+        : 'teal'
+    : 'gray';
+
+  return (
+    <Card withBorder padding="lg" radius="md">
+      <Group gap="xs" mb="md">
+        <ThemeIcon size={28} radius="md" variant="light" color="blue">
+          <IconDeviceDesktopAnalytics size={16} />
+        </ThemeIcon>
+        <Stack gap={0}>
+          <Text fw={600}>Состояние панели</Text>
+          <Text size="xs" c="dimmed">
+            Хост, на котором работает API · uptime {formatUptime(host.process.uptimeSeconds)}
+          </Text>
+        </Stack>
+      </Group>
+
+      <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="md">
+        <UsageBar
+          icon={<IconCpu size={18} />}
+          color={cpuColor}
+          label="CPU"
+          percent={cpuPct}
+          primary={`${cpuPct.toFixed(1)}%`}
+          secondary={`${host.cpu.cores} ядер · LA ${host.cpu.loadavg[0].toFixed(2)} / ${host.cpu.loadavg[1].toFixed(2)} / ${host.cpu.loadavg[2].toFixed(2)}`}
+        />
+        <UsageBar
+          icon={<IconDatabase size={18} />}
+          color={memColor}
+          label="RAM"
+          percent={host.memory.usedPercent}
+          primary={`${formatBytes(host.memory.usedBytes)} / ${formatBytes(host.memory.totalBytes)}`}
+          secondary={`${host.memory.usedPercent.toFixed(1)}% занято`}
+        />
+        <UsageBar
+          icon={<IconServer2 size={18} />}
+          color={diskColor}
+          label="Диск"
+          percent={host.disk?.usedPercent ?? 0}
+          primary={
+            host.disk
+              ? `${formatBytes(host.disk.usedBytes)} / ${formatBytes(host.disk.totalBytes)}`
+              : '—'
+          }
+          secondary={
+            host.disk
+              ? `${host.disk.usedPercent.toFixed(1)}% занято`
+              : 'statfs недоступен'
+          }
+        />
+        <UsageBar
+          icon={<IconActivity size={18} />}
+          color="violet"
+          label="Процесс панели"
+          percent={(host.process.heapUsedBytes / Math.max(1, host.process.heapTotalBytes)) * 100}
+          primary={`RSS ${formatBytes(host.process.rssBytes)}`}
+          secondary={`Heap ${formatBytes(host.process.heapUsedBytes)} / ${formatBytes(host.process.heapTotalBytes)}`}
+        />
+      </SimpleGrid>
+    </Card>
+  );
+}
+
+function UsageBar({
+  icon,
+  label,
+  percent,
+  primary,
+  secondary,
+  color,
+}: {
+  icon: ReactNode;
+  label: string;
+  percent: number;
+  primary: string;
+  secondary: string;
+  color: string;
+}) {
+  return (
+    <Paper withBorder p="md" radius="sm">
+      <Group justify="space-between" mb="xs">
+        <Group gap="xs">
+          <ThemeIcon size={22} radius="md" variant="light" color={color}>
+            {icon}
+          </ThemeIcon>
+          <Text size="sm" fw={500}>
+            {label}
+          </Text>
+        </Group>
+        <Text size="xs" c="dimmed" ff="monospace">
+          {percent.toFixed(0)}%
+        </Text>
+      </Group>
+      <Progress value={Math.min(100, Math.max(0, percent))} color={color} size="sm" radius="xl" />
+      <Stack gap={0} mt="xs">
+        <Text size="sm" fw={600} ff="monospace">
+          {primary}
+        </Text>
+        <Text size="xs" c="dimmed">
+          {secondary}
+        </Text>
+      </Stack>
+    </Paper>
+  );
+}
+
+function formatUptime(sec: number): string {
+  if (sec < 60) return `${sec}s`;
+  if (sec < 3600) return `${Math.floor(sec / 60)}m ${sec % 60}s`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h ${Math.floor((sec % 3600) / 60)}m`;
+  return `${Math.floor(sec / 86400)}d ${Math.floor((sec % 86400) / 3600)}h`;
 }
 
 function TrafficStat({ label, value }: { label: string; value: string }) {

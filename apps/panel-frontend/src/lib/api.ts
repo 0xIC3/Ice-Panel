@@ -539,10 +539,29 @@ export interface DashboardOverview {
     last24hHourly: { hour: string; bytes: number }[];
   };
   system: {
-    totalRamBytes: number | null;
-    usedRamBytes: number | null;
     onlineNodeCount: number;
     totalNodeCount: number;
+  };
+  host: {
+    cpu: {
+      loadPercent: number | null;
+      samplePercent: number;
+      cores: number;
+      loadavg: [number, number, number];
+    };
+    memory: { totalBytes: number; usedBytes: number; usedPercent: number };
+    disk: {
+      totalBytes: number;
+      usedBytes: number;
+      usedPercent: number;
+      path: string;
+    } | null;
+    process: {
+      rssBytes: number;
+      heapUsedBytes: number;
+      heapTotalBytes: number;
+      uptimeSeconds: number;
+    };
   };
   nodes: {
     id: string;
