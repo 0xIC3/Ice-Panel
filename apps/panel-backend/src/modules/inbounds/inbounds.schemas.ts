@@ -132,6 +132,21 @@ export const ShadowsocksMethodSchema = z.enum([
 export const ShadowsocksConfigSchema = z.object({
   /** Cipher method. SS2022 (`2022-blake3-*`) recommended for new deployments. */
   method: ShadowsocksMethodSchema.default('2022-blake3-aes-256-gcm'),
+
+  /**
+   * Server PSK — required by xray-core SS2022 at the `settings.password`
+   * level. SS2022 multi-user model uses ServerPSK for the inbound itself
+   * plus per-user PSK (per `clients[]` entry); clients connect with
+   * `base64url(method:ServerPSK:UserPSK)` joined.
+   *
+   * For SS2022 ciphers the PSK MUST match the cipher's key length
+   * (16 bytes for `2022-blake3-aes-128-gcm`, 32 bytes for the others)
+   * encoded as base64. Auto-generated on inbound create when empty.
+   *
+   * Verified against XTLS/Xray-examples Shadowsocks-2022/README on
+   * 2026-05-07 — server-side `clients[]` requires `settings.password`.
+   */
+  serverPsk: z.string().min(1).max(128).optional(),
 });
 
 /**

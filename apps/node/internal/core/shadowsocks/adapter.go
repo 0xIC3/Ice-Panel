@@ -129,7 +129,8 @@ func (a *Adapter) RemoveUser(userID string) error {
 // inboundCfgWire mirrors `ShadowsocksInboundCfg` in
 // packages/shared/src/transport.ts.
 type inboundCfgWire struct {
-	Method string `json:"method"`
+	Method    string `json:"method"`
+	ServerPSK string `json:"serverPsk"`
 }
 
 // ApplyInbound parses the panel-pushed SS config, swaps it into the live
@@ -142,17 +143,21 @@ func (a *Adapter) ApplyInbound(rawCfg json.RawMessage) error {
 	if wire.Method == "" {
 		return fmt.Errorf("shadowsocks ApplyInbound: method is required")
 	}
+	if wire.ServerPSK == "" {
+		return fmt.Errorf("shadowsocks ApplyInbound: serverPsk is required")
+	}
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if a.cfg.Inbound.Method == wire.Method {
-		a.logger.Info("shadowsocks ApplyInbound: method unchanged, skipping restart")
+	if a.cfg.Inbound.Method == wire.Method && a.cfg.Inbound.ServerPSK == wire.ServerPSK {
+		a.logger.Info("shadowsocks ApplyInbound: config unchanged, skipping restart")
 		return nil
 	}
 
 	a.cfg.Inbound.Method = wire.Method
-	a.logger.Info("shadowsocks ApplyInbound: method changed, regenerating + restarting",
+	a.cfg.Inbound.ServerPSK = wire.ServerPSK
+	a.logger.Info("shadowsocks ApplyInbound: config changed, regenerating + restarting",
 		"method", wire.Method)
 	return a.regenerateAndRestartLocked(context.Background())
 }

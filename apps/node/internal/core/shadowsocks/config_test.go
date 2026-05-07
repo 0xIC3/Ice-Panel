@@ -10,6 +10,7 @@ func validInbound() InboundConfig {
 	return InboundConfig{
 		ListenPort: 8388,
 		Method:     "2022-blake3-aes-256-gcm",
+		ServerPSK:  "BASE64-FAKE-32-BYTE-SERVER-PSK==",
 		ApiPort:    8081,
 	}
 }
@@ -22,6 +23,7 @@ func TestInboundValidation(t *testing.T) {
 	}{
 		{"missing method", func(c *InboundConfig) { c.Method = "" }, "Method is required"},
 		{"unsupported method", func(c *InboundConfig) { c.Method = "rc4-md5" }, "unsupported"},
+		{"missing server PSK", func(c *InboundConfig) { c.ServerPSK = "" }, "ServerPSK is required"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -31,6 +33,23 @@ func TestInboundValidation(t *testing.T) {
 				t.Errorf("validate: got %v want error containing %q", err, tc.wantErr)
 			}
 		})
+	}
+}
+
+func TestRender_EmitsServerPSK(t *testing.T) {
+	// Slice 24d (fix 2026-05-07): xray-core SS2022 multi-user requires
+	// `settings.password` (server PSK) at the inbound level alongside
+	// per-user `clients[].password`. Anti-regression test.
+	m := renderToMap(t, validInbound(), nil)
+	for _, raw := range m["inbounds"].([]any) {
+		inb := raw.(map[string]any)
+		if inb["protocol"] != "shadowsocks" {
+			continue
+		}
+		settings := inb["settings"].(map[string]any)
+		if settings["password"] != "BASE64-FAKE-32-BYTE-SERVER-PSK==" {
+			t.Errorf("settings.password (server PSK) missing/wrong: %v", settings["password"])
+		}
 	}
 }
 

@@ -137,6 +137,11 @@ export interface NaiveInboundCfg {
  * Shadowsocks 2022 inbound config (slice 24d). Method = AEAD/SS2022 cipher.
  * Per-user passwords are derived from `user.xrayUuid` on both sides — we
  * don't grow the credential surface for a fifth protocol.
+ *
+ * `serverPsk` (Server PSK) is auto-generated at inbound create on the
+ * panel side and pushed over the wire. xray-core requires it at the
+ * `settings.password` level for SS2022 multi-user; clients connect with
+ * `base64url(method:ServerPSK:UserPSK)` joined.
  */
 export interface ShadowsocksInboundCfg {
   method:
@@ -146,6 +151,7 @@ export interface ShadowsocksInboundCfg {
     | 'chacha20-ietf-poly1305'
     | 'aes-256-gcm'
     | 'aes-128-gcm';
+  serverPsk?: string;
 }
 
 /**

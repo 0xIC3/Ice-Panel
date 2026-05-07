@@ -54,9 +54,34 @@ Per-user `password` is the user's PSK. For SS2022 ciphers it must be **exactly t
 - `2022-blake3-aes-256-gcm`: 32 bytes (base64 → 44 chars)
 - `2022-blake3-chacha20-poly1305`: 32 bytes
 
-**Our shortcut (slice 24d):** we use `user.xrayUuid` (a 36-char UUID string) directly as the password. The string contains 36 ASCII bytes which xray's PSK derivation hashes down to the right length internally. **This is non-canonical** — the spec wants raw key bytes base64-encoded. xray-core tolerates string passwords by hashing, but other SS2022 servers (sing-box, ss-rust) may not. Document for users: "the panel-issued URL works only with xray-core SS2022 implementations" if we hit interop issues.
+**Our shortcut (slice 24d):** we use `user.xrayUuid` (a 36-char UUID string) directly as the per-user password. The string contains 36 ASCII bytes which xray's PSK derivation hashes down to the right length internally. **This is non-canonical** — the spec wants raw key bytes base64-encoded. xray-core tolerates string passwords by hashing, but other SS2022 servers (sing-box, ss-rust) may not. Document for users: "the panel-issued URL works only with xray-core SS2022 implementations" if we hit interop issues.
 
 **Cleaner alternative for v2:** generate a real 32-byte PSK per user, store base64 in `users.shadowsocksPassword`. Add when there's actual demand. Today's UUID-as-password works in xray and in clients that hit xray.
+
+## ⚠️ CORRECTION (2026-05-07): Server PSK was missing
+
+Earlier draft of slice 24d shipped without a server-level PSK at the
+`settings.password` slot. Verified against
+`XTLS/Xray-examples/Shadowsocks-2022/README.ENG.md`: xray-core SS2022
+multi-user mode requires:
+
+- `settings.method` — cipher
+- `settings.password` — **server PSK** (auto-generated 32-byte base64 in our flow)
+- `settings.clients[i].password` — **per-user PSK**
+- `settings.network` — `"tcp,udp"` for full SS2022 features
+
+**Client URI** colon-joins both: `base64url(method:ServerPSK:UserPSK)`.
+That's enforced now in `buildShadowsocksUri` — pass `serverPsk` for
+SS2022, omit for legacy AEAD single-tenant.
+
+The earlier code emitted only `base64url(method:UserPSK)` — single-
+tenant format that breaks in xray-core SS2022 multi-user (server
+expects a colon-prefix and rejects the user's auth otherwise).
+
+Anti-regression: `inbounds.service.ts createInbound` auto-generates a
+correct-length server PSK when admin doesn't supply one (16 bytes for
+`2022-blake3-aes-128-gcm`, 32 bytes for the others — base64-encoded
+via `crypto.randomBytes`).
 
 ## URI format (SIP002)
 

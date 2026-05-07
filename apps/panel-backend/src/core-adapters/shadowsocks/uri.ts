@@ -11,9 +11,17 @@
  * modern client tolerates base64url and several reject `+/=` in the
  * userinfo segment).
  *
- * SS2022 ciphers (`2022-blake3-*`) and legacy AEAD (`chacha20-ietf-poly1305`,
- * `aes-256-gcm`, etc) share the same URI shape — clients pick the right
- * crypto path from the method string itself.
+ * **SS2022 multi-user PSK format** (verified against XTLS/Xray-examples
+ * Shadowsocks-2022/README.ENG.md on 2026-05-07): the `password` part of
+ * the URI is the colon-joined `<ServerPSK>:<UserPSK>`. Server PSK is the
+ * inbound-level secret (xray's `settings.password`); User PSK is the
+ * per-client `clients[i].password`. Single-tenant SS (no `clients[]`) is
+ * a degenerate case where you'd just pass UserPSK alone — pass empty
+ * `serverPsk` here and we'll skip the colon prefix.
+ *
+ * Legacy AEAD ciphers (`aes-256-gcm`, `chacha20-ietf-poly1305`) work with
+ * just one password — pass the user's PSK as `userPsk`, leave
+ * `serverPsk` empty.
  */
 
 export type ShadowsocksMethod =
@@ -26,7 +34,11 @@ export type ShadowsocksMethod =
 
 export interface ShadowsocksUriOpts {
   method: ShadowsocksMethod;
-  password: string;
+  /** Per-user PSK. */
+  userPsk: string;
+  /** Inbound-level Server PSK (SS2022 multi-user). Empty → single-tenant
+   *  format (legacy AEAD or single-user SS2022). */
+  serverPsk?: string;
   host: string;
   port: number;
   /** URL fragment shown in clients (typically the node name). */
@@ -34,7 +46,12 @@ export interface ShadowsocksUriOpts {
 }
 
 export function buildShadowsocksUri(opts: ShadowsocksUriOpts): string {
-  const userinfo = base64UrlNoPad(`${opts.method}:${opts.password}`);
+  // SS2022 multi-user: `<method>:<ServerPSK>:<UserPSK>` joined with colons.
+  // Single-tenant: `<method>:<UserPSK>` (no server PSK).
+  const password = opts.serverPsk
+    ? `${opts.serverPsk}:${opts.userPsk}`
+    : opts.userPsk;
+  const userinfo = base64UrlNoPad(`${opts.method}:${password}`);
   return `ss://${userinfo}@${opts.host}:${opts.port}#${encodeURIComponent(opts.name)}`;
 }
 

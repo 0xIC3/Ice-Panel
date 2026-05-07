@@ -306,22 +306,26 @@ export async function generateSubscription(
         }),
       });
     } else if (ib.protocol === 'shadowsocks' && user.xrayUuid) {
-      // Slice 24d — Shadowsocks (SS2022). Per-user password reuses
-      // user.xrayUuid: UUIDs have plenty of entropy and admins are already
-      // managing them; growing user.shadowsocksPassword would just be
-      // another credential row that's never independent of xrayUuid in
-      // practice.
-      const cfg = ib.config as unknown as { method: ShadowsocksMethod };
+      const ssCfg = ib.config as unknown as {
+        method: ShadowsocksMethod;
+        serverPsk?: string;
+      };
+      // Slice 24d (fix 2026-05-07): SS2022 multi-user requires
+      // ServerPSK:UserPSK colon-joined in the URI. Server PSK is per-
+      // inbound, generated at create-time and stored in inbound.config.
+      // Per-user PSK reuses user.xrayUuid (UUIDs have enough entropy;
+      // growing users.shadowsocksPsk just for this protocol is overkill).
       endpoints.push({
         protocol: 'shadowsocks',
         nodeName,
         host,
         port,
-        method: cfg.method,
+        method: ssCfg.method,
         password: user.xrayUuid,
         uri: buildShadowsocksUri({
-          method: cfg.method,
-          password: user.xrayUuid,
+          method: ssCfg.method,
+          userPsk: user.xrayUuid,
+          serverPsk: ssCfg.serverPsk,
           host,
           port,
           name: nodeName,

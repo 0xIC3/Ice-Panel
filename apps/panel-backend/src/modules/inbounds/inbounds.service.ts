@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import type { Inbound } from '../../generated/prisma/client.js';
 import { prisma } from '../../prisma.js';
@@ -8,6 +9,23 @@ import {
   type ListInboundsQuery,
   type UpdateInboundInput,
 } from './inbounds.schemas.js';
+
+/**
+ * Slice 24d (fix 2026-05-07) — auto-generate the SS2022 server-PSK at
+ * inbound create. Length matches xray-core requirements:
+ *   - `2022-blake3-aes-128-gcm`            → 16 bytes
+ *   - `2022-blake3-aes-256-gcm`            → 32 bytes
+ *   - `2022-blake3-chacha20-poly1305`      → 32 bytes
+ *   - legacy AEAD (chacha20/aes-gcm)       → no spec, 32 bytes works fine
+ */
+function ssPskBytesForMethod(method: string): number {
+  if (method === '2022-blake3-aes-128-gcm') return 16;
+  return 32;
+}
+
+function generateSsServerPsk(method: string): string {
+  return randomBytes(ssPskBytesForMethod(method)).toString('base64');
+}
 
 export class InboundNotFoundError extends Error {
   constructor() {
@@ -44,6 +62,20 @@ export async function createInbound(input: CreateInboundInput): Promise<Inbound>
   });
   if (!node) throw new NodeNotFoundError();
 
+  // Slice 24d — auto-generate Server PSK for SS2022 inbounds when admin
+  // didn't supply one. xray-core requires it for multi-user mode; nothing
+  // useful comes from making the admin paste random bytes.
+  let configToStore = input.config as Record<string, unknown>;
+  if (input.protocol === 'shadowsocks') {
+    const ssCfg = configToStore as { method: string; serverPsk?: string };
+    if (!ssCfg.serverPsk) {
+      configToStore = {
+        ...ssCfg,
+        serverPsk: generateSsServerPsk(ssCfg.method),
+      };
+    }
+  }
+
   let created: Inbound;
   try {
     created = await prisma.inbound.create({
@@ -55,7 +87,7 @@ export async function createInbound(input: CreateInboundInput): Promise<Inbound>
         enabled: input.enabled,
         publicHost: input.publicHost ?? null,
         publicPort: input.publicPort ?? null,
-        config: input.config as never,
+        config: configToStore as never,
       },
     });
   } catch (err) {

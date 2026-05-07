@@ -16,7 +16,12 @@ func newConfigOnlyAdapter(t *testing.T) *Adapter {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	return New(Config{
-		Inbound: InboundConfig{Method: "2022-blake3-aes-256-gcm", ListenPort: 8388, ApiPort: 8081},
+		Inbound: InboundConfig{
+			Method:     "2022-blake3-aes-256-gcm",
+			ServerPSK:  "BASE64-FAKE-SERVER-PSK==",
+			ListenPort: 8388,
+			ApiPort:    8081,
+		},
 		// no BinaryPath, no ConfigPath → config-only mode
 	}, logger)
 }
@@ -76,14 +81,15 @@ func TestRemoveUser(t *testing.T) {
 
 // ───── ApplyInbound ─────
 
-func TestApplyInbound_NoOpOnIdenticalMethod(t *testing.T) {
+func TestApplyInbound_NoOpOnIdenticalConfig(t *testing.T) {
 	a := newConfigOnlyAdapter(t)
-	body, _ := json.Marshal(map[string]any{"method": "2022-blake3-aes-256-gcm"})
+	body, _ := json.Marshal(map[string]any{
+		"method":    "2022-blake3-aes-256-gcm",
+		"serverPsk": "BASE64-FAKE-SERVER-PSK==",
+	})
 	if err := a.ApplyInbound(body); err != nil {
 		t.Fatalf("ApplyInbound: %v", err)
 	}
-	// In config-only mode, started flips to true on first regenerate but
-	// here Method matches so no regenerate fires.
 	if a.started {
 		t.Errorf("config-only adapter should not have started on no-op apply")
 	}
@@ -91,7 +97,10 @@ func TestApplyInbound_NoOpOnIdenticalMethod(t *testing.T) {
 
 func TestApplyInbound_MethodChangeRegenerates(t *testing.T) {
 	a := newConfigOnlyAdapter(t)
-	body, _ := json.Marshal(map[string]any{"method": "chacha20-ietf-poly1305"})
+	body, _ := json.Marshal(map[string]any{
+		"method":    "chacha20-ietf-poly1305",
+		"serverPsk": "BASE64-FAKE-SERVER-PSK==",
+	})
 	if err := a.ApplyInbound(body); err != nil {
 		t.Fatalf("ApplyInbound: %v", err)
 	}
@@ -100,6 +109,15 @@ func TestApplyInbound_MethodChangeRegenerates(t *testing.T) {
 	}
 	if !a.started {
 		t.Errorf("started should be true after regenerate")
+	}
+}
+
+func TestApplyInbound_RejectsMissingServerPsk(t *testing.T) {
+	a := newConfigOnlyAdapter(t)
+	body, _ := json.Marshal(map[string]any{"method": "2022-blake3-aes-256-gcm"})
+	if err := a.ApplyInbound(body); err == nil ||
+		!strings.Contains(err.Error(), "serverPsk is required") {
+		t.Errorf("expected serverPsk-required error, got %v", err)
 	}
 }
 

@@ -36,6 +36,12 @@ type InboundConfig struct {
 	// new deployments — legacy AEAD kept for compat with old clients.
 	Method string
 
+	// ServerPSK is xray-core's SS2022 server-level password (the `password`
+	// at the `settings.` level, distinct from per-user `clients[].password`).
+	// Required for multi-user SS2022 — verified against XTLS/Xray-examples
+	// on 2026-05-07. An earlier iteration of this file omitted it.
+	ServerPSK string
+
 	// ApiPort is the loopback port for the gRPC StatsService inbound.
 	// Default: 8081 (one above xray's default to avoid conflict if both
 	// adapters run on the same node).
@@ -76,6 +82,9 @@ func (c *InboundConfig) validate() error {
 		// ok
 	default:
 		return fmt.Errorf("unsupported Method %q", c.Method)
+	}
+	if c.ServerPSK == "" {
+		return errors.New("ServerPSK is required (xray SS2022 settings.password)")
 	}
 	return nil
 }
@@ -126,7 +135,12 @@ func renderConfig(inbound InboundConfig, users []ssClient) ([]byte, error) {
 				"port":     cfg.ListenPort,
 				"protocol": "shadowsocks",
 				"settings": map[string]any{
-					"method":   cfg.Method,
+					"method": cfg.Method,
+					// Server-level PSK (slice 24d, fix 2026-05-07). xray-core
+					// requires this at settings.password for SS2022 multi-user
+					// inbounds; clients combine it with per-user PSK as
+					// `ServerPSK:UserPSK` in the URI.
+					"password": cfg.ServerPSK,
 					"clients":  users,
 					"network":  "tcp,udp", // SS2022 supports UDP relay
 				},
