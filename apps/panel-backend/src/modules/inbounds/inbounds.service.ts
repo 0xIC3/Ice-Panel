@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Inbound } from '../../generated/prisma/client.js';
 import { prisma } from '../../prisma.js';
 import { eventBus } from '../../lib/event-bus.js';
+import { ALL_SQUAD_ID } from '../squads/squads.constants.js';
 import {
   PROTOCOL_CONFIG_SCHEMAS,
   type CreateInboundInput,
@@ -78,17 +79,31 @@ export async function createInbound(input: CreateInboundInput): Promise<Inbound>
 
   let created: Inbound;
   try {
-    created = await prisma.inbound.create({
-      data: {
-        nodeId: input.nodeId,
-        protocol: input.protocol,
-        name: input.name,
-        port: input.port,
-        enabled: input.enabled,
-        publicHost: input.publicHost ?? null,
-        publicPort: input.publicPort ?? null,
-        config: configToStore as never,
-      },
+    // Slice 26 invariant — every new inbound gets attached to the "All" squad
+    // synchronously, in the same transaction as the inbound row. Previously
+    // this was an async fire-and-forget on the inbound.created event handler;
+    // that opened a race window (inbound exists in DB but no group_inbound
+    // row yet), and surfaced as ghost-empty subscription bodies right after
+    // creating an inbound. Doing it here closes the gap.
+    created = await prisma.$transaction(async (tx) => {
+      const inbound = await tx.inbound.create({
+        data: {
+          nodeId: input.nodeId,
+          protocol: input.protocol,
+          name: input.name,
+          port: input.port,
+          enabled: input.enabled,
+          publicHost: input.publicHost ?? null,
+          publicPort: input.publicPort ?? null,
+          config: configToStore as never,
+        },
+      });
+      await tx.groupInbound.upsert({
+        where: { groupId_inboundId: { groupId: ALL_SQUAD_ID, inboundId: inbound.id } },
+        create: { groupId: ALL_SQUAD_ID, inboundId: inbound.id },
+        update: {},
+      });
+      return inbound;
     });
   } catch (err) {
     if (isUniquePortError(err)) {

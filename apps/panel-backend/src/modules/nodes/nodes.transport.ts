@@ -13,6 +13,74 @@ import { bootstrapCa } from '../keygen/keygen.service.js';
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 
+// Shared HTTPS agent for ALL panel→node calls. undici reuses TCP+TLS
+// connections within an Agent's pool, so /healthz and /metrics polls hit
+// every node every 15s without paying handshake cost on each tick. Built
+// lazily on first call (CA material requires DB roundtrip via bootstrapCa)
+// and never closed — agent lifetime = process lifetime.
+//
+// If the CA rotates we'd need to reset this; today the CA is bootstrapped
+// once at install and is treated as immutable. Slice for cert rotation later.
+let sharedAgent: Agent | null = null;
+let sharedAgentPromise: Promise<Agent> | null = null;
+
+async function getSharedAgent(
+  caOverride?: { certPem: string; privateKeyPem: string },
+): Promise<Agent> {
+  // Test injections must always build a fresh agent — they pass
+  // synthetic CAs that mustn't leak between cases.
+  if (caOverride) {
+    return new Agent({
+      connect: {
+        ca: caOverride.certPem,
+        cert: caOverride.certPem,
+        key: caOverride.privateKeyPem,
+        rejectUnauthorized: true,
+      },
+      keepAliveTimeout: 30_000,
+      keepAliveMaxTimeout: 60_000,
+    });
+  }
+
+  if (sharedAgent) return sharedAgent;
+  if (sharedAgentPromise) return sharedAgentPromise;
+
+  sharedAgentPromise = (async () => {
+    const ca = await bootstrapCa();
+    const agent = new Agent({
+      connect: {
+        ca: ca.certPem,
+        cert: ca.certPem,
+        key: ca.privateKeyPem,
+        rejectUnauthorized: true,
+      },
+      // undici defaults are conservative for short-lived connections; we
+      // want long-lived pools because we poll the same N hosts forever.
+      keepAliveTimeout: 30_000,
+      keepAliveMaxTimeout: 60_000,
+      // Per-origin connection pool size. 2 is plenty: simultaneous calls
+      // to the same node are rare (cron + occasional admin click).
+      connections: 2,
+    });
+    sharedAgent = agent;
+    return agent;
+  })();
+  return sharedAgentPromise;
+}
+
+/**
+ * Tear down the shared agent — called on graceful shutdown so node-side
+ * sockets get FIN'd cleanly instead of half-open.
+ */
+export async function closeNodeTransport(): Promise<void> {
+  if (sharedAgent) {
+    const a = sharedAgent;
+    sharedAgent = null;
+    sharedAgentPromise = null;
+    await a.close();
+  }
+}
+
 export class NodeRequestError extends Error {
   constructor(
     message: string,
@@ -48,18 +116,6 @@ export class NodeTransport {
     private readonly caOverride?: { certPem: string; privateKeyPem: string },
   ) {}
 
-  private async getAgent(): Promise<Agent> {
-    const ca = this.caOverride ?? (await bootstrapCa());
-    return new Agent({
-      connect: {
-        ca: ca.certPem,
-        cert: ca.certPem,
-        key: ca.privateKeyPem,
-        rejectUnauthorized: true,
-      },
-    });
-  }
-
   private buildUrl(path: string): string {
     return `https://${this.node.address}${path}`;
   }
@@ -70,7 +126,7 @@ export class NodeTransport {
     body?: unknown,
     opts: RequestOptions = {},
   ): Promise<TRes> {
-    const agent = await this.getAgent();
+    const agent = await getSharedAgent(this.caOverride);
     const controller = new AbortController();
     const timer = setTimeout(
       () => controller.abort(),
@@ -99,7 +155,11 @@ export class NodeTransport {
       return (await res.json()) as TRes;
     } finally {
       clearTimeout(timer);
-      await agent.close();
+      // Test-mode override: per-call agent is short-lived, close it.
+      // Production sharedAgent is process-scoped and stays open.
+      if (this.caOverride) {
+        await agent.close();
+      }
     }
   }
 

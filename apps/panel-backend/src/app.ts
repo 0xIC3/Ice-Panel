@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance } from 'fastify';
+import fastifyCompress from '@fastify/compress';
 import fastifyCors from '@fastify/cors';
 import fastifyJwt from '@fastify/jwt';
 import fastifyRateLimit from '@fastify/rate-limit';
@@ -53,6 +54,28 @@ export async function buildApp(): Promise<FastifyInstance> {
       redis: redisOk ? 'ok' : 'down',
     };
   });
+
+  // Compress JSON responses ≥1 KB. Dashboard overview is the obvious target —
+  // the per-node metrics + nodes table + events array runs ~12 KB and gzips
+  // to ~2 KB. Below threshold (small lists, error bodies) we skip compression
+  // to avoid the CPU/latency cost on responses where the savings are noise.
+  //
+  // Restricted to application/json so subscription URIs (text/plain, YAML,
+  // wgconf) stay raw — those clients are mobile VPN apps that don't always
+  // negotiate Accept-Encoding correctly, and the payloads are small.
+  //
+  // Skipped under NODE_ENV=test: vitest's app.inject() advertises
+  // Accept-Encoding but light-my-request doesn't auto-decode the response,
+  // so compressed bodies look like gibberish to JSON.parse. The compression
+  // win is a production concern anyway.
+  if (config.NODE_ENV !== 'test') {
+    await app.register(fastifyCompress, {
+      global: true,
+      encodings: ['gzip', 'deflate'],
+      threshold: 1024,
+      customTypes: /^application\/json$/,
+    });
+  }
 
   await app.register(fastifyCors, {
     origin: config.CORS_ORIGIN.split(',').map((s) => s.trim()),

@@ -1,7 +1,16 @@
 import type { HostMetricsResponse } from '@ice-panel/shared';
 import { prisma } from '../../prisma.js';
+import { redis } from '../../lib/redis.js';
 import { collectSystemMetrics, type SystemMetrics } from './system-metrics.js';
 import { readCachedNodeMetrics } from '../nodes/nodes.cron.js';
+
+// Dashboard overview is hit by every admin's browser every 10s. The aggregates
+// (groupBy on NodeUsageHistory + UserTraffic counts) cost a few hundred ms
+// each tick; cache the assembled DTO for 8s so 5 admins refreshing in unison
+// pay only one round of SQL. TTL < frontend interval so worst-case staleness
+// is bounded by polling cadence + a few seconds.
+const OVERVIEW_CACHE_KEY = 'dashboard:overview:v1';
+const OVERVIEW_CACHE_TTL_SECONDS = 8;
 
 const ONLINE_NOW_WINDOW_MS = 3 * 60 * 1000;
 const TOP_USERS_LIMIT = 5;
@@ -345,6 +354,15 @@ async function recentEvents(): Promise<DashboardOverview['recentEvents']> {
 }
 
 export async function getOverview(): Promise<DashboardOverview> {
+  const cached = await redis.get(OVERVIEW_CACHE_KEY).catch(() => null);
+  if (cached) {
+    try {
+      return JSON.parse(cached) as DashboardOverview;
+    } catch {
+      // Corrupted cache — fall through and recompute.
+    }
+  }
+
   const [users, traffic, nodesAndSystem, byProtocol, topUsers, events, host] =
     await Promise.all([
       userMetrics(),
@@ -356,7 +374,7 @@ export async function getOverview(): Promise<DashboardOverview> {
       collectSystemMetrics(),
     ]);
 
-  return {
+  const overview: DashboardOverview = {
     users,
     traffic,
     system: nodesAndSystem.system,
@@ -366,4 +384,11 @@ export async function getOverview(): Promise<DashboardOverview> {
     topUsersToday: topUsers,
     recentEvents: events,
   };
+
+  // Best-effort: never let a Redis hiccup break the dashboard response.
+  await redis
+    .set(OVERVIEW_CACHE_KEY, JSON.stringify(overview), 'EX', OVERVIEW_CACHE_TTL_SECONDS)
+    .catch(() => undefined);
+
+  return overview;
 }

@@ -362,5 +362,8 @@ model NodeUsageHistory {
 
   @@id([nodeId, hour])
   @@index([nodeId, hour(sort: Desc)])
+  // Dashboard aggregates by `WHERE hour >= since` without nodeId — the
+  // composite indexes above are leftmost on nodeId and useless for that.
+  @@index([hour(sort: Desc)])
   @@map("node_usage_history")
 }

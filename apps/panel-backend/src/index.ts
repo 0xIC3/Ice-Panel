@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { config } from './config.js';
 import { prisma, pingDatabase } from './prisma.js';
 import { pingRedis, closeRedis } from './lib/redis.js';
+import { closeNodeTransport } from './modules/nodes/nodes.transport.js';
 import { registerUserEventHandlers } from './modules/users/users.events.js';
 import { registerNodeEventHandlers } from './modules/nodes/nodes.events.js';
 import { registerInboundEventHandlers } from './modules/inbounds/inbounds.events.js';
@@ -70,6 +71,7 @@ async function shutdown() {
   if (cronTasksWorker) {
     await cronTasksWorker.close();
   }
+  await closeNodeTransport();
   await prisma.$disconnect();
   await closeRedis();
   process.exit(0);

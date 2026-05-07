@@ -26,4 +26,18 @@ export async function cleanDatabase(): Promise<void> {
   await prisma.$executeRawUnsafe(
     `TRUNCATE TABLE ${list} RESTART IDENTITY CASCADE`,
   );
+  // Re-seed the "All" squad — slice 26 wired user-create to default to it,
+  // so an empty groups table makes every user-create fail with FK violation.
+  // The seed migration installs this row in production; tests truncate it
+  // away each turn and need it back before the next case runs.
+  await prisma.$executeRawUnsafe(`
+    INSERT INTO "groups" (id, name, description, created_at, updated_at)
+    VALUES (
+      '00000000-0000-0000-0000-000000000001'::uuid,
+      'All',
+      'Default group containing every inbound. Auto-membership for new users.',
+      NOW(),
+      NOW()
+    )
+  `);
 }
