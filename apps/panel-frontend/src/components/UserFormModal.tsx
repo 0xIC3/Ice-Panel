@@ -9,7 +9,6 @@ import {
   Divider,
   Group,
   Modal,
-  MultiSelect,
   NumberInput,
   Paper,
   Progress,
@@ -43,7 +42,6 @@ import {
   listSquads,
   subscriptionUrl,
   type CreateUserInput,
-  type ProtocolName,
   type TrafficLimitStrategy,
   type UpdateUserInput,
   type User,
@@ -55,16 +53,6 @@ const STRATEGY_OPTIONS: { value: TrafficLimitStrategy; label: string }[] = [
   { value: 'week', label: 'Еженедельно' },
   { value: 'month', label: 'Ежемесячно' },
   { value: 'rolling', label: 'Скользящие 30 дней' },
-];
-
-const PROTOCOL_OPTIONS: { value: ProtocolName; label: string }[] = [
-  { value: 'hysteria', label: 'Hysteria2' },
-  { value: 'xray', label: 'Xray (VLESS / Trojan + REALITY)' },
-  { value: 'amneziawg', label: 'AmneziaWG' },
-  { value: 'naive', label: 'NaiveProxy' },
-  { value: 'shadowsocks', label: 'Shadowsocks 2022' },
-  { value: 'mtproto', label: 'MTProto (Telegram-only)' },
-  { value: 'mieru', label: 'Mieru (stealth proxy)' },
 ];
 
 const STATUS_COLORS: Record<string, string> = {
@@ -95,7 +83,6 @@ interface FormValues {
   email: string;
   telegramId: string;
   hwidDeviceLimit: number | '';
-  enabledProtocols: ProtocolName[];
   groupIds: string[];
 }
 
@@ -112,7 +99,6 @@ function defaultValues(user: User | null): FormValues {
     email: user?.email ?? '',
     telegramId: user?.telegramId ?? '',
     hwidDeviceLimit: user?.hwidDeviceLimit ?? '',
-    enabledProtocols: user?.enabledProtocols ?? ['hysteria'],
     groupIds: user?.groupIds ?? [ALL_SQUAD_ID],
   };
 }
@@ -140,7 +126,6 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
         return null;
       },
       email: (v) => (v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? 'Некорректный email' : null),
-      enabledProtocols: (v) => (v.length === 0 ? 'Выбери хотя бы один протокол' : null),
     },
   });
 
@@ -165,7 +150,6 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
         telegramId: values.telegramId || null,
         hwidDeviceLimit:
           values.hwidDeviceLimit === '' ? null : Number(values.hwidDeviceLimit),
-        enabledProtocols: values.enabledProtocols,
         groupIds,
       };
       await onSubmit(input);
@@ -181,7 +165,6 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
         telegramId: values.telegramId || null,
         hwidDeviceLimit:
           values.hwidDeviceLimit === '' ? null : Number(values.hwidDeviceLimit),
-        enabledProtocols: values.enabledProtocols,
         groupIds,
       };
       await onSubmit(input);
@@ -321,17 +304,6 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
 
             {/* RIGHT column */}
             <Stack gap="md">
-              <SectionCard icon={<IconShield size={16} />} title="Настройки доступа">
-                <MultiSelect
-                  label="Включённые протоколы"
-                  description="Что войдёт в подписку пользователя"
-                  data={PROTOCOL_OPTIONS}
-                  withCheckIcon
-                  searchable
-                  {...form.getInputProps('enabledProtocols')}
-                />
-              </SectionCard>
-
               <SectionCard icon={<IconShield size={16} />} title="Внутренние сквады">
                 <Text size="xs" c="dimmed" mb="xs">
                   В каких группах состоит пользователь. «All» включена всегда автоматически.

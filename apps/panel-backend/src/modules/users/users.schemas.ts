@@ -39,7 +39,13 @@ export const CreateUserSchema = z.object({
   ]).nullish(),
   email: z.email().max(255).nullish(),
   groupIds: z.array(z.uuid()).default([]),
-  enabledProtocols: z.array(ProtocolName).min(1).default(['hysteria']),
+  // Slice 27 follow-up: enabledProtocols accepted for back-compat with API
+  // clients but no longer affects subscription output. Squad ACL alone
+  // determines visibility. Empty/missing → defaults to all 7 (was previously
+  // ['hysteria'] which silently hid newer protocols from new users).
+  enabledProtocols: z
+    .array(ProtocolName)
+    .default(['hysteria', 'xray', 'amneziawg', 'naive', 'shadowsocks', 'mtproto', 'mieru']),
 });
 export type CreateUserInput = z.infer<typeof CreateUserSchema>;
 
@@ -59,7 +65,8 @@ export const UpdateUserSchema = z.object({
   ]).nullish(),
   email: z.email().max(255).nullish(),
   groupIds: z.array(z.uuid()).optional(),
-  enabledProtocols: z.array(ProtocolName).min(1).optional(),
+  // Slice 27 follow-up: kept for back-compat, ignored by subscription.
+  enabledProtocols: z.array(ProtocolName).optional(),
 });
 export type UpdateUserInput = z.infer<typeof UpdateUserSchema>;
 

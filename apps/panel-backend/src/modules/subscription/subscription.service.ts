@@ -1,5 +1,8 @@
 import { prisma } from '../../prisma.js';
-import { parseEnabledProtocols } from '../users/users.mapper.js';
+// Slice 27 follow-up: enabledProtocols is no longer consulted — squad ACL is
+// the single source of truth for which protocols a user sees. The column is
+// kept on the User row for backwards-compat but never filters subscription
+// output.
 import { allocatePeer } from '../amneziawg/amneziawg.service.js';
 import { buildNaiveUri } from '../../core-adapters/naive/index.js';
 import {
@@ -128,8 +131,6 @@ export async function generateSubscription(
       throw new SubscriptionForbiddenError('DISABLED');
   }
 
-  const enabled = new Set(parseEnabledProtocols(user.enabledProtocols));
-
   // Slice 27 — Squad ACL is now profile-level. Visible bindings are the
   // UNION of bindings of every profile attached to a group the user is a
   // member of. If the user has zero memberships the subscription is empty
@@ -162,8 +163,6 @@ export async function generateSubscription(
 
   const endpoints: SubscriptionEndpoint[] = [];
   for (const b of bindings) {
-    if (!enabled.has(b.profile.protocol as never)) continue;
-
     // Resolve deployable config: profile.config + binding.overrides.
     const baseConfig = (b.profile.config ?? {}) as Record<string, unknown>;
     const ovr = (b.overrides ?? {}) as Record<string, unknown>;

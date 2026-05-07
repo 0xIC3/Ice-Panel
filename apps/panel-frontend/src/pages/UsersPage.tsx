@@ -60,16 +60,6 @@ const STATUS_COLORS: Record<string, string> = {
   limited: 'yellow',
 };
 
-const PROTOCOL_COLORS: Record<string, string> = {
-  hysteria: 'blue',
-  xray: 'violet',
-  amneziawg: 'teal',
-  naive: 'orange',
-  shadowsocks: 'pink',
-  mtproto: 'cyan',
-  mieru: 'grape',
-};
-
 const GiB = 1_073_741_824;
 
 function formatBytes(n: number): string {
@@ -411,7 +401,6 @@ export function UsersPage() {
                 <Table.Th>Истекает</Table.Th>
                 <Table.Th>Расход трафика</Table.Th>
                 <Table.Th>Сквады</Table.Th>
-                <Table.Th>Протоколы</Table.Th>
                 <Table.Th>Tag</Table.Th>
                 <Table.Th style={{ width: 1 }}>Действия</Table.Th>
               </Table.Tr>
@@ -554,20 +543,6 @@ export function UsersPage() {
                           )}
                         </Group>
                       )}
-                    </Table.Td>
-                    <Table.Td>
-                      <Group gap={4} wrap="wrap">
-                        {u.enabledProtocols.map((p) => (
-                          <Badge
-                            key={p}
-                            color={PROTOCOL_COLORS[p] ?? 'gray'}
-                            variant="light"
-                            size="sm"
-                          >
-                            {p}
-                          </Badge>
-                        ))}
-                      </Group>
                     </Table.Td>
                     <Table.Td>
                       {u.tag ? (
