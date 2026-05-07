@@ -256,7 +256,7 @@ Per-slice verification checklists. Use when **closing** a slice or when re-valid
 
 ---
 
-## Slice 24b3 — AmneziaWG ApplyInbound real impl ⏭️
+## Slice 24b3 — AmneziaWG ApplyInbound real impl ✅ (code) / ⏭️ (VPS)
 
 ### Pre-conditions
 - VPS с AmneziaWG-нодой (kernel module работает или amneziawg-go fallback)
@@ -264,12 +264,20 @@ Per-slice verification checklists. Use when **closing** a slice or when re-valid
 - Зарегистрированный inbound с peers (хотя бы один юзер)
 
 ### Local checks
-- [ ] Diff classifier:
-  - H1-H4 changed → flag "full restart"
-  - Только S1-S4 / Jc/Jmin/Jmax / postUp / peers → flag "syncconf"
-  - subnet changed → reject ApplyInbound с error (cannot change subnet with allocated peers)
-- [ ] Mocked-CLI tests for both paths
-- [ ] Generation `/etc/amneziawg/awg0.conf` deterministic
+- [x] Wire `inboundCfgWire` парсится (subnet/serverPrivateKey/serverPublicKey/obfuscation{jc/jmin/jmax/s1-s4/h1-h4})
+- [x] `serverAddressFromSubnet`: `10.0.0.0/24` → `10.0.0.1/24`, IPv6 / garbage отбиты
+- [x] `classifyDiff`:
+  - identical → `diffNone`
+  - H1-H4 / PrivateKey / ListenPort / Interface → `diffRestart`
+  - S1-S4 / Jc / Jmin / Jmax → `diffSyncconf`
+  - subnet (Address) → `diffSubnet`
+  - Strictest-wins: `diffSubnet > diffRestart > diffSyncconf > diffNone`
+- [x] `ApplyInbound` no-op on identical (нет CLI-вызовов)
+- [x] Syncconf path: только S1 change → `awg-quick strip` + `awg syncconf` (existing `regenerateAndSyncLocked`)
+- [x] Restart path: H1 change → `awg-quick down` + `awg-quick up`
+- [x] Subnet change c allocated peers → error «subnet change rejected — N peer(s) already allocated»
+- [x] Subnet change без peers → restart path (no error)
+- [x] Malformed JSON / bad subnet → parse error без CLI
 
 ### VPS checks
 - [ ] Изменить `S1` (S-param, syncconf-eligible) → adapter logs `awg syncconf`, no restart, peers сохраняют коннект

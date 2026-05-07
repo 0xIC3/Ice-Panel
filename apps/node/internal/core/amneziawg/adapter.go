@@ -195,20 +195,93 @@ func (a *Adapter) Healthy() bool {
 	return err == nil
 }
 
-// ApplyInbound is a stub for slice 24b. AmneziaWG live reconfig is
-// non-trivial: subnet / keys / obfuscation params (Jc/S/H) all flow through
-// the wire DTO, but H1-H4 are interface-level and require a full
-// `systemctl restart awg-quick@<iface>` (no syncconf path). Real impl:
-//   1. Parse AmneziawgInboundCfg JSON.
-//   2. Diff vs current cfg.Inbound: if only client list changes → syncconf.
-//      If H1-H4 / S1-S4 / privateKey / subnet change → full restart.
-//   3. regenerateAndSyncLocked path already exists (see below).
+// ApplyInbound parses panel-pushed AmneziaWG config, classifies the diff vs
+// the live cfg.Inbound, and triggers the appropriate reload:
+//   - diffNone → no-op
+//   - diffSyncconf (S1-S4 / Jc/Jmin/Jmax changed) → rewrite + `awg syncconf`
+//   - diffRestart (H1-H4 / private key / port / iface changed) → rewrite +
+//     `systemctl restart awg-quick@<iface>` (interface bounces all peers)
+//   - diffSubnet (Address from subnet changed) → reject with error when
+//     peers are already allocated; admins must drain peers first
 //
-// Lands in a follow-up commit once we have a VPS to validate against.
-// For now: persist to inbounds.json (server.go), log, return nil.
-func (a *Adapter) ApplyInbound(cfg json.RawMessage) error {
-	a.logger.Info("amneziawg ApplyInbound stub — persisted to inbounds.json, no live reconfig",
-		"bytes", len(cfg))
+// Background context for the reload — the inbound HTTP request that triggered
+// this may have a short deadline, but we want the interface to come back up
+// even if the caller times out (matches the xray adapter pattern).
+func (a *Adapter) ApplyInbound(rawCfg json.RawMessage) error {
+	var wire inboundCfgWire
+	if err := json.Unmarshal(rawCfg, &wire); err != nil {
+		return fmt.Errorf("amneziawg ApplyInbound: parse cfg: %w", err)
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	newInbound, err := wire.toInboundConfig(a.cfg.Inbound.Interface, a.cfg.Inbound.ListenPort)
+	if err != nil {
+		return fmt.Errorf("amneziawg ApplyInbound: %w", err)
+	}
+	// Preserve install-time PostUp/PostDown and Interface defaults — those
+	// aren't in the panel wire. Interface name is install-time identity; if
+	// the wire expressed a new one it'd be a separate diffRestart anyway.
+	newInbound.PostUp = a.cfg.Inbound.PostUp
+	newInbound.PostDown = a.cfg.Inbound.PostDown
+
+	kind := classifyDiff(a.cfg.Inbound, newInbound)
+	switch kind {
+	case diffNone:
+		a.logger.Info("amneziawg ApplyInbound: config unchanged, skipping")
+		return nil
+	case diffSubnet:
+		if len(a.peers) > 0 {
+			return fmt.Errorf("amneziawg ApplyInbound: subnet change rejected — %d peer(s) already allocated; drain peers before changing subnet", len(a.peers))
+		}
+		// No peers: subnet change is safe and only needs a full restart to
+		// re-attach the new IP to the interface.
+		a.cfg.Inbound = newInbound
+		a.logger.Info("amneziawg ApplyInbound: subnet change with no peers, restarting interface",
+			"address", newInbound.Address)
+		return a.restartInterfaceLocked(context.Background())
+	case diffSyncconf:
+		a.cfg.Inbound = newInbound
+		a.logger.Info("amneziawg ApplyInbound: syncconf-eligible change", "iface", newInbound.Interface)
+		return a.regenerateAndSyncLocked(context.Background())
+	case diffRestart:
+		a.cfg.Inbound = newInbound
+		a.logger.Info("amneziawg ApplyInbound: interface-level change, full restart",
+			"iface", newInbound.Interface)
+		return a.restartInterfaceLocked(context.Background())
+	default:
+		return fmt.Errorf("amneziawg ApplyInbound: unknown diffKind %d", kind)
+	}
+}
+
+// restartInterfaceLocked writes the new config and bounces the interface via
+// awg-quick down/up. Used for changes that syncconf can't apply (H1-H4, keys,
+// listen port). Caller must hold a.mu.
+//
+// In config-only mode (AwgQuickBin == "") we just rewrite the file and skip
+// the actual bounce — that's what the unit tests rely on, and what dev
+// machines without amneziawg installed need.
+func (a *Adapter) restartInterfaceLocked(parent context.Context) error {
+	if err := a.writeCurrentConfigLocked(); err != nil {
+		return err
+	}
+	if a.cfg.AwgQuickBin == "" {
+		a.logger.Info("amneziawg restart skipped (config-only mode)")
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
+	defer cancel()
+
+	if out, err := a.cfg.runCmd(ctx, a.cfg.AwgQuickBin, "down", a.cfg.Inbound.Interface); err != nil {
+		// "iface not running" is fine — we're about to bring it up.
+		a.logger.Warn("awg-quick down returned non-zero (often safe)",
+			"err", err, "out", strings.TrimSpace(string(out)))
+	}
+	if out, err := a.cfg.runCmd(ctx, a.cfg.AwgQuickBin, "up", a.cfg.Inbound.Interface); err != nil {
+		return fmt.Errorf("awg-quick up %s: %w (%s)", a.cfg.Inbound.Interface, err, strings.TrimSpace(string(out)))
+	}
+	a.logger.Info("amneziawg interface bounced", "iface", a.cfg.Inbound.Interface)
 	return nil
 }
 
