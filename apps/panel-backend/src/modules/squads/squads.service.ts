@@ -28,9 +28,16 @@ export class SquadProtectedError extends Error {
 
 // ───── Service methods ─────
 
+// Soft-deleted users still keep their `group_members` rows (we only flip
+// `users.deletedAt`, the join row stays for restore-ability). So the naive
+// `_count: { members: true }` over-counts. Filter to live users only.
 const includeRelations = {
   groupProfiles: { select: { profileId: true } },
-  _count: { select: { members: true } },
+  _count: {
+    select: {
+      members: { where: { user: { deletedAt: null } } },
+    },
+  },
 } as const;
 
 export async function listSquads(): Promise<PublicSquadDto[]> {
