@@ -9,6 +9,7 @@ import {
   IconBolt,
   IconShield,
   IconLayoutDashboard,
+  IconSettings,
 } from '@tabler/icons-react';
 import { useAuth } from '../stores/auth';
 
@@ -70,22 +71,25 @@ export function AppLayout() {
               component={RouterNavLink}
               to="/profiles"
               label="Профили"
-              description="Шаблоны inbound'ов, разворачиваются на ноды"
               leftSection={<IconBolt size={18} />}
             />
             <NavLink
               component={RouterNavLink}
               to="/squads"
               label="Squads"
-              description="Group ACL — who sees which inbounds"
               leftSection={<IconShield size={18} />}
             />
             <NavLink
               component={RouterNavLink}
               to="/srr"
               label="SRR"
-              description="Subscription Response Rules"
               leftSection={<IconRoute size={18} />}
+            />
+            <NavLink
+              component={RouterNavLink}
+              to="/settings"
+              label="Настройки"
+              leftSection={<IconSettings size={18} />}
             />
           </Stack>
           <Button

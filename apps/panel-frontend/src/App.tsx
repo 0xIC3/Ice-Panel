@@ -8,6 +8,7 @@ import { NodesPage } from './pages/NodesPage';
 import { SrrPage } from './pages/SrrPage';
 import { ProfilesPage } from './pages/ProfilesPage';
 import { SquadsPage } from './pages/SquadsPage';
+import { SettingsPage } from './pages/SettingsPage';
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
               existing bookmarks don't 404. */}
           <Route path="/inbounds" element={<Navigate to="/profiles" replace />} />
           <Route path="/squads" element={<SquadsPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
           <Route path="/srr" element={<SrrPage />} />
         </Route>
       </Route>

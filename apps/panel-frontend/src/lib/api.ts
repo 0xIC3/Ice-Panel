@@ -638,6 +638,40 @@ export async function deleteBinding(id: string): Promise<void> {
   await api.delete(`/api/bindings/${id}`);
 }
 
+// ───── API tokens ─────
+
+export interface ApiToken {
+  id: string;
+  name: string;
+  scopes: string[];
+  lastUsedAt: string | null;
+  createdAt: string;
+}
+
+/** POST /api/api-tokens response — includes the plaintext token ONCE.
+ *  Panel never shows it again after this. */
+export interface CreatedApiToken extends ApiToken {
+  /** Plaintext bearer token, e.g. `icp_AbC123...`. Copy it now. */
+  token: string;
+}
+
+export async function listApiTokens(): Promise<{ tokens: ApiToken[] }> {
+  const { data } = await api.get<{ tokens: ApiToken[] }>('/api/api-tokens');
+  return data;
+}
+
+export async function createApiToken(input: {
+  name: string;
+  scopes?: string[];
+}): Promise<CreatedApiToken> {
+  const { data } = await api.post<CreatedApiToken>('/api/api-tokens', input);
+  return data;
+}
+
+export async function deleteApiToken(id: string): Promise<void> {
+  await api.delete(`/api/api-tokens/${id}`);
+}
+
 // ───── Dashboard ─────
 
 export interface NodeHostMetrics {
