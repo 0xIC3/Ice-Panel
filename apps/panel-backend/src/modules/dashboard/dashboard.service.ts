@@ -1,5 +1,7 @@
+import type { HostMetricsResponse } from '@ice-panel/shared';
 import { prisma } from '../../prisma.js';
 import { collectSystemMetrics, type SystemMetrics } from './system-metrics.js';
+import { readCachedNodeMetrics } from '../nodes/nodes.cron.js';
 
 const ONLINE_NOW_WINDOW_MS = 3 * 60 * 1000;
 const TOP_USERS_LIMIT = 5;
@@ -38,6 +40,9 @@ export interface DashboardOverview {
     lastStatusChange: string | null;
     inboundCount: number;
     todayBytes: number;
+    /** Latest /metrics snapshot pulled from this node, or null if cache cold
+     *  / TTL'd / node unreachable. Cache TTL is 60s, poll cadence is 15s. */
+    metrics: HostMetricsResponse | null;
   }[];
   byProtocol: {
     protocol: string;
@@ -227,8 +232,12 @@ async function nodeMetrics(): Promise<{
     );
   }
 
+  const metricsByNode = await Promise.all(
+    nodes.map((n) => readCachedNodeMetrics(n.id)),
+  );
+
   let onlineNodeCount = 0;
-  const nodeRows: DashboardOverview['nodes'] = nodes.map((n) => {
+  const nodeRows: DashboardOverview['nodes'] = nodes.map((n, i) => {
     if (n.status === 'online') onlineNodeCount += 1;
     return {
       id: n.id,
@@ -240,6 +249,7 @@ async function nodeMetrics(): Promise<{
       lastStatusChange: n.lastStatusChange ? n.lastStatusChange.toISOString() : null,
       inboundCount: n._count.inbounds,
       todayBytes: todayByNode.get(n.id) ?? 0,
+      metrics: metricsByNode[i],
     };
   });
 

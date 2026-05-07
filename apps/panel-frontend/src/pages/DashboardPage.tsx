@@ -284,7 +284,9 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
                   <Table.Tr>
                     <Table.Th>Имя</Table.Th>
                     <Table.Th>Статус</Table.Th>
-                    <Table.Th>Адаптер</Table.Th>
+                    <Table.Th>CPU</Table.Th>
+                    <Table.Th>RAM</Table.Th>
+                    <Table.Th>Диск</Table.Th>
                     <Table.Th ta="right">Inbounds</Table.Th>
                     <Table.Th ta="right">Сегодня</Table.Th>
                   </Table.Tr>
@@ -317,9 +319,34 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
                         </Tooltip>
                       </Table.Td>
                       <Table.Td>
-                        <Badge variant="outline" color="gray">
-                          {n.protocol}
-                        </Badge>
+                        <NodeMiniBar
+                          percent={n.metrics?.cpu.usagePercent ?? null}
+                          tooltip={
+                            n.metrics
+                              ? `${n.metrics.cpu.cores} ядер · LA ${n.metrics.cpu.loadAvg1.toFixed(2)}/${n.metrics.cpu.loadAvg5.toFixed(2)}/${n.metrics.cpu.loadAvg15.toFixed(2)}`
+                              : 'Метрики не доступны'
+                          }
+                        />
+                      </Table.Td>
+                      <Table.Td>
+                        <NodeMiniBar
+                          percent={n.metrics?.memory.usedPercent ?? null}
+                          tooltip={
+                            n.metrics
+                              ? `${formatBytes(n.metrics.memory.usedBytes)} / ${formatBytes(n.metrics.memory.totalBytes)}`
+                              : 'Метрики не доступны'
+                          }
+                        />
+                      </Table.Td>
+                      <Table.Td>
+                        <NodeMiniBar
+                          percent={n.metrics?.disk.usedPercent ?? null}
+                          tooltip={
+                            n.metrics
+                              ? `${formatBytes(n.metrics.disk.usedBytes)} / ${formatBytes(n.metrics.disk.totalBytes)}`
+                              : 'Метрики не доступны'
+                          }
+                        />
                       </Table.Td>
                       <Table.Td ta="right">{n.inboundCount}</Table.Td>
                       <Table.Td ta="right">{formatBytes(n.todayBytes)}</Table.Td>
@@ -592,6 +619,33 @@ function formatUptime(sec: number): string {
   if (sec < 3600) return `${Math.floor(sec / 60)}m ${sec % 60}s`;
   if (sec < 86400) return `${Math.floor(sec / 3600)}h ${Math.floor((sec % 3600) / 60)}m`;
   return `${Math.floor(sec / 86400)}d ${Math.floor((sec % 86400) / 3600)}h`;
+}
+
+function NodeMiniBar({
+  percent,
+  tooltip,
+}: {
+  percent: number | null;
+  tooltip: string;
+}) {
+  if (percent === null) {
+    return (
+      <Text size="xs" c="dimmed">
+        —
+      </Text>
+    );
+  }
+  const color = percent > 90 ? 'red' : percent > 75 ? 'yellow' : 'teal';
+  return (
+    <Tooltip label={tooltip}>
+      <Stack gap={2} miw={90}>
+        <Progress value={Math.min(100, percent)} color={color} size="sm" radius="xl" />
+        <Text size="xs" c="dimmed" ff="monospace">
+          {percent.toFixed(0)}%
+        </Text>
+      </Stack>
+    </Tooltip>
+  );
 }
 
 function TrafficStat({ label, value }: { label: string; value: string }) {

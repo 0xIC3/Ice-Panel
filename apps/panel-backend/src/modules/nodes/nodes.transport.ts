@@ -4,6 +4,7 @@ import type {
   RemoveUserRequest,
   GetStatsResponse,
   HealthcheckResponse,
+  HostMetricsResponse,
   NodeErrorResponse,
   ApplyInboundsRequest,
   ApplyInboundsResponse,
@@ -118,6 +119,14 @@ export class NodeTransport {
 
   async healthcheck(): Promise<HealthcheckResponse> {
     return this.request<HealthcheckResponse>('GET', '/healthz');
+  }
+
+  async getMetrics(): Promise<HostMetricsResponse> {
+    return this.request<HostMetricsResponse>('GET', '/metrics', undefined, {
+      // Metrics endpoint is local /proc reads — should be fast. Tight timeout
+      // keeps the per-tick poller bounded if a node hangs.
+      timeoutMs: 3_000,
+    });
   }
 
   /**

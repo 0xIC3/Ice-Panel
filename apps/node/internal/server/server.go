@@ -18,6 +18,7 @@ import (
 
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/dto"
+	"github.com/0xIC3/Ice-Panel/apps/node/internal/metrics"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/payload"
 )
 
@@ -41,6 +42,7 @@ type Server struct {
 	cfg       Config
 	logger    *slog.Logger
 	startedAt time.Time
+	collector *metrics.Collector
 }
 
 func New(cfg Config) (*Server, error) {
@@ -50,7 +52,11 @@ func New(cfg Config) (*Server, error) {
 	if cfg.Payload == nil {
 		return nil, errors.New("payload is required")
 	}
-	return &Server{cfg: cfg, logger: cfg.Logger}, nil
+	return &Server{
+		cfg:       cfg,
+		logger:    cfg.Logger,
+		collector: metrics.New("/"),
+	}, nil
 }
 
 // Run starts the HTTPS server and blocks until ctx is cancelled or it errors.
@@ -111,6 +117,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/removeUser", s.handleRemoveUser)
 	mux.HandleFunc("/applyInbounds", s.handleApplyInbounds)
 	mux.HandleFunc("/stats", s.handleStats)
+	mux.HandleFunc("/metrics", s.handleMetrics)
 	return mux
 }
 
@@ -313,6 +320,44 @@ func writeInboundsAtomically(path string, inbounds []dto.InboundDto) error {
 		return fmt.Errorf("rename: %w", err)
 	}
 	return nil
+}
+
+func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "GET only")
+		return
+	}
+	snap, err := s.collector.Collect()
+	if err != nil {
+		// Soft-fail: emit whatever sections succeeded; the panel can render
+		// partial data rather than show "node down" because /proc/loadavg
+		// briefly EBUSY'd. Hard-fail only when *every* section returned err
+		// (Collect propagates that as a non-nil error in that case only).
+		s.logger.Warn("metrics collect partial", "err", err)
+	}
+	writeJSON(w, http.StatusOK, dto.HostMetricsResponse{
+		CPU: dto.CPUMetricsDto{
+			UsagePercent: snap.CPU.UsagePercent,
+			LoadAvg1:     snap.CPU.LoadAvg1,
+			LoadAvg5:     snap.CPU.LoadAvg5,
+			LoadAvg15:    snap.CPU.LoadAvg15,
+			Cores:        snap.CPU.Cores,
+		},
+		Memory: dto.MemoryMetricsDto{
+			TotalBytes:     snap.Memory.TotalBytes,
+			AvailableBytes: snap.Memory.AvailableBytes,
+			UsedBytes:      snap.Memory.UsedBytes,
+			UsedPercent:    snap.Memory.UsedPercent,
+		},
+		Disk: dto.DiskMetricsDto{
+			Path:        snap.Disk.Path,
+			TotalBytes:  snap.Disk.TotalBytes,
+			UsedBytes:   snap.Disk.UsedBytes,
+			UsedPercent: snap.Disk.UsedPercent,
+		},
+		UptimeSeconds: snap.UptimeSeconds,
+		CollectedAt:   snap.CollectedAt.UTC().Format(time.RFC3339Nano),
+	})
 }
 
 func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {

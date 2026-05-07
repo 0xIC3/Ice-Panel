@@ -227,6 +227,45 @@ export interface HealthcheckResponse {
   cores: CoreStatus[];
 }
 
+// ───── GET /metrics ─────
+//
+// Host-level CPU / memory / disk for the VPS the node-agent runs on. Polled
+// by the panel every 15s and cached in Redis with TTL 60s, so the dashboard
+// can show per-node load without paying mTLS round-trip on every page open.
+
+export interface CPUMetricsDto {
+  /** Sampled CPU%, 0..100. Zero on the very first agent poll (no prior snapshot). */
+  usagePercent: number;
+  loadAvg1: number;
+  loadAvg5: number;
+  loadAvg15: number;
+  cores: number;
+}
+
+export interface MemoryMetricsDto {
+  totalBytes: number;
+  availableBytes: number;
+  usedBytes: number;
+  usedPercent: number;
+}
+
+export interface DiskMetricsDto {
+  path: string;
+  totalBytes: number;
+  usedBytes: number;
+  usedPercent: number;
+}
+
+export interface HostMetricsResponse {
+  cpu: CPUMetricsDto;
+  memory: MemoryMetricsDto;
+  disk: DiskMetricsDto;
+  /** Node-agent process uptime, seconds. */
+  uptimeSeconds: number;
+  /** ISO 8601 with nanos. Useful for "stale sample" heuristics on the panel. */
+  collectedAt: string;
+}
+
 // ───── Common error shape ─────
 
 export interface NodeErrorResponse {

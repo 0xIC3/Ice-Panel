@@ -1,5 +1,26 @@
+import type { HostMetricsResponse } from '@ice-panel/shared';
 import { prisma } from '../../prisma.js';
+import { redis } from '../../lib/redis.js';
 import { NodeTransport, NodeRequestError } from './nodes.transport.js';
+
+const METRICS_KEY_PREFIX = 'node:metrics:';
+const METRICS_TTL_SECONDS = 60;
+
+export function nodeMetricsKey(nodeId: string): string {
+  return `${METRICS_KEY_PREFIX}${nodeId}`;
+}
+
+export async function readCachedNodeMetrics(
+  nodeId: string,
+): Promise<HostMetricsResponse | null> {
+  const raw = await redis.get(nodeMetricsKey(nodeId));
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as HostMetricsResponse;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Poll every active node's `/healthz` over mTLS and update `nodes.status`
@@ -53,6 +74,47 @@ export async function pollNodeStatuses(): Promise<{ ok: number; down: number }> 
 interface PollResult {
   status: 'online' | 'unreachable';
   message: string | null;
+}
+
+/**
+ * Pull /metrics from every online node in parallel and cache in Redis with
+ * TTL 60s. Per-node failures are swallowed (we just won't have fresh metrics
+ * for that node — the dashboard will show the previous sample until TTL or
+ * "—" if it's the first run).
+ *
+ * Runs on a 15-second tick. Disabled / unreachable nodes are skipped — no
+ * point hammering them.
+ */
+export async function pollNodeMetrics(): Promise<{ ok: number; failed: number }> {
+  const nodes = await prisma.node.findMany({
+    where: {
+      deletedAt: null,
+      status: { notIn: ['disabled', 'unreachable'] },
+    },
+    select: { id: true, address: true },
+  });
+  if (nodes.length === 0) return { ok: 0, failed: 0 };
+
+  let ok = 0;
+  let failed = 0;
+  await Promise.all(
+    nodes.map(async (node) => {
+      try {
+        const transport = new NodeTransport(node);
+        const m = await transport.getMetrics();
+        await redis.set(
+          nodeMetricsKey(node.id),
+          JSON.stringify(m),
+          'EX',
+          METRICS_TTL_SECONDS,
+        );
+        ok++;
+      } catch {
+        failed++;
+      }
+    }),
+  );
+  return { ok, failed };
 }
 
 async function checkOne(node: {

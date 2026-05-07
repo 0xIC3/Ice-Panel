@@ -104,6 +104,42 @@ type HealthcheckResponse struct {
 	Cores  []CoreStatus `json:"cores"`
 }
 
+// ───── GET /metrics ─────
+//
+// Host-level CPU / memory / disk for the VPS the node-agent runs on. Polled
+// by the panel every 15s and cached in Redis with TTL 60s, so the dashboard
+// can show per-node load without paying mTLS round-trip on every page open.
+
+type CPUMetricsDto struct {
+	UsagePercent float64 `json:"usagePercent"`
+	LoadAvg1     float64 `json:"loadAvg1"`
+	LoadAvg5     float64 `json:"loadAvg5"`
+	LoadAvg15    float64 `json:"loadAvg15"`
+	Cores        int     `json:"cores"`
+}
+
+type MemoryMetricsDto struct {
+	TotalBytes     uint64  `json:"totalBytes"`
+	AvailableBytes uint64  `json:"availableBytes"`
+	UsedBytes      uint64  `json:"usedBytes"`
+	UsedPercent    float64 `json:"usedPercent"`
+}
+
+type DiskMetricsDto struct {
+	Path        string  `json:"path"`
+	TotalBytes  uint64  `json:"totalBytes"`
+	UsedBytes   uint64  `json:"usedBytes"`
+	UsedPercent float64 `json:"usedPercent"`
+}
+
+type HostMetricsResponse struct {
+	CPU           CPUMetricsDto    `json:"cpu"`
+	Memory        MemoryMetricsDto `json:"memory"`
+	Disk          DiskMetricsDto   `json:"disk"`
+	UptimeSeconds int64            `json:"uptimeSeconds"`
+	CollectedAt   string           `json:"collectedAt"`
+}
+
 // ───── Common error shape ─────
 
 type ErrorResponse struct {

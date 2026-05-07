@@ -520,6 +520,30 @@ export async function deleteSquad(id: string): Promise<void> {
 
 // ───── Dashboard ─────
 
+export interface NodeHostMetrics {
+  cpu: {
+    usagePercent: number;
+    loadAvg1: number;
+    loadAvg5: number;
+    loadAvg15: number;
+    cores: number;
+  };
+  memory: {
+    totalBytes: number;
+    availableBytes: number;
+    usedBytes: number;
+    usedPercent: number;
+  };
+  disk: {
+    path: string;
+    totalBytes: number;
+    usedBytes: number;
+    usedPercent: number;
+  };
+  uptimeSeconds: number;
+  collectedAt: string;
+}
+
 export interface DashboardOverview {
   users: {
     total: number;
@@ -573,6 +597,7 @@ export interface DashboardOverview {
     lastStatusChange: string | null;
     inboundCount: number;
     todayBytes: number;
+    metrics: NodeHostMetrics | null;
   }[];
   byProtocol: {
     protocol: string;
