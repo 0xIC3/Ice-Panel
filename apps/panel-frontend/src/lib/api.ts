@@ -90,6 +90,8 @@ export interface User {
   telegramId: string | null;
   email: string | null;
   enabledProtocols: ProtocolName[];
+  /** Slice 26 — squads the user belongs to. Always includes ALL_SQUAD_ID. */
+  groupIds: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -110,6 +112,8 @@ export interface CreateUserInput {
   tag?: string | null;
   email?: string | null;
   enabledProtocols?: ProtocolName[];
+  /** Slice 26 — squad membership. Empty/undefined → backend auto-adds to All. */
+  groupIds?: string[];
 }
 
 export interface UpdateUserInput {
@@ -121,6 +125,8 @@ export interface UpdateUserInput {
   tag?: string | null;
   email?: string | null;
   enabledProtocols?: ProtocolName[];
+  /** Slice 26 — replaces the full squad set when provided. */
+  groupIds?: string[];
 }
 
 export async function listUsers(params?: {
@@ -428,4 +434,53 @@ export async function generateInboundKeypair(
 export async function testSrrRule(userAgent: string): Promise<TestSrrResponse> {
   const { data } = await api.post<TestSrrResponse>('/api/srr/test', { userAgent });
   return data;
+}
+
+// ───── Squads (slice 26) ─────
+
+/** Stable, well-known UUID of the system "All" squad. Mirrored from
+ *  apps/panel-backend/src/modules/squads/squads.constants.ts — UI uses it
+ *  to render the row as read-only (rename/delete is rejected backend-side). */
+export const ALL_SQUAD_ID = '00000000-0000-0000-0000-000000000001';
+
+export interface Squad {
+  id: string;
+  name: string;
+  description: string | null;
+  inboundIds: string[];
+  memberCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateSquadInput {
+  name: string;
+  description?: string | null;
+  inboundIds?: string[];
+}
+
+export interface UpdateSquadInput {
+  name?: string;
+  description?: string | null;
+  /** Replaces the full inbound set when provided. */
+  inboundIds?: string[];
+}
+
+export async function listSquads(): Promise<{ squads: Squad[] }> {
+  const { data } = await api.get<{ squads: Squad[] }>('/api/squads');
+  return data;
+}
+
+export async function createSquad(input: CreateSquadInput): Promise<Squad> {
+  const { data } = await api.post<Squad>('/api/squads', input);
+  return data;
+}
+
+export async function updateSquad(id: string, input: UpdateSquadInput): Promise<Squad> {
+  const { data } = await api.put<Squad>(`/api/squads/${id}`, input);
+  return data;
+}
+
+export async function deleteSquad(id: string): Promise<void> {
+  await api.delete(`/api/squads/${id}`);
 }

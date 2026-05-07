@@ -398,10 +398,13 @@ Per-slice verification checklists. Use when **closing** a slice or when re-valid
 - [ ] Subscription test: create user in custom squad with 1 of 3 inbounds → /sub returns only 1
 - [ ] Subscription test: user with no group memberships (raw SQL DELETE) → empty subscription, no panic
 
-### Frontend TODO (separate commit)
-- [ ] `GroupsPage` CRUD UI (table + create/edit modal + inbound multi-select)
-- [ ] `UserFormModal` MultiSelect groups, default `[All]`, "All" shown disabled (auto-include)
-- [ ] api.ts: `listSquads`, `createSquad`, `updateSquad`, `deleteSquad` typed helpers
+### Frontend local checks
+- [x] `lib/api.ts`: `Squad`/`CreateSquadInput`/`UpdateSquadInput` types + `listSquads/createSquad/updateSquad/deleteSquad`; `ALL_SQUAD_ID` const
+- [x] `lib/api.ts`: `User.groupIds: string[]` (now returned by GET /api/users); `CreateUserInput.groupIds` / `UpdateUserInput.groupIds`
+- [x] `pages/SquadsPage.tsx` — table + create/edit/delete with confirm modal
+- [x] `components/SquadFormModal.tsx` — name/description/inbounds MultiSelect; All squad shown read-only with shield icon + disabled fields
+- [x] `components/UserFormModal.tsx` — Squads MultiSelect; All option disabled (auto-include); defensive re-add of ALL_SQUAD_ID at submit
+- [x] Route `/squads` + nav entry with `IconShield`
 
 ### VPS checks
 - [ ] (Не требуется специально — feature чисто backend / UI)

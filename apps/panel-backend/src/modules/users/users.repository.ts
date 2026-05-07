@@ -1,7 +1,10 @@
 import { prisma } from '../../prisma.js';
 import type { User, UserTraffic, Prisma } from '../../generated/prisma/client.js';
 
-export type UserWithTraffic = User & { traffic: UserTraffic | null };
+export type UserWithTraffic = User & {
+  traffic: UserTraffic | null;
+  groupMembers: { groupId: string }[];
+};
 
 export interface ListParams {
   page: number;
@@ -20,7 +23,7 @@ export async function findActiveByUsername(username: string): Promise<User | nul
 export async function findActiveById(id: string): Promise<UserWithTraffic | null> {
   return prisma.user.findFirst({
     where: { id, deletedAt: null },
-    include: { traffic: true },
+    include: { traffic: true, groupMembers: { select: { groupId: true } } },
   });
 }
 
@@ -34,7 +37,7 @@ export async function existsActive(id: string): Promise<boolean> {
 export async function create(data: Prisma.UserCreateInput): Promise<UserWithTraffic> {
   return prisma.user.create({
     data,
-    include: { traffic: true },
+    include: { traffic: true, groupMembers: { select: { groupId: true } } },
   });
 }
 
@@ -45,7 +48,7 @@ export async function updateById(
   return prisma.user.update({
     where: { id },
     data,
-    include: { traffic: true },
+    include: { traffic: true, groupMembers: { select: { groupId: true } } },
   });
 }
 
@@ -80,7 +83,7 @@ export async function list(params: ListParams): Promise<{
   const [users, total] = await Promise.all([
     prisma.user.findMany({
       where,
-      include: { traffic: true },
+      include: { traffic: true, groupMembers: { select: { groupId: true } } },
       orderBy: { createdAt: 'desc' },
       skip: (params.page - 1) * params.limit,
       take: params.limit,

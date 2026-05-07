@@ -1,4 +1,4 @@
-import type { User, UserTraffic } from '../../generated/prisma/client.js';
+import type { GroupMember, User, UserTraffic } from '../../generated/prisma/client.js';
 
 /**
  * Public DTO returned to admins via REST API.
@@ -36,6 +36,9 @@ export interface PublicUserDto {
   // Per-user enabled protocols (subset of {hysteria,xray,amneziawg,naive})
   enabledProtocols: string[];
 
+  // Squad membership (slice 26)
+  groupIds: string[];
+
   // Lifecycle
   createdAt: string;
   updatedAt: string;
@@ -52,7 +55,7 @@ export interface PublicUserDto {
  *   - Date → ISO string
  */
 export function mapUserToPublic(
-  user: User,
+  user: User & { groupMembers?: Pick<GroupMember, 'groupId'>[] },
   traffic: UserTraffic | null,
 ): PublicUserDto {
   return {
@@ -84,6 +87,8 @@ export function mapUserToPublic(
     email: user.email,
 
     enabledProtocols: parseEnabledProtocols(user.enabledProtocols),
+
+    groupIds: user.groupMembers?.map((m) => m.groupId) ?? [],
 
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt.toISOString(),

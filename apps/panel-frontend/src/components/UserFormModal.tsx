@@ -9,7 +9,10 @@ import {
   Textarea,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
+import { useQuery } from '@tanstack/react-query';
 import {
+  ALL_SQUAD_ID,
+  listSquads,
   type CreateUserInput,
   type ProtocolName,
   type TrafficLimitStrategy,
@@ -42,6 +45,7 @@ interface FormValues {
   tag: string;
   email: string;
   enabledProtocols: ProtocolName[];
+  groupIds: string[];
 }
 
 function defaultValues(user: User | null): FormValues {
@@ -56,6 +60,7 @@ function defaultValues(user: User | null): FormValues {
     tag: user?.tag ?? '',
     email: user?.email ?? '',
     enabledProtocols: user?.enabledProtocols ?? ['hysteria'],
+    groupIds: user?.groupIds ?? [ALL_SQUAD_ID],
   };
 }
 
@@ -69,6 +74,13 @@ interface Props {
 
 export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Props) {
   const isEdit = user !== null;
+
+  const squadsQuery = useQuery({ queryKey: ['squads'], queryFn: listSquads });
+  const squadOptions = (squadsQuery.data?.squads ?? []).map((s) => ({
+    value: s.id,
+    label: s.id === ALL_SQUAD_ID ? `${s.name} (auto)` : s.name,
+    disabled: s.id === ALL_SQUAD_ID,
+  }));
 
   const form = useForm<FormValues>({
     initialValues: defaultValues(user),
@@ -90,6 +102,12 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
   }
 
   async function handleSubmit(values: FormValues) {
+    // Always include the All squad — UI shows it disabled-checked, but we
+    // re-add it defensively in case the form ever drifts (e.g. browser back).
+    const groupIds = values.groupIds.includes(ALL_SQUAD_ID)
+      ? values.groupIds
+      : [ALL_SQUAD_ID, ...values.groupIds];
+
     if (isEdit) {
       const input: UpdateUserInput = {
         status: values.status,
@@ -99,6 +117,7 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
         tag: values.tag || null,
         email: values.email || null,
         enabledProtocols: values.enabledProtocols,
+        groupIds,
       };
       await onSubmit(input);
     } else {
@@ -111,6 +130,7 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
         tag: values.tag || null,
         email: values.email || null,
         enabledProtocols: values.enabledProtocols,
+        groupIds,
       };
       await onSubmit(input);
     }
@@ -170,6 +190,16 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
             data={PROTOCOL_OPTIONS}
             withCheckIcon
             {...form.getInputProps('enabledProtocols')}
+          />
+
+          <MultiSelect
+            label="Squads"
+            description="Which inbound groups this user belongs to. 'All' is always included automatically."
+            placeholder="Add additional squads…"
+            data={squadOptions}
+            withCheckIcon
+            searchable
+            {...form.getInputProps('groupIds')}
           />
 
           {!isEdit && (

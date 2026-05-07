@@ -7,6 +7,7 @@ import {
   IconLogout,
   IconRoute,
   IconNetwork,
+  IconShield,
 } from '@tabler/icons-react';
 import { useAuth } from '../stores/auth';
 
@@ -62,6 +63,13 @@ export function AppLayout() {
               to="/inbounds"
               label="Inbounds"
               leftSection={<IconNetwork size={18} />}
+            />
+            <NavLink
+              component={RouterNavLink}
+              to="/squads"
+              label="Squads"
+              description="Group ACL — who sees which inbounds"
+              leftSection={<IconShield size={18} />}
             />
             <NavLink
               component={RouterNavLink}
