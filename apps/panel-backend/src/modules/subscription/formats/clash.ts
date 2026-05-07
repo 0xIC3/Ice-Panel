@@ -34,15 +34,20 @@ export function buildClashYaml(endpoints: SubscriptionEndpoint[]): string {
     const name = `${e.nodeName}-${e.protocol}`;
     if (e.protocol === 'hysteria') {
       proxyNames.push(name);
-      proxies.push(
-        [
-          `  - name: ${yamlString(name)}`,
-          `    type: hysteria2`,
-          `    server: ${e.host}`,
-          `    port: ${e.port}`,
-          `    password: ${yamlString(e.password)}`,
-        ].join('\n'),
-      );
+      const lines = [
+        `  - name: ${yamlString(name)}`,
+        `    type: hysteria2`,
+        `    server: ${e.host}`,
+        `    port: ${e.port}`,
+        `    password: ${yamlString(e.password)}`,
+      ];
+      if (e.obfsPassword) {
+        lines.push(
+          `    obfs: salamander`,
+          `    obfs-password: ${yamlString(e.obfsPassword)}`,
+        );
+      }
+      proxies.push(lines.join('\n'));
     } else if (e.protocol === 'xray') {
       proxyNames.push(name);
       proxies.push(

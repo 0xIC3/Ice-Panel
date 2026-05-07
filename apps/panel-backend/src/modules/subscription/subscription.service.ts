@@ -145,17 +145,20 @@ export async function generateSubscription(
     const nodeName = ib.node.name;
 
     if (ib.protocol === 'hysteria') {
+      const hyCfg = ib.config as { obfsPassword?: string } | null;
       endpoints.push({
         protocol: 'hysteria',
         nodeName,
         host,
         port,
         password: user.hysteriaPassword,
+        obfsPassword: hyCfg?.obfsPassword,
         uri: buildHysteriaUri({
           password: user.hysteriaPassword,
           host,
           port,
           name: nodeName,
+          obfsPassword: hyCfg?.obfsPassword,
         }),
       });
     } else if (ib.protocol === 'xray' && user.xrayUuid) {

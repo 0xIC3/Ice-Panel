@@ -43,6 +43,9 @@ interface SubscriptionEndpointBase {
 export interface HysteriaSubscriptionEndpoint extends SubscriptionEndpointBase {
   protocol: 'hysteria';
   password: string;
+  /** Salamander obfuscation password — present only when the inbound has
+   *  `obfsPassword` set. Critical on RU/IR/CN ISPs that DPI-throttle bare QUIC. */
+  obfsPassword?: string;
 }
 
 export interface XraySubscriptionEndpoint extends SubscriptionEndpointBase {

@@ -16,15 +16,22 @@ export interface HysteriaUriOpts {
   port: number;
   /** URL fragment shown in clients (typically the node name). */
   name: string;
+  /** Salamander obfuscation password. When set, emitted as `obfs=salamander`
+   *  + `obfs-password=...` query params. Critical on RU/IR/CN ISPs where
+   *  bare QUIC is throttled or dropped by DPI mid-session. */
+  obfsPassword?: string;
 }
 
 export function buildHysteriaUri(opts: HysteriaUriOpts): string {
   // Hiddify's outbound parser was failing on bare `hysteria2://...:443/#name`
   // ("Unknown parse outbound") on 2026-05-06. Adding an explicit `sni` query
   // param fixes it — even when SNI matches host (which Hysteria infers
-  // automatically), some clients want it spelled out. Slice 24 will replace
-  // this with the full obfs/insecure/pinSHA256 query builder.
+  // automatically), some clients want it spelled out.
   const params = new URLSearchParams();
   params.set('sni', opts.host);
+  if (opts.obfsPassword) {
+    params.set('obfs', 'salamander');
+    params.set('obfs-password', opts.obfsPassword);
+  }
   return `hysteria2://${encodeURIComponent(opts.password)}@${opts.host}:${opts.port}/?${params.toString()}#${encodeURIComponent(opts.name)}`;
 }

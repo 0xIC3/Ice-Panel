@@ -39,6 +39,9 @@ export function buildSingboxJson(endpoints: SubscriptionEndpoint[]): string {
         server: e.host,
         server_port: e.port,
         password: e.password,
+        ...(e.obfsPassword
+          ? { obfs: { type: 'salamander', password: e.obfsPassword } }
+          : {}),
         tls: {
           enabled: true,
           server_name: e.host,
