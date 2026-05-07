@@ -87,6 +87,10 @@ func buildAdapters(logger *slog.Logger) []core.CoreAdapter {
 			AuthCallbackPort: getenvInt("HYSTERIA_AUTH_PORT", defaultAuthCallbackPort),
 			BinaryPath:       os.Getenv("HYSTERIA_BINARY"),
 			ConfigPath:       os.Getenv("HYSTERIA_CONFIG"),
+			Hostname:         os.Getenv("HYSTERIA_HOSTNAME"),
+			ACMEEmail:        os.Getenv("HYSTERIA_ACME_EMAIL"),
+			ListenPort:       getenvInt("HYSTERIA_LISTEN_PORT", 443),
+			ServiceUnit:      os.Getenv("HYSTERIA_SERVICE_UNIT"),
 		}, logger),
 	}
 

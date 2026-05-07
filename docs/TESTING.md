@@ -215,21 +215,25 @@ Per-slice verification checklists. Use when **closing** a slice or when re-valid
 
 ---
 
-## Slice 24b2 — Hysteria ApplyInbound real impl ⏭️
+## Slice 24b2 — Hysteria ApplyInbound real impl ✅ (code) / ⏭️ (VPS)
 
 ### Pre-conditions
 - VPS с уже установленной Ice-Panel Hysteria-нодой через `install-node.sh --hysteria-domain ...`
 - DNS A-record указывает на VPS, пропагирован
 - `/etc/hysteria/config.yaml` существует с ACME settings
 - `hysteria.service` running, LE-cert получен
+- node-agent env: `HYSTERIA_HOSTNAME`, `HYSTERIA_ACME_EMAIL`, `HYSTERIA_CONFIG=/etc/hysteria/config.yaml`, `HYSTERIA_SERVICE_UNIT=hysteria-server.service`
 
 ### Local checks
-- [ ] Hysteria adapter `ApplyInbound` parse `HysteriaInboundCfg` JSON → unmarshal без ошибок
-- [ ] Diff vs current — same cfg → no-op
-- [ ] Diff — изменился `obfsPassword` → flag set "needs restart"
-- [ ] Mock `runCmd("systemctl", "restart", "hysteria.service")` через injectable runner
-- [ ] Tests: same cfg → 0 runCmd calls, different cfg → 1 runCmd call
-- [ ] Generation `/etc/hysteria/config.yaml` deterministic (same cfg → byte-identical output)
+- [x] `ApplyInbound` парсит `inboundCfgWire` JSON (obfsPassword / masqueradeUrl / brutalUpMbps / brutalDownMbps) — unmarshal OK
+- [x] Diff vs current — same cfg → no-op (no rewrite, no restart)
+- [x] Diff — изменился `obfsPassword` → write + restart
+- [x] Mock `RunCmd("systemctl", "restart", ServiceUnit)` через injectable runner
+- [x] Tests: same cfg → 0 RunCmd calls, different cfg → 1 RunCmd call (`TestApplyInbound_IsIdempotent`, `TestApplyInbound_RestartFiresOnEveryRealChange`)
+- [x] `renderConfig` deterministic — golden-test matches expected YAML byte-for-byte
+- [x] No-ConfigPath path: `ApplyInbound` accepts in-memory only, no file write, no restart
+- [x] No-ServiceUnit path: writes file but skips restart (callback-only mode)
+- [x] Malformed JSON returns parse error без вызова RunCmd
 
 ### VPS checks
 - [ ] В UI изменить `obfsPassword` Hysteria inbound'а → backend pushes → node-agent rewrites yaml → systemctl restart hysteria → success

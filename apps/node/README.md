@@ -19,9 +19,13 @@ The agent reads the following environment variables.
 | Var | Default | Description |
 |---|---|---|
 | `HYSTERIA_BINARY` | (none) | Path to `hysteria` executable. Empty → callback-only mode (no subprocess; Hysteria runs as a separate systemd unit). |
-| `HYSTERIA_CONFIG` | (none) | Path to Hysteria YAML config when `HYSTERIA_BINARY` is set. |
+| `HYSTERIA_CONFIG` | (none) | Path to Hysteria YAML config. Used both when `HYSTERIA_BINARY` is set (subprocess mode) and when the server runs as a separate systemd unit (slice 24b2: `ApplyInbound` rewrites this file). |
 | `HYSTERIA_AUTH_HOST` | `127.0.0.1` | Bind host for the local `/auth` callback that Hysteria's `auth.type: http` calls. |
 | `HYSTERIA_AUTH_PORT` | `9000` | Bind port for the local `/auth` callback. |
+| `HYSTERIA_HOSTNAME` | (none) | Public FQDN used for ACME (Let's Encrypt http-01) cert issuance. Required for `ApplyInbound` to render `config.yaml`. |
+| `HYSTERIA_ACME_EMAIL` | (none) | Contact address Let's Encrypt uses for renewal warnings. Required for `ApplyInbound` to render. |
+| `HYSTERIA_LISTEN_PORT` | `443` | Public UDP port hysteria listens on. |
+| `HYSTERIA_SERVICE_UNIT` | (none) | systemd unit to `systemctl restart` after `ApplyInbound` rewrites the config (e.g. `hysteria-server.service`). Empty → write file but skip restart (callback-only mode where admin manages the unit). |
 
 ### Xray adapter (opt-in)
 

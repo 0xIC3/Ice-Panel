@@ -1,9 +1,15 @@
 package hysteria
 
 import (
+	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core"
@@ -131,5 +137,157 @@ func TestHealthyAfterCallbackStart(t *testing.T) {
 	a.callbackSrv = &http.Server{}
 	if !a.Healthy() {
 		t.Errorf("Healthy: expected true with callback up and no subprocess configured")
+	}
+}
+
+// ───── ApplyInbound (slice 24b2) ─────
+
+// recordingRunner captures every RunCmd invocation for assertions.
+type recordingRunner struct {
+	mu    sync.Mutex
+	calls [][]string
+}
+
+func (r *recordingRunner) run(_ context.Context, name string, args ...string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.calls = append(r.calls, append([]string{name}, args...))
+	return nil
+}
+
+func newApplyInboundAdapter(t *testing.T, runner *recordingRunner) (*Adapter, string) {
+	t.Helper()
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	a := New(Config{
+		Hostname:    "hy2.example.com",
+		ACMEEmail:   "admin@example.com",
+		ListenPort:  443,
+		ConfigPath:  cfgPath,
+		ServiceUnit: "hysteria-server.service",
+		RunCmd:      runner.run,
+	}, logger)
+	return a, cfgPath
+}
+
+func TestApplyInbound_WritesConfigAndRestartsService(t *testing.T) {
+	runner := &recordingRunner{}
+	a, cfgPath := newApplyInboundAdapter(t, runner)
+
+	body, _ := json.Marshal(map[string]any{
+		"obfsPassword":  "salt",
+		"masqueradeUrl": "https://www.bing.com",
+	})
+	if err := a.ApplyInbound(body); err != nil {
+		t.Fatalf("ApplyInbound: %v", err)
+	}
+
+	blob, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("read written config: %v", err)
+	}
+	body2 := string(blob)
+	if !strings.Contains(body2, "password: salt") {
+		t.Errorf("written config missing obfs password:\n%s", body2)
+	}
+	if !strings.Contains(body2, "url: https://www.bing.com") {
+		t.Errorf("written config missing masquerade url:\n%s", body2)
+	}
+
+	if got := len(runner.calls); got != 1 {
+		t.Fatalf("expected 1 systemctl call, got %d: %v", got, runner.calls)
+	}
+	want := []string{"systemctl", "restart", "hysteria-server.service"}
+	for i, v := range want {
+		if runner.calls[0][i] != v {
+			t.Errorf("call arg[%d]: got %q want %q (full: %v)", i, runner.calls[0][i], v, runner.calls[0])
+		}
+	}
+}
+
+func TestApplyInbound_IsIdempotent(t *testing.T) {
+	runner := &recordingRunner{}
+	a, _ := newApplyInboundAdapter(t, runner)
+
+	body, _ := json.Marshal(map[string]any{"obfsPassword": "salt"})
+	if err := a.ApplyInbound(body); err != nil {
+		t.Fatalf("first ApplyInbound: %v", err)
+	}
+	if err := a.ApplyInbound(body); err != nil {
+		t.Fatalf("second ApplyInbound: %v", err)
+	}
+	if got := len(runner.calls); got != 1 {
+		t.Errorf("expected 1 restart for two identical applies, got %d: %v", got, runner.calls)
+	}
+}
+
+func TestApplyInbound_RestartFiresOnEveryRealChange(t *testing.T) {
+	runner := &recordingRunner{}
+	a, _ := newApplyInboundAdapter(t, runner)
+
+	first, _ := json.Marshal(map[string]any{"obfsPassword": "v1"})
+	second, _ := json.Marshal(map[string]any{"obfsPassword": "v2"})
+
+	_ = a.ApplyInbound(first)
+	_ = a.ApplyInbound(second)
+
+	if got := len(runner.calls); got != 2 {
+		t.Errorf("expected 2 restarts for differing applies, got %d", got)
+	}
+}
+
+func TestApplyInbound_NoConfigPath_AcceptsInMemory(t *testing.T) {
+	runner := &recordingRunner{}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	a := New(Config{RunCmd: runner.run}, logger) // no ConfigPath, no ServiceUnit
+
+	body, _ := json.Marshal(map[string]any{"obfsPassword": "x"})
+	if err := a.ApplyInbound(body); err != nil {
+		t.Fatalf("ApplyInbound: %v", err)
+	}
+	if len(runner.calls) != 0 {
+		t.Errorf("no ConfigPath → no systemctl call expected, got %v", runner.calls)
+	}
+
+	// Same body again → diff says equal, no work either way
+	if err := a.ApplyInbound(body); err != nil {
+		t.Fatalf("second ApplyInbound: %v", err)
+	}
+}
+
+func TestApplyInbound_NoServiceUnit_WritesButNoRestart(t *testing.T) {
+	runner := &recordingRunner{}
+	dir := t.TempDir()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	a := New(Config{
+		Hostname:   "h",
+		ACMEEmail:  "e@x",
+		ConfigPath: filepath.Join(dir, "config.yaml"),
+		RunCmd:     runner.run,
+		// ServiceUnit deliberately empty
+	}, logger)
+
+	body, _ := json.Marshal(map[string]any{"obfsPassword": "x"})
+	if err := a.ApplyInbound(body); err != nil {
+		t.Fatalf("ApplyInbound: %v", err)
+	}
+	if len(runner.calls) != 0 {
+		t.Errorf("empty ServiceUnit → no systemctl call expected, got %v", runner.calls)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "config.yaml")); err != nil {
+		t.Errorf("config should still be written when ServiceUnit empty: %v", err)
+	}
+}
+
+func TestApplyInbound_RejectsMalformedJSON(t *testing.T) {
+	runner := &recordingRunner{}
+	a, _ := newApplyInboundAdapter(t, runner)
+
+	if err := a.ApplyInbound([]byte("{not json")); err == nil {
+		t.Errorf("expected parse error on malformed JSON")
+	}
+	if len(runner.calls) != 0 {
+		t.Errorf("no systemctl on parse error, got %v", runner.calls)
 	}
 }
