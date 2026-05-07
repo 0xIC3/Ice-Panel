@@ -345,7 +345,7 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
                         key={s.id}
                         name={s.name}
                         userCount={s.memberCount}
-                        inboundCount={s.inboundIds.length}
+                        profileCount={s.profileIds.length}
                         checked={checked}
                         disabled={isAll}
                         onToggle={() => {
@@ -491,14 +491,14 @@ function ProfileHeader({ user, subUrl }: { user: User; subUrl: string }) {
 function SquadRow({
   name,
   userCount,
-  inboundCount,
+  profileCount,
   checked,
   disabled,
   onToggle,
 }: {
   name: string;
   userCount: number;
-  inboundCount: number;
+  profileCount: number;
   checked: boolean;
   disabled?: boolean;
   onToggle: () => void;
@@ -527,9 +527,9 @@ function SquadRow({
               {userCount}
             </Badge>
           </Tooltip>
-          <Tooltip label="Inbound'ов">
+          <Tooltip label="Профилей">
             <Badge variant="light" color="indigo" size="sm">
-              {inboundCount}
+              {profileCount}
             </Badge>
           </Tooltip>
         </Group>
