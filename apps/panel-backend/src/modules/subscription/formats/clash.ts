@@ -82,13 +82,12 @@ export function buildClashYaml(endpoints: SubscriptionEndpoint[]): string {
         `      public-key: ${yamlString(e.publicKey)}`,
         `      short-id: ${yamlString(e.shortId)}`,
       );
-      // Transport-specific options for ws/grpc/httpupgrade. Clash Meta
-      // schema names mirror the upstream xray ones, with httpupgrade
-      // landing in `network: 'http-upgrade'` (note the dash) on some
-      // older Mihomo builds. We emit the canonical underscore-less form
-      // — modern Mihomo (≥1.18) accepts it.
-      if (network === 'ws' || network === 'http-upgrade' || network === 'httpupgrade') {
-        const optsKey = network === 'grpc' ? 'grpc-opts' : `${network}-opts`;
+      // Transport-specific options for ws/httpupgrade. Clash Meta accepts
+      // the underscore-less `httpupgrade` form on modern Mihomo (≥1.18);
+      // older builds wanted `http-upgrade`, but we don't target those.
+      // grpc has its own block below.
+      if (network === 'ws' || network === 'httpupgrade') {
+        const optsKey = `${network}-opts`;
         const opts: string[] = [];
         if (e.path) opts.push(`      path: ${yamlString(e.path)}`);
         if (e.hostHeader) {

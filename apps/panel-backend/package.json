@@ -5,9 +5,12 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
+    "predev": "node ./node_modules/prisma/build/index.js migrate deploy",
     "dev": "tsx watch --env-file=../../.env src/index.ts",
     "build": "tsc",
+    "prestart": "node ./node_modules/prisma/build/index.js migrate deploy",
     "start": "node --env-file=../../.env dist/index.js",
+    "db:migrate": "node ./node_modules/prisma/build/index.js migrate deploy",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest --passWithNoTests"
   },

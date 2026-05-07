@@ -517,3 +517,60 @@ export async function updateSquad(id: string, input: UpdateSquadInput): Promise<
 export async function deleteSquad(id: string): Promise<void> {
   await api.delete(`/api/squads/${id}`);
 }
+
+// ───── Dashboard ─────
+
+export interface DashboardOverview {
+  users: {
+    total: number;
+    byStatus: Record<string, number>;
+    onlineNow: number;
+    onlineToday: number;
+    onlineThisWeek: number;
+    neverOnline: number;
+  };
+  traffic: {
+    todayBytes: number;
+    yesterdayBytes: number;
+    last7dBytes: number;
+    last30dBytes: number;
+    calendarMonthBytes: number;
+    currentYearBytes: number;
+    last24hHourly: { hour: string; bytes: number }[];
+  };
+  system: {
+    totalRamBytes: number | null;
+    usedRamBytes: number | null;
+    onlineNodeCount: number;
+    totalNodeCount: number;
+  };
+  nodes: {
+    id: string;
+    name: string;
+    address: string;
+    protocol: string;
+    status: string;
+    countryCode: string | null;
+    lastStatusChange: string | null;
+    inboundCount: number;
+    todayBytes: number;
+  }[];
+  byProtocol: {
+    protocol: string;
+    inboundCount: number;
+    enabledUserCount: number;
+  }[];
+  topUsersToday: { id: string; username: string; bytes: number }[];
+  recentEvents: {
+    id: string;
+    eventType: string;
+    userId: string;
+    username: string | null;
+    createdAt: string;
+  }[];
+}
+
+export async function getDashboardOverview(): Promise<DashboardOverview> {
+  const { data } = await api.get<DashboardOverview>('/api/dashboard/overview');
+  return data;
+}

@@ -13,6 +13,7 @@ import { subscriptionRoutes } from './modules/subscription/subscription.routes.j
 import { srrRoutes } from './modules/srr/srr.routes.js';
 import { inboundsRoutes } from './modules/inbounds/inbounds.routes.js';
 import { squadsRoutes } from './modules/squads/squads.routes.js';
+import { dashboardRoutes } from './modules/dashboard/dashboard.routes.js';
 
 /**
  * Build the Fastify instance with all plugins and routes registered.
@@ -82,6 +83,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(srrRoutes);
   await app.register(inboundsRoutes);
   await app.register(squadsRoutes);
+  await app.register(dashboardRoutes);
 
   return app;
 }

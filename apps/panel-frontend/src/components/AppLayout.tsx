@@ -8,6 +8,7 @@ import {
   IconRoute,
   IconNetwork,
   IconShield,
+  IconLayoutDashboard,
 } from '@tabler/icons-react';
 import { useAuth } from '../stores/auth';
 
@@ -46,6 +47,13 @@ export function AppLayout() {
       <AppShell.Navbar p="md">
         <Stack justify="space-between" h="100%">
           <Stack gap={4}>
+            <NavLink
+              component={RouterNavLink}
+              to="/"
+              end
+              label="Главная"
+              leftSection={<IconLayoutDashboard size={18} />}
+            />
             <NavLink
               component={RouterNavLink}
               to="/users"
