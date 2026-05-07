@@ -6,7 +6,7 @@ import {
   IconServer2,
   IconLogout,
   IconRoute,
-  IconNetwork,
+  IconBolt,
   IconShield,
   IconLayoutDashboard,
 } from '@tabler/icons-react';
@@ -68,9 +68,10 @@ export function AppLayout() {
             />
             <NavLink
               component={RouterNavLink}
-              to="/inbounds"
-              label="Inbounds"
-              leftSection={<IconNetwork size={18} />}
+              to="/profiles"
+              label="Профили"
+              description="Шаблоны inbound'ов, разворачиваются на ноды"
+              leftSection={<IconBolt size={18} />}
             />
             <NavLink
               component={RouterNavLink}

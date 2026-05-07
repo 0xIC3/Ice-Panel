@@ -12,9 +12,14 @@ import { usersRoutes } from './modules/users/users.routes.js';
 import { nodesRoutes } from './modules/nodes/nodes.routes.js';
 import { subscriptionRoutes } from './modules/subscription/subscription.routes.js';
 import { srrRoutes } from './modules/srr/srr.routes.js';
-import { inboundsRoutes } from './modules/inbounds/inbounds.routes.js';
+// Slice 27 — `inboundsRoutes` retired. The new /api/profiles + /api/bindings
+// pair from `profilesRoutes` replaces it. The inbounds module file is kept
+// in the tree for now because its config schemas are reused by profiles, but
+// no routes are mounted.
+// import { inboundsRoutes } from './modules/inbounds/inbounds.routes.js';
 import { squadsRoutes } from './modules/squads/squads.routes.js';
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes.js';
+import { profilesRoutes } from './modules/profiles/profiles.routes.js';
 
 /**
  * Build the Fastify instance with all plugins and routes registered.
@@ -104,9 +109,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(nodesRoutes);
   await app.register(subscriptionRoutes);
   await app.register(srrRoutes);
-  await app.register(inboundsRoutes);
   await app.register(squadsRoutes);
   await app.register(dashboardRoutes);
+  await app.register(profilesRoutes);
 
   return app;
 }

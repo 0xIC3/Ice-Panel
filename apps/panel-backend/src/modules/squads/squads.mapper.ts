@@ -1,17 +1,18 @@
-import type { Group, GroupInbound } from '../../generated/prisma/client.js';
+import type { Group, GroupProfile } from '../../generated/prisma/client.js';
 
 export interface PublicSquadDto {
   id: string;
   name: string;
   description: string | null;
-  inboundIds: string[];
+  /** Slice 27 — squad ACL operates on profiles, not per-node inbounds. */
+  profileIds: string[];
   memberCount: number;
   createdAt: string;
   updatedAt: string;
 }
 
 type SquadWithRelations = Group & {
-  groupInbounds: Pick<GroupInbound, 'inboundId'>[];
+  groupProfiles: Pick<GroupProfile, 'profileId'>[];
   _count?: { members: number };
 };
 
@@ -20,7 +21,7 @@ export function mapSquadToPublic(squad: SquadWithRelations): PublicSquadDto {
     id: squad.id,
     name: squad.name,
     description: squad.description,
-    inboundIds: squad.groupInbounds.map((gi) => gi.inboundId),
+    profileIds: squad.groupProfiles.map((gp) => gp.profileId),
     memberCount: squad._count?.members ?? 0,
     createdAt: squad.createdAt.toISOString(),
     updatedAt: squad.updatedAt.toISOString(),

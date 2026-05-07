@@ -1,4 +1,5 @@
 import { eventBus } from '../../lib/event-bus.js';
+import { prisma } from '../../prisma.js';
 import { inboundSyncQueue } from './inbounds.queue.js';
 
 /**
@@ -44,5 +45,42 @@ export function registerInboundEventHandlers(): void {
   // re-bootstrap) and exercises the auto-push pipeline immediately.
   eventBus.on('node.created', ({ nodeId, nodeName }) => {
     enqueue(nodeId, `node.created ${nodeName}`);
+  });
+
+  // ───── Slice 27 — Profile + Binding events ─────
+  //
+  // binding.* is per-(profile, node) — only that node needs re-push.
+  // profile.* changed shared config — every bound node needs re-push.
+
+  eventBus.on('binding.created', ({ bindingId, nodeId }) => {
+    enqueue(nodeId, `binding.created ${bindingId}`);
+  });
+  eventBus.on('binding.updated', ({ bindingId, nodeId }) => {
+    enqueue(nodeId, `binding.updated ${bindingId}`);
+  });
+  eventBus.on('binding.deleted', ({ bindingId, nodeId }) => {
+    enqueue(nodeId, `binding.deleted ${bindingId}`);
+  });
+
+  eventBus.on('profile.updated', ({ profileId }) => {
+    void prisma.profileNodeBinding
+      .findMany({ where: { profileId }, select: { nodeId: true } })
+      .then((rows) => {
+        const seen = new Set<string>();
+        for (const r of rows) {
+          if (seen.has(r.nodeId)) continue;
+          seen.add(r.nodeId);
+          enqueue(r.nodeId, `profile.updated ${profileId}`);
+        }
+      })
+      .catch((err: unknown) =>
+        console.error(`[event] profile.updated fan-out failed:`, err),
+      );
+  });
+
+  eventBus.on('profile.deleted', ({ profileId, affectedNodeIds }) => {
+    for (const nodeId of affectedNodeIds) {
+      enqueue(nodeId, `profile.deleted ${profileId}`);
+    }
   });
 }

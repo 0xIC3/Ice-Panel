@@ -9,16 +9,17 @@ const NameSchema = z
 export const CreateSquadSchema = z.object({
   name: NameSchema,
   description: z.string().max(1000).nullish(),
-  /** Initial inbound assignment. Optional — admin can attach later via PUT. */
-  inboundIds: z.array(z.uuid()).default([]),
+  /** Slice 27 — squad ACL is now profile-level. Initial profile assignment;
+   *  admin can attach later via PUT. */
+  profileIds: z.array(z.uuid()).default([]),
 });
 export type CreateSquadInput = z.infer<typeof CreateSquadSchema>;
 
 export const UpdateSquadSchema = z.object({
   name: NameSchema.optional(),
   description: z.string().max(1000).nullish(),
-  /** When provided, replaces the full inbound set (set semantics). */
-  inboundIds: z.array(z.uuid()).optional(),
+  /** When provided, replaces the full profile set (set semantics). */
+  profileIds: z.array(z.uuid()).optional(),
 });
 export type UpdateSquadInput = z.infer<typeof UpdateSquadSchema>;
 

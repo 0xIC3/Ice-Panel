@@ -130,38 +130,58 @@ export async function generateSubscription(
 
   const enabled = new Set(parseEnabledProtocols(user.enabledProtocols));
 
-  // Slice 26 — Squad ACL. Inbounds visible to the user are the UNION of
-  // inbounds attached to every group the user is a member of. If the user
-  // has zero memberships the subscription is empty (createUser auto-adds
-  // them to "All", so this is unreachable through the normal API path —
-  // but we don't want a panic if someone clears memberships via raw SQL).
-  const inbounds = await prisma.inbound.findMany({
+  // Slice 27 — Squad ACL is now profile-level. Visible bindings are the
+  // UNION of bindings of every profile attached to a group the user is a
+  // member of. If the user has zero memberships the subscription is empty
+  // (createUser auto-adds them to "All", so this is only reachable if
+  // someone clears memberships via raw SQL).
+  const bindings = await prisma.profileNodeBinding.findMany({
     where: {
       enabled: true,
-      node: { deletedAt: null, status: { not: 'disabled' } },
-      groupInbounds: {
-        some: {
-          group: {
-            members: { some: { userId: user.id } },
+      profile: {
+        enabled: true,
+        groupProfiles: {
+          some: {
+            group: { members: { some: { userId: user.id } } },
           },
         },
       },
+      node: { deletedAt: null, status: { not: 'disabled' } },
     },
-    include: { node: { select: { name: true, address: true } } },
-    orderBy: [{ node: { createdAt: 'asc' } }, { port: 'asc' }],
+    include: {
+      profile: { select: { id: true, protocol: true, config: true } },
+      node: { select: { name: true, address: true, createdAt: true } },
+    },
+    orderBy: [{ port: 'asc' }],
+  });
+  // Sort by node createdAt then port so the order across formats stays stable.
+  bindings.sort((a, b) => {
+    const t = a.node.createdAt.getTime() - b.node.createdAt.getTime();
+    return t !== 0 ? t : a.port - b.port;
   });
 
   const endpoints: SubscriptionEndpoint[] = [];
-  for (const ib of inbounds) {
-    if (!enabled.has(ib.protocol as never)) continue;
+  for (const b of bindings) {
+    if (!enabled.has(b.profile.protocol as never)) continue;
 
-    // Slice 25 — `publicHost` and `publicPort` on the inbound override the
-    // historic fallback (`hostFromAddress(node.address)` / `inbound.port`).
-    // Lets admins keep `node.address` as the mTLS-only control-plane endpoint
-    // (often a bare IP) while emitting a real FQDN to clients.
-    const host = ib.publicHost ?? hostFromAddress(ib.node.address);
-    const port = ib.publicPort ?? ib.port;
-    const nodeName = ib.node.name;
+    // Resolve deployable config: profile.config + binding.overrides.
+    const baseConfig = (b.profile.config ?? {}) as Record<string, unknown>;
+    const ovr = (b.overrides ?? {}) as Record<string, unknown>;
+    const cfgMerged = { ...baseConfig, ...ovr };
+
+    // Synthetic "ib" handle so the per-protocol branches below stay close
+    // to the previous shape (less churn in the giant switch).
+    const ib = {
+      id: b.id,
+      protocol: b.profile.protocol,
+      profileId: b.profile.id,
+      config: cfgMerged,
+    };
+
+    // Public host/port logic: binding overrides → fall back to node.address.
+    const host = b.publicHost ?? hostFromAddress(b.node.address);
+    const port = b.publicPort ?? b.port;
+    const nodeName = b.node.name;
 
     if (ib.protocol === 'hysteria') {
       const hyCfg = ib.config as { obfsPassword?: string } | null;
@@ -243,7 +263,9 @@ export async function generateSubscription(
       });
     } else if (ib.protocol === 'amneziawg' && user.amneziawgPrivateKey) {
       const cfg = ib.config as unknown as AmneziawgInboundConfig;
-      const peer = await allocatePeer(ib.id, user.id, cfg.subnet);
+      // Slice 27 — peer is keyed on profileId (one allocation per logical
+      // AmneziaWG profile, shared across all nodes the profile is bound to).
+      const peer = await allocatePeer(ib.profileId, user.id, cfg.subnet);
       endpoints.push({
         protocol: 'amneziawg',
         nodeName,

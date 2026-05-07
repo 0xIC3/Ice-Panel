@@ -222,7 +222,7 @@ async function nodeMetrics(): Promise<{
       status: true,
       countryCode: true,
       lastStatusChange: true,
-      _count: { select: { inbounds: true } },
+      _count: { select: { profileBindings: true } },
     },
     orderBy: { name: 'asc' },
   });
@@ -256,7 +256,7 @@ async function nodeMetrics(): Promise<{
       status: n.status,
       countryCode: n.countryCode,
       lastStatusChange: n.lastStatusChange ? n.lastStatusChange.toISOString() : null,
-      inboundCount: n._count.inbounds,
+      inboundCount: n._count.profileBindings,
       todayBytes: todayByNode.get(n.id) ?? 0,
       metrics: metricsByNode[i],
     };
@@ -272,7 +272,10 @@ async function nodeMetrics(): Promise<{
 }
 
 async function protocolMetrics(): Promise<DashboardOverview['byProtocol']> {
-  const inboundCounts = await prisma.inbound.groupBy({
+  // Slice 27 — protocols come from the profile table now. Profile×bindings
+  // is m:n; we count distinct profiles per protocol so the "1 protocol = N
+  // inbound rows on N nodes" duplication doesn't inflate the dashboard.
+  const inboundCounts = await prisma.profile.groupBy({
     by: ['protocol'],
     _count: { _all: true },
   });

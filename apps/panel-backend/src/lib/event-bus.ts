@@ -23,6 +23,16 @@ export interface DomainEventMap {
   'inbound.created':      { inboundId: string; nodeId: string };
   'inbound.updated':      { inboundId: string; nodeId: string };
   'inbound.deleted':      { inboundId: string; nodeId: string };
+  // Slice 27 — Profiles + ProfileNodeBinding model. profile.* events fire
+  // on profile-template mutations (no immediate node restart — config of
+  // shared profile changed, all bound nodes need re-push). binding.* events
+  // are scoped to a single node (only that node gets re-pushed).
+  'profile.created':      { profileId: string };
+  'profile.updated':      { profileId: string };
+  'profile.deleted':      { profileId: string; affectedNodeIds: string[] };
+  'binding.created':      { bindingId: string; profileId: string; nodeId: string };
+  'binding.updated':      { bindingId: string; profileId: string; nodeId: string };
+  'binding.deleted':      { bindingId: string; profileId: string; nodeId: string };
 }
 
 type EventHandler<K extends keyof DomainEventMap> = (

@@ -34,7 +34,8 @@ import {
   ALL_SQUAD_ID,
   createSquad,
   deleteSquad,
-  listInbounds,
+  listBindings,
+  listProfiles,
   listSquads,
   updateSquad,
   type CreateSquadInput,
@@ -50,7 +51,8 @@ export function SquadsPage() {
   const [search, setSearch] = useState('');
 
   const squadsQuery = useQuery({ queryKey: ['squads'], queryFn: listSquads });
-  const inboundsQuery = useQuery({ queryKey: ['inbounds'], queryFn: listInbounds });
+  const profilesQuery = useQuery({ queryKey: ['profiles'], queryFn: () => listProfiles() });
+  const bindingsQuery = useQuery({ queryKey: ['bindings'], queryFn: () => listBindings() });
 
   const createMutation = useMutation({
     mutationFn: createSquad,
@@ -123,7 +125,14 @@ export function SquadsPage() {
   }
 
   const squads = squadsQuery.data?.squads ?? [];
-  const inbounds = inboundsQuery.data?.inbounds ?? [];
+  const profiles = profilesQuery.data?.profiles ?? [];
+  const bindingsByProfile = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const b of bindingsQuery.data?.bindings ?? []) {
+      m.set(b.profileId, (m.get(b.profileId) ?? 0) + 1);
+    }
+    return m;
+  }, [bindingsQuery.data]);
 
   const filteredSquads = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -210,7 +219,7 @@ export function SquadsPage() {
         opened={createOpen}
         onClose={closeCreate}
         squad={null}
-        inbounds={inbounds}
+        profiles={profiles} bindingsByProfile={bindingsByProfile}
         onSubmit={handleCreate}
         loading={createMutation.isPending}
       />
@@ -219,7 +228,7 @@ export function SquadsPage() {
         opened={editing !== null}
         onClose={() => setEditing(null)}
         squad={editing}
-        inbounds={inbounds}
+        profiles={profiles} bindingsByProfile={bindingsByProfile}
         onSubmit={handleUpdate}
         loading={updateMutation.isPending}
       />

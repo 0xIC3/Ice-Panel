@@ -48,6 +48,94 @@ model KeygenCa {
   @@map("keygen_ca")
 }
 
+// ───── Slice 27: Profiles + Node Bindings ─────────────────────────────────
+//
+// New model that replaces the per-node `Inbound` row. Inspired by Remnawave's
+// ConfigProfile + Host split, simplified for our 7-protocol topology:
+//
+//   Profile               — a logical inbound TEMPLATE with shared config
+//                           (e.g. one VLESS+REALITY profile reused on N nodes)
+//   ProfileNodeBinding    — m:n: which profile is deployed to which node, +
+//                           per-node overrides (port, publicHost, ACME domain,
+//                           server PSK, AmneziaWG private key, ...)
+//   GroupProfile          — squad ACL at the profile level (replaces
+//                           GroupInbound / group_inbounds)
+//
+// During the migration window both old (`inbounds`, `group_inbounds`) and new
+// tables coexist. Final cleanup migration drops the old ones once all callers
+// are switched over.
+
+model Profile {
+  id          String   @id @default(uuid()) @db.Uuid
+  // Globally unique within the panel. Becomes the user-facing label of the
+  // logical inbound (replaces the per-node Inbound.name when N nodes share
+  // the same template).
+  name        String   @unique @db.VarChar(64)
+  protocol    String   @db.VarChar(32)
+  description String?
+  // Shared protocol config (for VLESS+REALITY: sni, publicKey, shortId,
+  // flow, fingerprint, network; for Hysteria2: obfs, brutal CC, etc.).
+  // Per-node fields live on ProfileNodeBinding.overrides.
+  config      Json
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  bindings       ProfileNodeBinding[]
+  groupProfiles  GroupProfile[]
+  amneziawgPeers AmneziawgPeer[]
+
+  @@index([protocol])
+  @@map("profiles")
+}
+
+model ProfileNodeBinding {
+  id         String   @id @default(uuid()) @db.Uuid
+  profileId  String   @map("profile_id") @db.Uuid
+  nodeId     String   @map("node_id") @db.Uuid
+  // Listening port on this node. Different bindings of the same profile
+  // can use different ports (e.g. node A on 443, node B on 8443).
+  port       Int
+  // Optional override of the public host emitted in subscription URIs.
+  // NULL → fall back to node.address (legacy behaviour).
+  publicHost String?  @map("public_host") @db.VarChar(253)
+  publicPort Int?     @map("public_port")
+  // Per-binding override of the protocol config. Merged shallowly over
+  // Profile.config when assembling the deployable inbound for this node.
+  // Used for fields that MUST differ per node: ACME domain, AmneziaWG
+  // server private key, Shadowsocks server PSK, MTProto derived secret, etc.
+  overrides  Json?
+  enabled    Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  node    Node    @relation(fields: [nodeId], references: [id], onDelete: Restrict)
+
+  // Same port can't be reused on the same node (different protocols would
+  // collide on the underlying socket).
+  @@unique([nodeId, port])
+  @@unique([profileId, nodeId])
+  @@index([profileId])
+  @@index([nodeId])
+  @@map("profile_node_bindings")
+}
+
+model GroupProfile {
+  groupId   String   @map("group_id") @db.Uuid
+  profileId String   @map("profile_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  group   Group   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, profileId])
+  @@index([profileId])
+  @@map("group_profiles")
+}
+
+// ────────────────────────────────────────────────────────────────────────
+
 model Node {
   id                    String    @id @default(uuid()) @db.Uuid
   // `name` and `address` are unique only among ACTIVE rows — see the
@@ -70,6 +158,7 @@ model Node {
   deletedAt             DateTime? @map("deleted_at") @db.Timestamptz(6)
 
   inbounds Inbound[]
+  profileBindings  ProfileNodeBinding[]
   connectedUsers  UserTraffic[]
   userUsageHistory NodeUserUsageHistory[]
   usageHistory     NodeUsageHistory[]
@@ -103,7 +192,6 @@ model Inbound {
 
   node Node @relation(fields: [nodeId], references: [id], onDelete: Restrict)
   groupInbounds GroupInbound[]
-  amneziawgPeers AmneziawgPeer[]
 
   @@unique([nodeId, port])
   @@index([nodeId])
@@ -119,6 +207,7 @@ model Group {
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   groupInbounds GroupInbound[]
+  groupProfiles GroupProfile[]
   members       GroupMember[]
 
   @@map("groups")
@@ -310,16 +399,20 @@ model SubscriptionResponseRule {
 // IP exhaustion before mutating the awg config.
 model AmneziawgPeer {
   id        String   @id @default(uuid()) @db.Uuid
-  inboundId String   @map("inbound_id") @db.Uuid
+  // Slice 27 — was `inboundId` pointing at `inbounds`. After profiles
+  // refactor, peer allocations are scoped to the logical profile. Same user
+  // gets the same WG IP across every node a given profile is bound to
+  // (separate WG processes per node never see each other, so no collision).
+  profileId String   @map("profile_id") @db.Uuid
   userId    String   @map("user_id") @db.Uuid
   ip        String   @db.VarChar(45)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  inbound Inbound @relation(fields: [inboundId], references: [id], onDelete: Cascade)
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([inboundId, ip])
-  @@unique([inboundId, userId])
+  @@unique([profileId, ip])
+  @@unique([profileId, userId])
   @@index([userId])
   @@map("amneziawg_peers")
 }

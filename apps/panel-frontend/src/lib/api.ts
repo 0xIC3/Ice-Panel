@@ -485,7 +485,8 @@ export interface Squad {
   id: string;
   name: string;
   description: string | null;
-  inboundIds: string[];
+  /** Slice 27 — squad ACL is profile-level. Renamed from inboundIds. */
+  profileIds: string[];
   memberCount: number;
   createdAt: string;
   updatedAt: string;
@@ -494,14 +495,14 @@ export interface Squad {
 export interface CreateSquadInput {
   name: string;
   description?: string | null;
-  inboundIds?: string[];
+  profileIds?: string[];
 }
 
 export interface UpdateSquadInput {
   name?: string;
   description?: string | null;
-  /** Replaces the full inbound set when provided. */
-  inboundIds?: string[];
+  /** Replaces the full profile set when provided. */
+  profileIds?: string[];
 }
 
 export async function listSquads(): Promise<{ squads: Squad[] }> {
@@ -521,6 +522,113 @@ export async function updateSquad(id: string, input: UpdateSquadInput): Promise<
 
 export async function deleteSquad(id: string): Promise<void> {
   await api.delete(`/api/squads/${id}`);
+}
+
+// ───── Profiles + Bindings (slice 27) ─────
+//
+// Replaces the per-node Inbound model. A Profile is a logical inbound
+// template (shared across nodes), a Binding deploys it to a specific node
+// with optional per-node overrides.
+
+export interface Profile {
+  id: string;
+  name: string;
+  protocol: ProtocolName;
+  description: string | null;
+  config: InboundConfig;
+  enabled: boolean;
+  bindingCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Binding {
+  id: string;
+  profileId: string;
+  nodeId: string;
+  port: number;
+  publicHost: string | null;
+  publicPort: number | null;
+  overrides: Record<string, unknown> | null;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateProfileInput {
+  name: string;
+  protocol: ProtocolName;
+  description?: string | null;
+  config: InboundConfig;
+  enabled?: boolean;
+}
+
+export interface UpdateProfileInput {
+  name?: string;
+  description?: string | null;
+  enabled?: boolean;
+  config?: InboundConfig;
+}
+
+export interface CreateBindingInput {
+  profileId: string;
+  nodeId: string;
+  port: number;
+  publicHost?: string;
+  publicPort?: number;
+  overrides?: Record<string, unknown>;
+  enabled?: boolean;
+}
+
+export interface UpdateBindingInput {
+  port?: number;
+  publicHost?: string | null;
+  publicPort?: number | null;
+  overrides?: Record<string, unknown> | null;
+  enabled?: boolean;
+}
+
+export async function listProfiles(params?: {
+  protocol?: ProtocolName;
+}): Promise<{ profiles: Profile[] }> {
+  const { data } = await api.get<{ profiles: Profile[] }>('/api/profiles', { params });
+  return data;
+}
+
+export async function createProfile(input: CreateProfileInput): Promise<Profile> {
+  const { data } = await api.post<Profile>('/api/profiles', input);
+  return data;
+}
+
+export async function updateProfile(id: string, input: UpdateProfileInput): Promise<Profile> {
+  const { data } = await api.put<Profile>(`/api/profiles/${id}`, input);
+  return data;
+}
+
+export async function deleteProfile(id: string): Promise<void> {
+  await api.delete(`/api/profiles/${id}`);
+}
+
+export async function listBindings(params?: {
+  nodeId?: string;
+  profileId?: string;
+}): Promise<{ bindings: Binding[] }> {
+  const { data } = await api.get<{ bindings: Binding[] }>('/api/bindings', { params });
+  return data;
+}
+
+export async function createBinding(input: CreateBindingInput): Promise<Binding> {
+  const { data } = await api.post<Binding>('/api/bindings', input);
+  return data;
+}
+
+export async function updateBinding(id: string, input: UpdateBindingInput): Promise<Binding> {
+  const { data } = await api.put<Binding>(`/api/bindings/${id}`, input);
+  return data;
+}
+
+export async function deleteBinding(id: string): Promise<void> {
+  await api.delete(`/api/bindings/${id}`);
 }
 
 // ───── Dashboard ─────

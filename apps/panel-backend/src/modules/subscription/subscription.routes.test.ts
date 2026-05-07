@@ -45,10 +45,10 @@ async function createUser(
 }
 
 /**
- * Test helper: creates a node + a Hysteria inbound on port 443. Existing
- * tests rely on `createNode(name, address)` producing one hysteria endpoint
- * per node — slice 23 made inbounds explicit, so the helper keeps that
- * shape by also seeding the matching inbound.
+ * Test helper: creates a node + a Hysteria profile-binding on port 443.
+ * Slice 27 — inbounds split into Profile (template) + ProfileNodeBinding
+ * (per-node deployment). Each call creates a fresh profile so subscription
+ * sees the binding through the auto-attached "All" squad.
  */
 async function createNode(name: string, address: string): Promise<string> {
   const res = await app.inject({
@@ -65,42 +65,61 @@ async function createNode(name: string, address: string): Promise<string> {
   return nodeId;
 }
 
-async function createHysteriaInbound(nodeId: string, port = 443): Promise<string> {
+async function createProfile(
+  protocol: string,
+  config: Record<string, unknown>,
+  nameSuffix: string,
+): Promise<string> {
   const res = await app.inject({
     method: 'POST',
-    url: '/api/inbounds',
+    url: '/api/profiles',
     headers: { authorization: `Bearer ${token}` },
-    payload: { nodeId, protocol: 'hysteria', name: `hy-${port}`, port, config: {} },
+    payload: {
+      name: `${protocol}-${nameSuffix}`,
+      protocol,
+      config,
+    },
   });
   if (res.statusCode !== 201) {
-    throw new Error(`createHysteriaInbound failed: ${res.statusCode} ${res.body}`);
+    throw new Error(`createProfile failed: ${res.statusCode} ${res.body}`);
   }
   return JSON.parse(res.body).id;
 }
 
-async function createXrayInbound(nodeId: string, port = 8443): Promise<string> {
+async function createBinding(profileId: string, nodeId: string, port: number): Promise<string> {
   const res = await app.inject({
     method: 'POST',
-    url: '/api/inbounds',
+    url: '/api/bindings',
     headers: { authorization: `Bearer ${token}` },
-    payload: {
-      nodeId,
-      protocol: 'xray',
-      name: `x-${port}`,
-      port,
-      config: {
-        realityDest: 'www.cloudflare.com:443',
-        realityServerNames: ['www.cloudflare.com'],
-        realityShortIds: ['abc123'],
-        realityPrivateKey: 'test-pubkey-for-vitest',
-        realityPublicKey: 'test-pubkey-for-vitest',
-      },
-    },
+    payload: { profileId, nodeId, port },
   });
   if (res.statusCode !== 201) {
-    throw new Error(`createXrayInbound failed: ${res.statusCode} ${res.body}`);
+    throw new Error(`createBinding failed: ${res.statusCode} ${res.body}`);
   }
   return JSON.parse(res.body).id;
+}
+
+async function createHysteriaInbound(nodeId: string, port = 443): Promise<string> {
+  // Each call creates a fresh per-node profile so port collisions don't
+  // happen across nodes and we mimic the pre-slice-27 "one inbound per
+  // (node, port)" shape the existing assertions expect.
+  const profileId = await createProfile('hysteria', {}, `${nodeId.slice(0, 6)}-${port}`);
+  return createBinding(profileId, nodeId, port);
+}
+
+async function createXrayInbound(nodeId: string, port = 8443): Promise<string> {
+  const profileId = await createProfile(
+    'xray',
+    {
+      realityDest: 'www.cloudflare.com:443',
+      realityServerNames: ['www.cloudflare.com'],
+      realityShortIds: ['abc123'],
+      realityPrivateKey: 'test-pubkey-for-vitest',
+      realityPublicKey: 'test-pubkey-for-vitest',
+    },
+    `${nodeId.slice(0, 6)}-${port}`,
+  );
+  return createBinding(profileId, nodeId, port);
 }
 
 beforeEach(async () => {

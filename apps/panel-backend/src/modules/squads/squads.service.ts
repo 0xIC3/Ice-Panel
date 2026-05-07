@@ -29,7 +29,7 @@ export class SquadProtectedError extends Error {
 // ───── Service methods ─────
 
 const includeRelations = {
-  groupInbounds: { select: { inboundId: true } },
+  groupProfiles: { select: { profileId: true } },
   _count: { select: { members: true } },
 } as const;
 
@@ -58,8 +58,8 @@ export async function createSquad(input: CreateSquadInput): Promise<PublicSquadD
     data: {
       name: input.name,
       description: input.description ?? null,
-      groupInbounds: {
-        create: input.inboundIds.map((inboundId) => ({ inboundId })),
+      groupProfiles: {
+        create: input.profileIds.map((profileId) => ({ profileId })),
       },
     },
     include: includeRelations,
@@ -71,11 +71,11 @@ export async function updateSquad(
   id: string,
   input: UpdateSquadInput,
 ): Promise<PublicSquadDto> {
-  // The "All" squad is system-managed: it tracks every inbound automatically
-  // (inbound.created event will eventually wire here). Admins can't rename
-  // it, can't change its inbound set, can't blow it away. Everything else
-  // about a user's view-of-the-world depends on this squad existing with
-  // its known UUID.
+  // The "All" squad is system-managed: it auto-tracks every profile (the
+  // profile.created handler attaches new profiles to it). Admins can't rename
+  // it, can't change its profile set, can't blow it away. Everything else
+  // about a user's view-of-the-world depends on this squad existing with its
+  // known UUID.
   if (id === ALL_SQUAD_ID) throw new SquadProtectedError();
 
   const existing = await prisma.group.findUnique({ where: { id } });
@@ -86,14 +86,14 @@ export async function updateSquad(
     if (dupe) throw new SquadAlreadyExistsError(input.name);
   }
 
-  // Inbound set replacement — done via tx so concurrent updates can't leave
+  // Profile set replacement — done via tx so concurrent updates can't leave
   // half-applied state. Wipe the join rows, write the new ones.
   const row = await prisma.$transaction(async (tx) => {
-    if (input.inboundIds !== undefined) {
-      await tx.groupInbound.deleteMany({ where: { groupId: id } });
-      if (input.inboundIds.length > 0) {
-        await tx.groupInbound.createMany({
-          data: input.inboundIds.map((inboundId) => ({ groupId: id, inboundId })),
+    if (input.profileIds !== undefined) {
+      await tx.groupProfile.deleteMany({ where: { groupId: id } });
+      if (input.profileIds.length > 0) {
+        await tx.groupProfile.createMany({
+          data: input.profileIds.map((profileId) => ({ groupId: id, profileId })),
         });
       }
     }
@@ -115,7 +115,7 @@ export async function deleteSquad(id: string): Promise<void> {
   const existing = await prisma.group.findUnique({ where: { id } });
   if (!existing) throw new SquadNotFoundError(id);
 
-  // Cascade is on for both group_inbounds and group_members (see schema).
+  // Cascade is on for both group_profiles and group_members (see schema).
   // Users who lose their last squad would be invisible to subscription —
   // backstop them into "All" so they don't end up with empty subs.
   await prisma.$transaction(async (tx) => {

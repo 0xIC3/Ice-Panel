@@ -6,7 +6,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { UsersPage } from './pages/UsersPage';
 import { NodesPage } from './pages/NodesPage';
 import { SrrPage } from './pages/SrrPage';
-import { InboundsPage } from './pages/InboundsPage';
+import { ProfilesPage } from './pages/ProfilesPage';
 import { SquadsPage } from './pages/SquadsPage';
 
 export default function App() {
@@ -19,7 +19,10 @@ export default function App() {
           <Route path="/" element={<DashboardPage />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/nodes" element={<NodesPage />} />
-          <Route path="/inbounds" element={<InboundsPage />} />
+          <Route path="/profiles" element={<ProfilesPage />} />
+          {/* Slice 27 — /inbounds replaced by /profiles. Keep redirect so
+              existing bookmarks don't 404. */}
+          <Route path="/inbounds" element={<Navigate to="/profiles" replace />} />
           <Route path="/squads" element={<SquadsPage />} />
           <Route path="/srr" element={<SrrPage />} />
         </Route>

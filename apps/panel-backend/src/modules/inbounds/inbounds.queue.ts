@@ -75,46 +75,49 @@ async function fetchActiveUsers(): Promise<ActiveUser[]> {
 }
 
 async function fetchEnabledInbounds(nodeId: string): Promise<InboundDto[]> {
-  const rows = await prisma.inbound.findMany({
-    where: { nodeId, enabled: true },
-    select: {
-      id: true,
-      name: true,
-      protocol: true,
-      port: true,
-      publicHost: true,
-      publicPort: true,
-      config: true,
+  // Slice 27 — walks ProfileNodeBinding rows joined to Profile, and resolves
+  // the deployable config for each. Replaces the old per-node `inbounds`
+  // table read while keeping the wire format identical (the node-agent
+  // doesn't know about profile/binding split — it just gets a flat list).
+  const bindings = await prisma.profileNodeBinding.findMany({
+    where: {
+      nodeId,
+      enabled: true,
+      profile: { enabled: true },
+    },
+    include: {
+      profile: {
+        select: { id: true, name: true, protocol: true, config: true },
+      },
     },
     orderBy: { port: 'asc' },
   });
-  return rows.map((r) => {
-    let config = r.config as InboundDto['config'];
-    // Slice 41 — mtproto: derive the per-inbound secret from (inboundId,
-    // domain) and inject into the wire DTO. The agent uses panel's value
-    // verbatim (could re-derive but trusts the panel to keep lock-step).
-    // Why here and not in inbounds.service.ts: the secret depends on the
-    // assigned ID, which Prisma generates only at create-time. Computing
-    // at fetch-time avoids storing it in the DB.
-    if (r.protocol === 'mtproto') {
+
+  return bindings.map((b) => {
+    // Shallow merge: per-binding overrides win over profile.config. Used for
+    // ACME domain, AmneziaWG private key, Shadowsocks server PSK, etc.
+    const baseConfig = (b.profile.config ?? {}) as Record<string, unknown>;
+    const overrides = (b.overrides ?? {}) as Record<string, unknown>;
+    let config = { ...baseConfig, ...overrides } as InboundDto['config'];
+
+    // Slice 41 — mtproto secret derived from (binding.id, domain). Both
+    // the wire push (here) and subscription generator key on binding.id so
+    // the secret stays in lock-step on both sides.
+    if (b.profile.protocol === 'mtproto') {
       const cfg = config as { domain?: string };
       if (cfg && cfg.domain) {
         config = {
           ...cfg,
-          secret: mtprotoSecret(r.id, cfg.domain),
+          secret: mtprotoSecret(b.id, cfg.domain),
         } as InboundDto['config'];
       }
     }
+
     return {
-      id: r.id,
-      name: r.name,
-      protocol: r.protocol as ProtocolName,
-      // The node-agent gets the actual listen port (what xray/hysteria binds
-      // to). publicPort is purely for client-URL emission and lives only on
-      // the panel side, so we don't ship it across the wire.
-      port: r.port,
-      // Prisma returns Json as `unknown`; the panel-side service has already
-      // validated the shape via Zod when the inbound was created/updated.
+      id: b.id,
+      name: b.profile.name,
+      protocol: b.profile.protocol as ProtocolName,
+      port: b.port,
       config,
     };
   });
