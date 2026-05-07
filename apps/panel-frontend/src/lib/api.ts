@@ -321,6 +321,9 @@ export interface XrayInboundConfig {
   path?: string;
   host?: string;
   serviceName?: string;
+  /** Slice 24c part 3 — `vless` (default) or `trojan` over the same REALITY
+   *  stack. Empty/undefined → server falls back to vless. */
+  subprotocol?: 'vless' | 'trojan';
 }
 
 export interface AmneziawgObfuscation {

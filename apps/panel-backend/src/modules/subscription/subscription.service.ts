@@ -5,6 +5,7 @@ import { buildNaiveUri } from '../../core-adapters/naive/index.js';
 import {
   buildHysteriaUri,
   buildSubscriptionJson,
+  buildTrojanRealityUri,
   buildVlessRealityUri,
   encodePlainList,
   hostFromAddress,
@@ -174,10 +175,48 @@ export async function generateSubscription(
         }),
       });
     } else if (ib.protocol === 'xray' && user.xrayUuid) {
-      const cfg = ib.config as unknown as XrayInboundConfig;
+      const cfg = ib.config as unknown as XrayInboundConfig & {
+        subprotocol?: 'vless' | 'trojan';
+      };
       const sni = cfg.realityServerNames[0] ?? '';
       const shortId = cfg.realityShortIds[0] ?? '';
       const network = cfg.network ?? 'raw';
+      const subprotocol = cfg.subprotocol ?? 'vless';
+      // Slice 24c part 3 — branch URI scheme on subprotocol. We reuse
+      // user.xrayUuid as the Trojan password (UUIDs have plenty of entropy
+      // and admins are already managing them; a separate trojanPassword
+      // column would be redundant credential management).
+      const uri =
+        subprotocol === 'trojan'
+          ? buildTrojanRealityUri({
+              password: user.xrayUuid,
+              host,
+              port,
+              publicKey: cfg.realityPublicKey,
+              shortId,
+              sni,
+              fingerprint: cfg.fingerprint,
+              network,
+              path: cfg.path,
+              hostHeader: cfg.host,
+              serviceName: cfg.serviceName,
+              name: nodeName,
+            })
+          : buildVlessRealityUri({
+              uuid: user.xrayUuid,
+              host,
+              port,
+              publicKey: cfg.realityPublicKey,
+              shortId,
+              sni,
+              flow: cfg.flow,
+              fingerprint: cfg.fingerprint,
+              network,
+              path: cfg.path,
+              hostHeader: cfg.host,
+              serviceName: cfg.serviceName,
+              name: nodeName,
+            });
       endpoints.push({
         protocol: 'xray',
         nodeName,
@@ -193,21 +232,8 @@ export async function generateSubscription(
         path: cfg.path,
         hostHeader: cfg.host,
         serviceName: cfg.serviceName,
-        uri: buildVlessRealityUri({
-          uuid: user.xrayUuid,
-          host,
-          port,
-          publicKey: cfg.realityPublicKey,
-          shortId,
-          sni,
-          flow: cfg.flow,
-          fingerprint: cfg.fingerprint,
-          network,
-          path: cfg.path,
-          hostHeader: cfg.host,
-          serviceName: cfg.serviceName,
-          name: nodeName,
-        }),
+        subprotocol,
+        uri,
       });
     } else if (ib.protocol === 'amneziawg' && user.amneziawgPrivateKey) {
       const cfg = ib.config as unknown as AmneziawgInboundConfig;

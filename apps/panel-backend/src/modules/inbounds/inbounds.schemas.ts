@@ -56,6 +56,22 @@ export const XrayConfigSchema = z.object({
   host: z.string().max(255).optional(),
   /** gRPC serviceName. Required when network=grpc. */
   serviceName: z.string().max(64).optional(),
+
+  /**
+   * Subprotocol carried over the same Xray binary + REALITY stack. Slice
+   * 24c part 3:
+   *   - `vless`   — canonical: per-user UUID, optional Vision flow
+   *   - `trojan`  — per-user password (we reuse `user.xrayUuid` as the
+   *                 password — UUID is high-entropy random and admins are
+   *                 already managing it). No Vision flow on Trojan.
+   * Same REALITY private/public key pair drives both — clients see the
+   * difference only at the URI scheme level (`vless://` vs `trojan://`).
+   *
+   * Shadowsocks (SS2022) is deferred to a follow-up — multi-user model
+   * differs (per-user keys + cipher selection) and benefits from its own
+   * commit.
+   */
+  subprotocol: z.enum(['vless', 'trojan']).default('vless'),
 });
 
 const ObfuscationSchema = z.object({

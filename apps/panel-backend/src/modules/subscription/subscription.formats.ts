@@ -5,7 +5,12 @@ import type { ProtocolName } from '@ice-panel/shared';
 // implementation into core-adapters/hysteria — this file now hosts only
 // the format-level helpers that are not protocol-specific).
 export { buildHysteriaUri, type HysteriaUriOpts } from '../../core-adapters/hysteria/index.js';
-export { buildVlessRealityUri, type VlessRealityUriOpts } from '../../core-adapters/xray/index.js';
+export {
+  buildVlessRealityUri,
+  type VlessRealityUriOpts,
+  buildTrojanRealityUri,
+  type TrojanRealityUriOpts,
+} from '../../core-adapters/xray/index.js';
 
 /**
  * Strip the optional `:port` suffix from a `host[:port]` string. Returns
@@ -50,16 +55,20 @@ export interface HysteriaSubscriptionEndpoint extends SubscriptionEndpointBase {
 
 export interface XraySubscriptionEndpoint extends SubscriptionEndpointBase {
   protocol: 'xray';
+  /** UUID — used both as VLESS userId and (slice 24c part 3) as Trojan password. */
   uuid: string;
   publicKey: string;
   shortId: string;
   sni: string;
   flow: string;
   fingerprint: string;
-  network: 'raw' | 'xhttp' | 'ws' | 'grpc';
+  network: 'raw' | 'xhttp' | 'ws' | 'grpc' | 'httpupgrade' | 'kcp';
   path?: string;
   hostHeader?: string;
   serviceName?: string;
+  /** Slice 24c part 3 — controls URI scheme (`vless://` vs `trojan://`)
+   *  and downstream singbox/clash outbound type. */
+  subprotocol?: 'vless' | 'trojan';
 }
 
 export interface AmneziawgSubscriptionEndpoint extends SubscriptionEndpointBase {

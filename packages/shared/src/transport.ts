@@ -78,10 +78,14 @@ export interface XrayInboundCfg {
   realityPublicKey: string;
   flow: 'xtls-rprx-vision' | 'none';
   fingerprint: string;            // chrome / firefox / safari / etc
-  network: 'raw' | 'xhttp' | 'ws' | 'grpc';
-  path?: string;                  // ws/xhttp
-  host?: string;                  // ws/xhttp Host header override
+  network: 'raw' | 'xhttp' | 'ws' | 'grpc' | 'httpupgrade' | 'kcp';
+  path?: string;                  // ws/xhttp/httpupgrade
+  host?: string;                  // ws/xhttp/httpupgrade Host header override
   serviceName?: string;           // grpc
+  /** Slice 24c part 3 — subprotocol carried over the REALITY stack.
+   *  `vless` (default) → per-user UUID; `trojan` → per-user password
+   *  (we reuse user.xrayUuid as the password). */
+  subprotocol?: 'vless' | 'trojan';
 }
 
 export interface HysteriaInboundCfg {

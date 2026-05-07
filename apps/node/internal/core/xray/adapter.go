@@ -227,6 +227,9 @@ type xrayInboundCfgWire struct {
 	Path               string   `json:"path,omitempty"`
 	Host               string   `json:"host,omitempty"`
 	ServiceName        string   `json:"serviceName,omitempty"`
+	// Slice 24c part 3 — controls inbound `protocol` (vless vs trojan) and
+	// `settings.clients` shape. Empty/missing → vless (back-compat).
+	Subprotocol string `json:"subprotocol,omitempty"`
 }
 
 // ApplyInbound parses the panel-pushed Xray config, swaps it into the live
@@ -259,6 +262,7 @@ func (a *Adapter) ApplyInbound(rawCfg json.RawMessage) error {
 		Path:               wire.Path,
 		HostHeader:         wire.Host,
 		ServiceName:        wire.ServiceName,
+		Subprotocol:        wire.Subprotocol,
 	}
 
 	a.mu.Lock()
@@ -291,7 +295,8 @@ func inboundEqual(a, b InboundConfig) bool {
 		a.Network != b.Network ||
 		a.Path != b.Path ||
 		a.HostHeader != b.HostHeader ||
-		a.ServiceName != b.ServiceName {
+		a.ServiceName != b.ServiceName ||
+		a.Subprotocol != b.Subprotocol {
 		return false
 	}
 	if !stringSliceEqual(a.RealityServerNames, b.RealityServerNames) {

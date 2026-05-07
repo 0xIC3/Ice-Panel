@@ -369,11 +369,26 @@ Per-slice verification checklists. Use when **closing** a slice or when re-valid
 - [x] uri.test.ts — 2 новых теста (httpupgrade/kcp)
 - [x] config_test.go — 7 новых тестов (sniffing/outbounds/BLOCK rules/sockopt-BBR + 4 транспорта)
 
-### Part 3 (Trojan + Shadowsocks subprotocols) — TODO
-- [ ] Trojan: новый Zod schema branch в discriminated union, URI builder (`trojan://...`), node render path
-- [ ] Shadowsocks (incl SS2022): cipher selector, per-user password, URI `ss://base64(method:password)@host:port`
-- [ ] Singbox + Clash format support для обоих
-- [ ] Frontend: protocol Select option + form sections
+### Part 3a (Trojan subprotocol) — local checks
+- [x] `XrayConfigSchema.subprotocol: z.enum(['vless', 'trojan']).default('vless')`
+- [x] `XrayInboundCfg.subprotocol?` в shared transport.ts
+- [x] `buildTrojanRealityUri`: scheme `trojan://`, password как userinfo, no `flow=`, no `encryption=` query
+- [x] `XraySubscriptionEndpoint.subprotocol?` тип
+- [x] `subscription.service.ts` branch'ит URI builder на subprotocol; password = `user.xrayUuid`
+- [x] Node `xray.InboundConfig.Subprotocol` + wire field
+- [x] `userInboundProtocol(cfg)` возвращает "trojan" / "vless"
+- [x] `buildUserInboundSettings`: vless emits `{clients:[{id,email,flow}], decryption:'none'}`; trojan emits `{clients:[{password,email}]}` (no flow/decryption)
+- [x] `inboundEqual` сравнивает Subprotocol → ApplyInbound restart fires при switch
+- [x] Frontend: `xraySubprotocol` field в form, Select с пояснением
+- [x] uri tests — 6 case'ов для buildTrojanRealityUri (раздельные транспорты)
+- [x] config tests — 3 case'а: defaults to vless, trojan inbound shape, trojan still uses REALITY streamSettings
+
+### Part 3b (Shadowsocks SS2022) — TODO
+- [ ] Cipher selector: chacha20-ietf-poly1305 / aes-256-gcm / 2022-blake3-aes-256-gcm
+- [ ] Per-user password (SS2022 multi-user) или single-password mode
+- [ ] URI builder: `ss://base64(method:password)@host:port#name`
+- [ ] Singbox + Clash format support
+- [ ] Frontend form section
 
 ### Original Pre-conditions (kept for VPS-cycle reference)
 

@@ -60,6 +60,7 @@ interface FormValues {
   xrayPath: string;
   xrayHostHeader: string;
   xrayServiceName: string;
+  xraySubprotocol: 'vless' | 'trojan';
 
   // AmneziaWG
   awgSubnet: string;
@@ -114,6 +115,7 @@ function defaults(rule: Inbound | null, defaultNodeId: string): FormValues {
     xrayPath: '',
     xrayHostHeader: '',
     xrayServiceName: '',
+    xraySubprotocol: 'vless',
 
     awgSubnet: '10.0.0.0/24',
     awgServerPriv: '',
@@ -162,6 +164,7 @@ function defaults(rule: Inbound | null, defaultNodeId: string): FormValues {
         xrayPath: (cfg.path as string) ?? '',
         xrayHostHeader: (cfg.host as string) ?? '',
         xrayServiceName: (cfg.serviceName as string) ?? '',
+        xraySubprotocol: ((cfg.subprotocol as 'vless' | 'trojan') ?? 'vless'),
       };
     case 'amneziawg': {
       const obf = (cfg.obfuscation as Record<string, number> | undefined) ?? {};
@@ -276,9 +279,12 @@ export function InboundFormModal({ opened, onClose, inbound, nodes, onSubmit, lo
           realityShortIds: csvList(values.xrayShortIds),
           realityPrivateKey: values.xrayPrivateKey,
           realityPublicKey: values.xrayPublicKey,
+          // Trojan ignores `flow`; we still send it for round-tripping the
+          // form, but the backend renderConfig won't emit it on Trojan.
           flow: values.xrayFlow,
           fingerprint: values.xrayFingerprint,
           network: values.xrayNetwork,
+          subprotocol: values.xraySubprotocol,
           ...(values.xrayPath ? { path: values.xrayPath } : {}),
           ...(values.xrayHostHeader ? { host: values.xrayHostHeader } : {}),
           ...(values.xrayServiceName ? { serviceName: values.xrayServiceName } : {}),
@@ -487,9 +493,24 @@ export function InboundFormModal({ opened, onClose, inbound, nodes, onSubmit, lo
                 required
                 {...form.getInputProps('xrayPublicKey')}
               />
+              <Select
+                label="Subprotocol"
+                description="Carried over the same REALITY stack. Trojan reuses user's UUID as password — no extra credential. Vision flow only applies to vless."
+                data={[
+                  { value: 'vless', label: 'VLESS (canonical, supports Vision flow)' },
+                  { value: 'trojan', label: 'Trojan (password auth, no Vision)' },
+                ]}
+                allowDeselect={false}
+                {...form.getInputProps('xraySubprotocol')}
+              />
               <Group grow>
                 <Select
                   label="Flow"
+                  description={
+                    form.values.xraySubprotocol === 'trojan'
+                      ? 'Ignored on Trojan — kept for vless round-trip'
+                      : undefined
+                  }
                   data={['xtls-rprx-vision', 'xtls-rprx-vision-udp443', '']}
                   {...form.getInputProps('xrayFlow')}
                 />

@@ -352,3 +352,73 @@ func TestRender_Network_GrpcEmitsServiceName(t *testing.T) {
 		}
 	}
 }
+
+// ───── Slice 24c part 3: Trojan subprotocol ─────
+
+func TestRender_DefaultsToVless(t *testing.T) {
+	m := renderToMap(t, validInbound())
+	for _, raw := range m["inbounds"].([]any) {
+		inb := raw.(map[string]any)
+		if inb["tag"] == "vless-in" || inb["tag"] == "" {
+			if inb["protocol"] != "vless" {
+				t.Errorf("default subprotocol should be vless, got %v", inb["protocol"])
+			}
+		}
+	}
+}
+
+func TestRender_TrojanInboundProtocol(t *testing.T) {
+	cfg := validInbound()
+	cfg.Subprotocol = "trojan"
+	m := renderToMap(t, cfg)
+
+	var trojanInb map[string]any
+	for _, raw := range m["inbounds"].([]any) {
+		inb := raw.(map[string]any)
+		if inb["protocol"] == "trojan" {
+			trojanInb = inb
+			break
+		}
+	}
+	if trojanInb == nil {
+		t.Fatalf("trojan inbound not found in render")
+	}
+
+	settings := trojanInb["settings"].(map[string]any)
+	clients := settings["clients"].([]any)
+	if len(clients) != 1 {
+		t.Fatalf("expected 1 client, got %d", len(clients))
+	}
+	c := clients[0].(map[string]any)
+	if c["password"] != "u1" {
+		t.Errorf("trojan client should have password=ID, got %v", c["password"])
+	}
+	if _, hasID := c["id"]; hasID {
+		t.Errorf("trojan client should NOT have `id` field, only `password`")
+	}
+	// Trojan also doesn't carry the VLESS-only `decryption: none`
+	if _, hasDec := settings["decryption"]; hasDec {
+		t.Errorf("trojan settings should NOT have `decryption` field")
+	}
+}
+
+func TestRender_Trojan_StillUsesRealityStreamSettings(t *testing.T) {
+	cfg := validInbound()
+	cfg.Subprotocol = "trojan"
+	m := renderToMap(t, cfg)
+	for _, raw := range m["inbounds"].([]any) {
+		inb := raw.(map[string]any)
+		if inb["protocol"] != "trojan" {
+			continue
+		}
+		ss := inb["streamSettings"].(map[string]any)
+		if ss["security"] != "reality" {
+			t.Errorf("trojan should still use REALITY security, got %v", ss["security"])
+		}
+		// Reality settings should contain server names + private key
+		rs := ss["realitySettings"].(map[string]any)
+		if rs["privateKey"] != "fake-private-key-for-testing" {
+			t.Errorf("trojan should preserve REALITY private key")
+		}
+	}
+}

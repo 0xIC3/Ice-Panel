@@ -61,6 +61,14 @@ type InboundConfig struct {
 	// ServiceName is required when Network is `grpc` (the gRPC service
 	// identifier the inbound listens on).
 	ServiceName string
+
+	// Subprotocol carries which Xray-core protocol the user-facing inbound
+	// runs: "vless" (default) or "trojan". Slice 24c part 3 — same REALITY
+	// stack drives both, only the inbound's `protocol` and `clients` shape
+	// differ. Trojan password reuses user.xrayUuid (set on the client side
+	// of the panel; on the agent's renderConfig we map xrayClient.ID into
+	// `password` for trojan instead of `id` for vless).
+	Subprotocol string
 }
 
 func (c *InboundConfig) withDefaults() InboundConfig {
@@ -152,14 +160,11 @@ func renderConfig(inbound InboundConfig, users []xrayClient) ([]byte, error) {
 		},
 		"inbounds": []map[string]any{
 			{
-				"tag":      cfg.Tag,
-				"listen":   cfg.ListenHost,
-				"port":     cfg.ListenPort,
-				"protocol": "vless",
-				"settings": map[string]any{
-					"clients":    users,
-					"decryption": "none",
-				},
+				"tag":            cfg.Tag,
+				"listen":         cfg.ListenHost,
+				"port":           cfg.ListenPort,
+				"protocol":       userInboundProtocol(cfg),
+				"settings":       buildUserInboundSettings(cfg, users),
 				"streamSettings": buildStreamSettings(cfg),
 				// Sniffing — slice 24c part 2. Lets routing rules see the
 				// real destination protocol/SNI rather than just the IP/port,
@@ -244,6 +249,45 @@ func renderConfig(inbound InboundConfig, users []xrayClient) ([]byte, error) {
 		},
 	}
 	return json.MarshalIndent(doc, "", "  ")
+}
+
+// userInboundProtocol picks the Xray-core inbound protocol for the user-
+// facing endpoint based on the configured subprotocol. Both protocols share
+// the REALITY streamSettings stack and the api/stats infrastructure — only
+// the inbound `protocol` and the `clients` element shape differ.
+func userInboundProtocol(cfg InboundConfig) string {
+	if cfg.Subprotocol == "trojan" {
+		return "trojan"
+	}
+	return "vless"
+}
+
+// buildUserInboundSettings produces the inbound's `settings` block. VLESS
+// expects `{clients: [{id, email, flow}], decryption: "none"}`; Trojan
+// expects `{clients: [{password, email}]}` (Trojan defines no flow and no
+// payload encryption beyond TLS). Slice 24c part 3.
+//
+// We reuse `xrayClient.ID` as the Trojan password — UUIDs have plenty of
+// entropy and the user already has one (`user.xrayUuid`) tracked by the
+// panel, so we don't grow the credential surface.
+func buildUserInboundSettings(cfg InboundConfig, users []xrayClient) map[string]any {
+	if cfg.Subprotocol == "trojan" {
+		clients := make([]map[string]any, 0, len(users))
+		for _, u := range users {
+			clients = append(clients, map[string]any{
+				"password": u.ID,
+				"email":    u.Email,
+			})
+		}
+		return map[string]any{
+			"clients": clients,
+		}
+	}
+	// VLESS — default
+	return map[string]any{
+		"clients":    users,
+		"decryption": "none",
+	}
 }
 
 // buildStreamSettings selects the right Xray streamSettings shape for the
