@@ -3,9 +3,9 @@
 > Этот документ — план развития проекта и справочник по используемым технологиям.
 > Обновляется по мере прохождения срезов. Если в коде ушло вперёд — значит документ устарел, обнови его.
 >
-> **Версия:** 3.4 (2026-05-07) — slice 24b2 (Hysteria ApplyInbound), 24b3 (AmneziaWG ApplyInbound со smart-diff classifier), 26 (Squad ACL backend + frontend) закрыты по коду. VPS-валидация всех трёх отложена до следующего test cycle. ROADMAP свёрнут от дубликатов: единая таблица статуса срезов в Phase 3, без дублирования с Phase 2 carry-over.
+> **Версия:** 3.5 (2026-05-07) — slice 24b2 (Hysteria ApplyInbound), 24b3 (AmneziaWG ApplyInbound со smart-diff classifier), 26 (Squad ACL backend + frontend) закрыты по коду. ROADMAP свёрнут от дубликатов; добавлен раздел «Phase 2 extensions» с slice 40 (Mieru) и 41 (MTProto/mtg) — proof-of-concept что CoreAdapter тривиализует добавление новых ядер. VPS-валидация всех трёх done-срезов отложена до следующего test cycle.
 >
-> **Changelog:** v3.3 (2026-05-07) VPS-тест #2 — обфускация Salamander добавлена в subscription pipeline. v3.2 (2026-05-06) slice 24b разбит на 24b1+24b2+24b3+24b4; появился TESTING.md.
+> **Changelog:** v3.4 (2026-05-07) дедуп таблиц + 24b2/24b3/26 done. v3.3 (2026-05-07) VPS-тест #2 — обфускация Salamander добавлена в subscription pipeline. v3.2 (2026-05-06) slice 24b разбит на 24b1+24b2+24b3+24b4; появился TESTING.md.
 
 > **Companion doc:** [TESTING.md](./TESTING.md) — конкретные чек-листы что и как проверять при закрытии каждого slice'а (local checks / VPS checks / edge cases / done criteria). Обновляется при закрытии slice + при поимке новых багов.
 
@@ -22,7 +22,12 @@
 - **NaiveProxy** — HTTP/2 поверх Chromium-стека
 - **Xray-core** — для VLESS/Reality/VMess/Trojan (legacy-поддержка)
 
-**Главная архитектурная ставка:** интерфейс `CoreAdapter`. Если он спроектирован хорошо — добавить 4-е, 5-е, 10-е ядро становится тривиально.
+**Расширения через CoreAdapter** (планируются как Phase 2 extensions, slice 40+):
+- **Mieru** — stealth-прокси с XChaCha20-Poly1305, активная разработка, single-bin
+- **MTProto** (`mtg`) — Telegram-only прокси с fake-TLS, минимальный footprint
+- *(дальше по запросу: Sing-box native, Tuic, ShadowQuic, Reality Direct...)*
+
+**Главная архитектурная ставка:** интерфейс `CoreAdapter`. Если он спроектирован хорошо — добавить 5-е, 6-е, 10-е ядро становится тривиально (1 slice = 1 ядро). Slice 40 + 41 — конкретный proof-of-concept этой ставки.
 
 ---
 
@@ -977,6 +982,23 @@ Wire mirrors `AmneziawgConfigSchema`. `serverPublicKey` принимается, 
 | **API tokens** | ⏭️ | Bearer-токены для интеграций (Telegram-бот, скрипты). Otp-style scope/expiry/revoke |
 | **HWID lock** | ⏭️ | Привязка subscription к device-fingerprint, anti-share между несколькими девайсами |
 | **UX: full subscription URL в UI** | ⏭️ | Показать полный URL юзера в UsersPage с copy-button рядом (сейчас только token rendering) |
+
+### Phase 2 extensions — новые ядра поверх CoreAdapter
+
+Чисто аддитивные срезы. Никакой существующий код не ломается — добавляются Go-адаптер на ноде, URI-builder на panel-backend, Zod-схема, форма в InboundFormModal, опция в `users.enabledProtocols`. Главная цель — провалидировать что абстракция CoreAdapter действительно тривиализует добавление ядер (заявленная архитектурная ставка).
+
+| # | Название | Status | Что вводим |
+|---|---|---|---|
+| 40 | **Mieru ядро** (`enfein/mieru`) | ⏭️ | Stealth-прокси, XChaCha20-Poly1305. Bootstrap `mita` бинарника + per-user через YAML rewrite + reload. URI: native mieru-схема, Hiddify/NekoBox parse напрямую. Pre-gen `mieru_username/mieru_password` в `users` таблице. Singbox + plain emit. |
+| 41 | **MTProto proxy** (`9seconds/mtg`) | ⏭️ | Telegram-only. Single bin `mtg`, fake-TLS режим обязателен (anti-DPI). Per-user = hex-secret string. Subscription: `tg://proxy?server=...&port=...&secret=ee<host_hex>` либо `https://t.me/proxy?...`. mtg `/stats` endpoint для per-user counters. |
+
+**Почему отдельная секция, не в Phase 2 основной:** Phase 2 формально закрыта (slice 23 + multi-node validated 2026-05-06). Эти срезы — proof-of-concept «новое ядро = реализовать CoreAdapter, остальное бесплатно», ради валидации архитектуры. Можно делать в любой момент когда основная очередь Phase 3 / commercial sprint позволит.
+
+**Mieru — ~3-5 дней соло** (по сложности ≈ AmneziaWG, slice 19): config gen + per-user через YAML rewrite + reload, есть субscription URI builder.
+
+**MTProto — ~2-3 дня соло** (проще Hysteria): нет ACME, нет obfs-параметров, только secret + fake-TLS host. mtg отлично документирован и стабильно работает 5+ лет.
+
+**Carry-over заметка:** если в реальном использовании всплывут другие востребованные ядра (Sing-box native, Reality Direct, Tuic, ShadowQuic) — добавляются такими же 1-slice экспресс-срезами после 41.
 
 ### Подробности по срезам Phase 3
 
