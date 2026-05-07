@@ -4,7 +4,7 @@ What's actually validated by real traffic vs what's scaffolded. **Updated after 
 
 > **Companion docs:** [ROADMAP.md](./ROADMAP.md) tracks slices; [TESTING.md](./TESTING.md) carries per-slice checklists; **this file** answers "what can I sell to a paying user today, vs what's still a science experiment".
 
-> **Last updated:** 2026-05-07 (after VPS cycle #2 + slice 24b/24c/24d/26/40/41 code-complete).
+> **Last updated:** 2026-05-08 (after slice 27 — Profile + ProfileNodeBinding refactor — code-complete; per-protocol verification status unchanged from VPS cycle #2).
 
 ## ✅ Confirmed by real traffic
 
