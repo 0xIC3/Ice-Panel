@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PermissiveUuid } from '../../lib/uuid-schema.js';
 
 const NameSchema = z
   .string()
@@ -23,4 +24,9 @@ export const UpdateSquadSchema = z.object({
 });
 export type UpdateSquadInput = z.infer<typeof UpdateSquadSchema>;
 
-export const SquadIdParamSchema = z.object({ id: z.uuid() });
+// PermissiveUuid: SquadIdParamSchema accepts the seeded "All" squad
+// (00000000-0000-0000-0000-000000000001, non-v4 version digit) when admin
+// hits PUT/DELETE /api/squads/:id. The service layer rejects All with a
+// friendly SquadProtectedError; without the permissive shape the request
+// would die at Zod with a confusing 400.
+export const SquadIdParamSchema = z.object({ id: PermissiveUuid });

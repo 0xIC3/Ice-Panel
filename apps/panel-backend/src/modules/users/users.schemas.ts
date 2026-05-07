@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PermissiveUuid } from '../../lib/uuid-schema.js';
 
 // ───── Reusable atoms ─────
 
@@ -38,7 +39,7 @@ export const CreateUserSchema = z.object({
     z.string().regex(/^\d+$/),
   ]).nullish(),
   email: z.email().max(255).nullish(),
-  groupIds: z.array(z.uuid()).default([]),
+  groupIds: z.array(PermissiveUuid).default([]),
   // Slice 27 follow-up: enabledProtocols accepted for back-compat with API
   // clients but no longer affects subscription output. Squad ACL alone
   // determines visibility. Empty/missing → defaults to all 7 (was previously
@@ -64,7 +65,7 @@ export const UpdateUserSchema = z.object({
     z.string().regex(/^\d+$/),
   ]).nullish(),
   email: z.email().max(255).nullish(),
-  groupIds: z.array(z.uuid()).optional(),
+  groupIds: z.array(PermissiveUuid).optional(),
   // Slice 27 follow-up: kept for back-compat, ignored by subscription.
   enabledProtocols: z.array(ProtocolName).optional(),
 });
@@ -80,7 +81,7 @@ export const ListUsersQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(500).default(50),
   status: UserStatus.optional(),
   search: z.string().min(1).max(64).optional(),                  // matches username/email/telegramId/tag
-  groupId: z.uuid().optional(),
+  groupId: PermissiveUuid.optional(),
 });
 export type ListUsersQuery = z.infer<typeof ListUsersQuerySchema>;
 

@@ -37,6 +37,14 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof ZodError) {
+      // Log the issues to stdout so admins can see *which field* failed
+      // without needing to open browser DevTools — caught by request log
+      // but with full issue array (path + message + code per offending
+      // field) instead of just `statusCode: 400`.
+      request.log.warn(
+        { url: request.url, issues: error.issues },
+        'Zod validation failed',
+      );
       return reply.code(400).send({
         error: 'VALIDATION_ERROR',
         message: 'Invalid input',
