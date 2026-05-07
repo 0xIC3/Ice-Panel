@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../auth/auth.hook.js';
+import { config } from '../../config.js';
 import {
   CreateNodeSchema,
   UpdateNodeSchema,
@@ -12,15 +13,11 @@ import * as bootstrap from './bootstrap.service.js';
 
 /**
  * Derive the panel URL the admin is currently using to talk to the API.
- * The bootstrap install command embeds this so the node knows where to
- * fetch its payload from. Falls back to the X-Forwarded-Proto / Host pair
- * when behind a reverse proxy (Caddy / Cloudflare).
+ * Prefers PUBLIC_URL env var (set in docker-compose) over request-derived
+ * heuristics — the heuristic breaks when Caddy doesn't forward X-Forwarded-Proto.
  */
 function publicUrlFromRequest(request: FastifyRequest): string {
-  // Behind a TLS-terminating reverse proxy (Caddy / nginx / Cloudflare),
-  // the `host` header carries the public hostname while `x-forwarded-proto`
-  // carries the original scheme. If `x-forwarded-host` is present, default
-  // proto to https — proxies that rewrite Host almost always terminate TLS.
+  if (config.PUBLIC_URL) return config.PUBLIC_URL.replace(/\/$/, '');
   const xfHost = request.headers['x-forwarded-host']?.toString();
   const proto =
     request.headers['x-forwarded-proto']?.toString() ||

@@ -34,6 +34,11 @@ const ConfigSchema = z.object({
   // Comma-separated list of frontend origins allowed to call the API.
   // Default covers the Vite dev server.
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
+
+  // Public-facing base URL of this panel (e.g. https://panel.example.com).
+  // Used to generate bootstrap commands and subscription links.
+  // When unset, the URL is derived from the incoming request headers.
+  PUBLIC_URL: z.url().optional(),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
