@@ -24,7 +24,7 @@ export const inboundSyncQueue = new Queue<ApplyNodeInboundsJobData>(QUEUE_NAME, 
     // restarts on a flaky network is louder than stacking addUser noops.
     attempts: 3,
     backoff: { type: 'exponential', delay: 1000 },
-    removeOnComplete: { age: 3600, count: 500 },
+    removeOnComplete: true,
     removeOnFail: { age: 86400 },
   },
 });
