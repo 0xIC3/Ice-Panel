@@ -3,6 +3,7 @@
 > Этот документ — план развития проекта и справочник по используемым технологиям.
 > Обновляется по мере прохождения срезов. Если в коде ушло вперёд — значит документ устарел, обнови его.
 >
+> **Версия:** 3.3 (2026-05-07) — VPS-тест #2 частично пройден: Xray ✅ (тот же ISP), Hysteria pipeline доказан loopback'ом на VPS, но реальный UDP-трафик от RU мобильного ISP до ice-naive-test не идёт (тротлится/блокируется на пути; Salamander obfs + QUIC-tuning не помогли). Не баг кода — выходит за рамки Phase 1 acceptance. Доимплементили обфускацию Salamander в подписочный pipeline (URI / sing-box / Clash) — для других ISP/VPS-комбо.
 > **Версия:** 3.2 (2026-05-06) — slice 24b разбит на 24b1 (interface + Xray real impl, ✅ done) и 24b2/24b3/24b4 (Hysteria / AmneziaWG / Naive real impls — отдельные follow-up commits). Появился `docs/TESTING.md` с per-slice верификационными чек-листами.
 
 > **Companion doc:** [TESTING.md](./TESTING.md) — конкретные чек-листы что и как проверять при закрытии каждого slice'а (local checks / VPS checks / edge cases / done criteria). Обновляется при закрытии slice + при поимке новых багов.

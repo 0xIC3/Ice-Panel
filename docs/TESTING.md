@@ -6,6 +6,48 @@ Per-slice verification checklists. Use when **closing** a slice or when re-valid
 
 ---
 
+## VPS test cycles — log
+
+### Cycle #1 (2026-05-06)
+
+- 2 VPS (SE Xray REALITY + DE Hysteria 2) под одной панелью
+- Hiddify connect к обоим, auto-balancer 69 ms hy2 / 117 ms xray
+- Validated: CoreAdapter abstraction, bootstrap-token flow, SRR auto-format e2e
+- Стоимость: ~1 EUR (часовой billing)
+
+### Cycle #2 (2026-05-07) — partial
+
+4 VPS: panel + xray (`ice-xray-test`) + AWG (`ice-wg-test`) + hy2 (`ice-naive-test`).
+
+| Проверка | Результат |
+|---|---|
+| Xray REALITY traffic в Hiddify | ✅ работает |
+| AWG нода online + applyInbounds принят | ✅ (но adapter stub — без живого трафика, ждёт slice 24b3) |
+| Hysteria2 pipeline (loopback на VPS) | ✅ `hysteria client` через `127.0.0.1:443` → curl `https://example.com` → 200 OK за 4ms |
+| Hysteria2 real client (RU мобильный ISP → ice-naive-test) | ❌ Streisand iOS — пакеты не выходят (timeout). Happ iOS — пакеты долетают, auth ✅, `tx: 0`, читаемый таймаут на upstream TCP. |
+| Salamander obfs (`ice-test-obfs-2026`) | ❌ не помог |
+| QUIC tuning (`disablePathMTUDiscovery: true` + расширенные windows) | ❌ не помог |
+| TCP egress с самой VPS (`curl https://8.8.8.8`) | ✅ работает |
+
+**Вывод:** pipeline корректен (доказан loopback'ом). Нерабочесть real-client'а — ISP-уровневый блок/тротлинг QUIC специфичный для пары `RU-mobile-ISP ↔ 89.22.239.22`, не баг кода. xray на другом VPS с того же ISP работает, что подтверждает изолированность проблемы.
+
+**Что пофиксили в pipeline во время теста:**
+- `feat(panel-backend)`: emit Salamander obfs в hy2 subscription URI / sing-box / Clash, когда у inbound выставлен `obfsPassword`. Раньше поле было в БД, но в подписку не попадало — обфускация была инертной.
+
+**Закрытые баги предыдущей сессии (см. snapshot в memory):**
+- Bootstrap command `http://` → `https://` через `PUBLIC_URL` env var
+- Bootstrap expiry: «expires in N min» вместо абсолютного времени
+- Node без protocol поля → добавлена колонка + Select в UI
+- Hysteria ACME `mkdir read-only` → `WorkingDirectory=/etc/hysteria` в systemd unit
+- BullMQ failed job deduplication: документирован Redis cleanup runbook
+
+**Известные carry-over в следующий cycle:**
+- Slice 24b2 — node-agent должен сам писать `/etc/hysteria/config.yaml` (включая `obfs:` блок из inbound config) и рестартить hysteria.service. Сейчас admin правит руками.
+- Hysteria validation на не-RU/не-мобильном ISP — нужна другая клиентская сеть для повторного e2e
+- AWG real applyInbound — slice 24b3
+
+---
+
 ## Структура каждого блока
 
 - **Pre-conditions** — что должно быть готово до теста (БД, образы, VPS, домены).
