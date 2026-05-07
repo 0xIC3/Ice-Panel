@@ -91,7 +91,7 @@ export function NodePayloadModal({ opened, onClose, nodeName, payload, bootstrap
               <Group justify="space-between">
                 <Text fw={600}>Bootstrap token</Text>
                 <Badge color="blue" variant="light">
-                  expires {new Date(bootstrap.expiresAt).toLocaleTimeString()}
+                  expires in {Math.max(0, Math.round((new Date(bootstrap.expiresAt).getTime() - Date.now()) / 60000))} min
                 </Badge>
               </Group>
               <Code style={{ wordBreak: 'break-all' }}>{bootstrap.token}</Code>
