@@ -307,7 +307,7 @@ export interface HysteriaInboundConfig {
   brutalDownMbps?: number;
 }
 
-export type XrayNetwork = 'raw' | 'xhttp' | 'ws' | 'grpc';
+export type XrayNetwork = 'raw' | 'xhttp' | 'ws' | 'grpc' | 'httpupgrade' | 'kcp';
 
 export interface XrayInboundConfig {
   realityDest: string;

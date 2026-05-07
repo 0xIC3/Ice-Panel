@@ -255,6 +255,10 @@ func (a *Adapter) ApplyInbound(rawCfg json.RawMessage) error {
 		RealityPrivateKey:  wire.RealityPrivateKey,
 		RealityShortIDs:    wire.RealityShortIDs,
 		Flow:               wire.Flow,
+		Network:            wire.Network,
+		Path:               wire.Path,
+		HostHeader:         wire.Host,
+		ServiceName:        wire.ServiceName,
 	}
 
 	a.mu.Lock()
@@ -283,7 +287,11 @@ func inboundEqual(a, b InboundConfig) bool {
 		a.Flow != b.Flow ||
 		a.Tag != b.Tag ||
 		a.ListenHost != b.ListenHost ||
-		a.ListenPort != b.ListenPort {
+		a.ListenPort != b.ListenPort ||
+		a.Network != b.Network ||
+		a.Path != b.Path ||
+		a.HostHeader != b.HostHeader ||
+		a.ServiceName != b.ServiceName {
 		return false
 	}
 	if !stringSliceEqual(a.RealityServerNames, b.RealityServerNames) {

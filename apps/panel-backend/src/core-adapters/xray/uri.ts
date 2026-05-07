@@ -19,7 +19,7 @@
  * the inbounds table per-instance.
  */
 
-export type VlessNetwork = 'raw' | 'xhttp' | 'ws' | 'grpc';
+export type VlessNetwork = 'raw' | 'xhttp' | 'ws' | 'grpc' | 'httpupgrade' | 'kcp';
 
 export interface VlessRealityUriOpts {
   uuid: string;
@@ -55,18 +55,27 @@ export function buildVlessRealityUri(opts: VlessRealityUriOpts): string {
     fp: opts.fingerprint ?? 'chrome',
   });
 
-  // Vision is only meaningful with raw/xhttp. ws/grpc don't accept it — most
-  // clients ignore it, but a few (Xray itself when strict) reject the URI.
+  // Vision is only meaningful with raw/xhttp. ws/grpc/httpupgrade/kcp don't
+  // accept it — most clients ignore it, but a few (Xray itself when strict)
+  // reject the URI.
   if (flow && (network === 'raw' || network === 'xhttp')) {
     params.set('flow', flow);
   }
 
-  if (network === 'ws' || network === 'xhttp') {
+  // path + host header — same param names across ws/xhttp/httpupgrade per
+  // VLESS URI convention. kcp doesn't carry path/host.
+  if (network === 'ws' || network === 'xhttp' || network === 'httpupgrade') {
     if (opts.path) params.set('path', opts.path);
     if (opts.hostHeader) params.set('host', opts.hostHeader);
   }
   if (network === 'grpc' && opts.serviceName) {
     params.set('serviceName', opts.serviceName);
+  }
+  if (network === 'kcp') {
+    // header type — `none` is the safest default; admins picking obfuscated
+    // mTLS-like profiles (`wechat-video`, etc) can override the inbound
+    // streamSettings on the node side, but URI surface stays minimal.
+    params.set('headerType', 'none');
   }
 
   return `vless://${opts.uuid}@${opts.host}:${opts.port}?${params.toString()}#${encodeURIComponent(opts.name)}`;

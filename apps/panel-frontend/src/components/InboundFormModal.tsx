@@ -56,7 +56,7 @@ interface FormValues {
   xrayPublicKey: string;
   xrayFlow: string;
   xrayFingerprint: string;
-  xrayNetwork: 'raw' | 'xhttp' | 'ws' | 'grpc';
+  xrayNetwork: 'raw' | 'xhttp' | 'ws' | 'grpc' | 'httpupgrade' | 'kcp';
   xrayPath: string;
   xrayHostHeader: string;
   xrayServiceName: string;
@@ -158,7 +158,7 @@ function defaults(rule: Inbound | null, defaultNodeId: string): FormValues {
         xrayPublicKey: (cfg.realityPublicKey as string) ?? '',
         xrayFlow: (cfg.flow as string) ?? base.xrayFlow,
         xrayFingerprint: (cfg.fingerprint as string) ?? base.xrayFingerprint,
-        xrayNetwork: ((cfg.network as 'raw' | 'xhttp' | 'ws' | 'grpc') ?? 'raw'),
+        xrayNetwork: ((cfg.network as 'raw' | 'xhttp' | 'ws' | 'grpc' | 'httpupgrade' | 'kcp') ?? 'raw'),
         xrayPath: (cfg.path as string) ?? '',
         xrayHostHeader: (cfg.host as string) ?? '',
         xrayServiceName: (cfg.serviceName as string) ?? '',
@@ -501,17 +501,21 @@ export function InboundFormModal({ opened, onClose, inbound, nodes, onSubmit, lo
               </Group>
               <Select
                 label="Network (transport)"
-                description="raw = canonical REALITY+Vision. ws/grpc/xhttp work but Vision only pairs with raw/xhttp."
+                description="raw = canonical REALITY+Vision. ws/grpc/xhttp/httpupgrade work but Vision pairs only with raw/xhttp. kcp = UDP (collides with Hysteria on the same port)."
                 data={[
                   { value: 'raw', label: 'raw (TCP, was `tcp` pre-v24.9.30)' },
                   { value: 'xhttp', label: 'xhttp (HTTP/2 chunked, was `splithttp`)' },
                   { value: 'ws', label: 'ws (WebSocket)' },
                   { value: 'grpc', label: 'gRPC' },
+                  { value: 'httpupgrade', label: 'httpupgrade (CDN-friendly, no WS handshake)' },
+                  { value: 'kcp', label: 'kcp (UDP, lossy networks — port collides with Hysteria)' },
                 ]}
                 allowDeselect={false}
                 {...form.getInputProps('xrayNetwork')}
               />
-              {(form.values.xrayNetwork === 'ws' || form.values.xrayNetwork === 'xhttp') && (
+              {(form.values.xrayNetwork === 'ws' ||
+                form.values.xrayNetwork === 'xhttp' ||
+                form.values.xrayNetwork === 'httpupgrade') && (
                 <Group grow>
                   <TextInput
                     label="Path"

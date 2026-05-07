@@ -88,4 +88,26 @@ describe('buildVlessRealityUri', () => {
     expect(uri).toContain('type=xhttp');
     expect(uri).toContain('flow=xtls-rprx-vision');
   });
+
+  // ───── slice 24c part 2: httpupgrade + kcp transports ─────
+
+  it('emits path/host on network=httpupgrade and drops Vision flow', () => {
+    const uri = buildVlessRealityUri({
+      ...baseOpts,
+      network: 'httpupgrade',
+      path: '/u',
+      hostHeader: 'cdn.example.com',
+    });
+    expect(uri).toContain('type=httpupgrade');
+    expect(uri).toContain('path=%2Fu');
+    expect(uri).toContain('host=cdn.example.com');
+    expect(uri).not.toContain('flow=');
+  });
+
+  it('emits headerType on network=kcp and drops Vision flow', () => {
+    const uri = buildVlessRealityUri({ ...baseOpts, network: 'kcp' });
+    expect(uri).toContain('type=kcp');
+    expect(uri).toContain('headerType=none');
+    expect(uri).not.toContain('flow=');
+  });
 });

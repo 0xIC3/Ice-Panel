@@ -160,3 +160,195 @@ func TestWriteConfigAtomic(t *testing.T) {
 		t.Errorf("temp file lingered: %v", err)
 	}
 }
+
+// ───── Slice 24c part 2: routing defaults + sockopt + transport branches ─────
+
+func renderToMap(t *testing.T, cfg InboundConfig) map[string]any {
+	t.Helper()
+	blob, err := renderConfig(cfg, []xrayClient{{ID: "u1", Email: "u1"}})
+	if err != nil {
+		t.Fatalf("renderConfig: %v", err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(blob, &m); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	return m
+}
+
+func TestRender_RoutingDefaults_SniffingOnVlessInbound(t *testing.T) {
+	m := renderToMap(t, validInbound())
+	inbounds := m["inbounds"].([]any)
+	for _, raw := range inbounds {
+		inb := raw.(map[string]any)
+		if inb["protocol"] == "vless" {
+			sn := inb["sniffing"].(map[string]any)
+			if sn["enabled"] != true {
+				t.Errorf("sniffing should be enabled on vless inbound")
+			}
+			dest := sn["destOverride"].([]any)
+			if len(dest) != 3 {
+				t.Errorf("destOverride should have 3 entries, got %v", dest)
+			}
+		}
+	}
+}
+
+func TestRender_RoutingDefaults_DnsOutAndBlackhole(t *testing.T) {
+	m := renderToMap(t, validInbound())
+	outbounds := m["outbounds"].([]any)
+	tags := map[string]bool{}
+	for _, raw := range outbounds {
+		ob := raw.(map[string]any)
+		tags[ob["tag"].(string)] = true
+	}
+	if !tags["direct"] || !tags["dns-out"] || !tags["blocked"] {
+		t.Errorf("expected tags direct/dns-out/blocked, got %v", tags)
+	}
+}
+
+func TestRender_RoutingDefaults_BlockRules(t *testing.T) {
+	m := renderToMap(t, validInbound())
+	routing := m["routing"].(map[string]any)
+	rules := routing["rules"].([]any)
+
+	var dnsRule, btRule, smtpRule bool
+	for _, raw := range rules {
+		r := raw.(map[string]any)
+		out := r["outboundTag"]
+		if protocols, ok := r["protocol"].([]any); ok {
+			for _, p := range protocols {
+				if p == "dns" && out == "dns-out" {
+					dnsRule = true
+				}
+				if p == "bittorrent" && out == "blocked" {
+					btRule = true
+				}
+			}
+		}
+		if r["port"] == "25" && out == "blocked" {
+			smtpRule = true
+		}
+	}
+	if !dnsRule {
+		t.Errorf("missing dns→dns-out routing rule")
+	}
+	if !btRule {
+		t.Errorf("missing bittorrent→blocked routing rule")
+	}
+	if !smtpRule {
+		t.Errorf("missing port:25→blocked routing rule")
+	}
+}
+
+func TestRender_DirectOutboundUsesBBR(t *testing.T) {
+	m := renderToMap(t, validInbound())
+	outbounds := m["outbounds"].([]any)
+	for _, raw := range outbounds {
+		ob := raw.(map[string]any)
+		if ob["tag"] == "direct" {
+			ss, ok := ob["streamSettings"].(map[string]any)
+			if !ok {
+				t.Errorf("direct outbound missing streamSettings")
+				return
+			}
+			sock := ss["sockopt"].(map[string]any)
+			if sock["tcpCongestion"] != "bbr" {
+				t.Errorf("direct outbound should set tcpCongestion=bbr, got %v", sock["tcpCongestion"])
+			}
+			if sock["tcpFastOpen"] != true {
+				t.Errorf("direct outbound should set tcpFastOpen=true")
+			}
+		}
+	}
+}
+
+func TestRender_Network_WSEmitsWsSettings(t *testing.T) {
+	cfg := validInbound()
+	cfg.Network = "ws"
+	cfg.Path = "/vless"
+	cfg.HostHeader = "cdn.example.com"
+	m := renderToMap(t, cfg)
+	for _, raw := range m["inbounds"].([]any) {
+		inb := raw.(map[string]any)
+		if inb["protocol"] != "vless" {
+			continue
+		}
+		ss := inb["streamSettings"].(map[string]any)
+		if ss["network"] != "ws" {
+			t.Errorf("network: got %v want ws", ss["network"])
+		}
+		ws, ok := ss["wsSettings"].(map[string]any)
+		if !ok {
+			t.Fatalf("wsSettings missing")
+		}
+		if ws["path"] != "/vless" {
+			t.Errorf("ws path: got %v want /vless", ws["path"])
+		}
+		headers := ws["headers"].(map[string]any)
+		if headers["Host"] != "cdn.example.com" {
+			t.Errorf("ws Host header: got %v", headers["Host"])
+		}
+	}
+}
+
+func TestRender_Network_HTTPUpgradeEmitsHttpupgradeSettings(t *testing.T) {
+	cfg := validInbound()
+	cfg.Network = "httpupgrade"
+	cfg.Path = "/u"
+	m := renderToMap(t, cfg)
+	for _, raw := range m["inbounds"].([]any) {
+		inb := raw.(map[string]any)
+		if inb["protocol"] != "vless" {
+			continue
+		}
+		ss := inb["streamSettings"].(map[string]any)
+		if ss["network"] != "httpupgrade" {
+			t.Errorf("network: got %v", ss["network"])
+		}
+		hu, ok := ss["httpupgradeSettings"].(map[string]any)
+		if !ok {
+			t.Fatalf("httpupgradeSettings missing")
+		}
+		if hu["path"] != "/u" {
+			t.Errorf("httpupgrade path: got %v", hu["path"])
+		}
+	}
+}
+
+func TestRender_Network_KCPEmitsKcpSettings(t *testing.T) {
+	cfg := validInbound()
+	cfg.Network = "kcp"
+	m := renderToMap(t, cfg)
+	for _, raw := range m["inbounds"].([]any) {
+		inb := raw.(map[string]any)
+		if inb["protocol"] != "vless" {
+			continue
+		}
+		ss := inb["streamSettings"].(map[string]any)
+		if ss["network"] != "kcp" {
+			t.Errorf("network: got %v", ss["network"])
+		}
+		if _, ok := ss["kcpSettings"].(map[string]any); !ok {
+			t.Errorf("kcpSettings missing")
+		}
+	}
+}
+
+func TestRender_Network_GrpcEmitsServiceName(t *testing.T) {
+	cfg := validInbound()
+	cfg.Network = "grpc"
+	cfg.ServiceName = "GunSvc"
+	m := renderToMap(t, cfg)
+	for _, raw := range m["inbounds"].([]any) {
+		inb := raw.(map[string]any)
+		if inb["protocol"] != "vless" {
+			continue
+		}
+		ss := inb["streamSettings"].(map[string]any)
+		grpc := ss["grpcSettings"].(map[string]any)
+		if grpc["serviceName"] != "GunSvc" {
+			t.Errorf("serviceName: got %v", grpc["serviceName"])
+		}
+	}
+}

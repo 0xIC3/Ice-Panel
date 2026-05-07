@@ -355,13 +355,25 @@ Per-slice verification checklists. Use when **closing** a slice or when re-valid
 - [x] `ApiPort` сохраняется в ApplyInbound (install-time identity)
 - [x] env: `XRAY_API_PORT` (default 8080)
 
-### Part 2 (transports + subprotocols) — TODO
-- [ ] HTTPUpgrade transport (`network: 'httpupgrade'`)
-- [ ] KCP transport (`network: 'kcp'`, mtu/tti/uplinkCapacity)
-- [ ] Trojan subprotocol + Zod schema + URI builder
-- [ ] Shadowsocks (incl SS2022) subprotocol
-- [ ] sniffing + sockopt-BBR + DNS-OUT + BLOCK rules в config render
-- [ ] Frontend transport-specific форма для каждого
+### Part 2 (transports + routing defaults) — local checks
+- [x] `network` enum в panel schema расширен: `httpupgrade`, `kcp`
+- [x] `XrayNetwork` type в `lib/api.ts` обновлён
+- [x] `buildVlessRealityUri` поддерживает `httpupgrade` (path+host) и `kcp` (headerType=none); Vision flow дропается на этих транспортах
+- [x] Node `xray.InboundConfig` получил Network/Path/HostHeader/ServiceName поля
+- [x] `buildStreamSettings` ветвится по network: raw/ws/xhttp/httpupgrade/grpc/kcp; для каждого правильный xxxSettings блок
+- [x] sniffing на vless inbound: enabled, destOverride [http,tls,quic]
+- [x] outbounds: direct (sockopt BBR + tcpFastOpen), dns-out, blackhole (tag=blocked)
+- [x] routing.rules: api-in→api, dns→dns-out, bittorrent→blocked, port:25→blocked
+- [x] `inboundEqual` сравнивает Network/Path/HostHeader/ServiceName (apply-restart fires при их изменении)
+- [x] Frontend `InboundFormModal` — Select обновлён, path/host показываются для httpupgrade
+- [x] uri.test.ts — 2 новых теста (httpupgrade/kcp)
+- [x] config_test.go — 7 новых тестов (sniffing/outbounds/BLOCK rules/sockopt-BBR + 4 транспорта)
+
+### Part 3 (Trojan + Shadowsocks subprotocols) — TODO
+- [ ] Trojan: новый Zod schema branch в discriminated union, URI builder (`trojan://...`), node render path
+- [ ] Shadowsocks (incl SS2022): cipher selector, per-user password, URI `ss://base64(method:password)@host:port`
+- [ ] Singbox + Clash format support для обоих
+- [ ] Frontend: protocol Select option + form sections
 
 ### Original Pre-conditions (kept for VPS-cycle reference)
 

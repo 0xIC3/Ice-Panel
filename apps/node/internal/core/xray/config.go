@@ -44,6 +44,23 @@ type InboundConfig struct {
 	// MUST stay on 127.0.0.1 (renderConfig hardcodes the listen host) —
 	// exposing it externally would let anyone read+reset all counters.
 	ApiPort int
+
+	// Network is the stream transport. Empty/"raw" → REALITY canonical.
+	// Slice 24c part 2 adds `xhttp`/`ws`/`grpc`/`httpupgrade`/`kcp` branches —
+	// Vision flow is incompatible with all but `raw`/`xhttp`; the operator
+	// is responsible for aligning Flow with Network at form level.
+	Network string
+
+	// Path is used by `ws`, `xhttp`, `httpupgrade` transports. Default "/".
+	Path string
+
+	// HostHeader overrides the Host header for `ws`/`xhttp`/`httpupgrade`.
+	// Empty → use the connect host as Host.
+	HostHeader string
+
+	// ServiceName is required when Network is `grpc` (the gRPC service
+	// identifier the inbound listens on).
+	ServiceName string
 }
 
 func (c *InboundConfig) withDefaults() InboundConfig {
@@ -143,17 +160,16 @@ func renderConfig(inbound InboundConfig, users []xrayClient) ([]byte, error) {
 					"clients":    users,
 					"decryption": "none",
 				},
-				"streamSettings": map[string]any{
-					"network":  "raw",
-					"security": "reality",
-					"realitySettings": map[string]any{
-						"show":        false,
-						"dest":        cfg.RealityDest,
-						"xver":        0,
-						"serverNames": cfg.RealityServerNames,
-						"privateKey":  cfg.RealityPrivateKey,
-						"shortIds":    cfg.RealityShortIDs,
-					},
+				"streamSettings": buildStreamSettings(cfg),
+				// Sniffing — slice 24c part 2. Lets routing rules see the
+				// real destination protocol/SNI rather than just the IP/port,
+				// which is needed for the `geosite:` and `protocol:` matchers
+				// below to actually fire. `routeOnly: false` (default) means
+				// the sniffed value also drives the connection, so DNS-over-
+				// HTTPS hijack-protection rules work too.
+				"sniffing": map[string]any{
+					"enabled":      true,
+					"destOverride": []string{"http", "tls", "quic"},
 				},
 			},
 			{
@@ -166,20 +182,141 @@ func renderConfig(inbound InboundConfig, users []xrayClient) ([]byte, error) {
 				},
 			},
 		},
+		// Outbounds — slice 24c part 2:
+		//   - `direct` (freedom): default exit
+		//   - `dns-out`: DNS server outbound — routing rule below pins all
+		//     `protocol: dns` traffic here so client DNS queries don't leak
+		//     out via `direct` and reveal real destinations to the resolver
+		//   - `blocked` (blackhole): drop target for BLOCK rules
 		"outbounds": []map[string]any{
-			{"protocol": "freedom", "tag": "direct"},
+			{
+				"protocol": "freedom",
+				"tag":      "direct",
+				"streamSettings": map[string]any{
+					"sockopt": map[string]any{
+						// BBR congestion control — measurably better throughput
+						// on lossy networks (5-30% in our prod-runs). Requires
+						// `net.core.default_qdisc=fq` + `net.ipv4.tcp_congestion
+						// _control=bbr` in sysctl on the node — install-node.sh
+						// sets these (slice 23.1).
+						"tcpCongestion": "bbr",
+						"tcpFastOpen":   true,
+					},
+				},
+			},
+			{"protocol": "dns", "tag": "dns-out"},
+			{"protocol": "blackhole", "tag": "blocked"},
 		},
 		"routing": map[string]any{
+			"domainStrategy": "IPIfNonMatch",
 			"rules": []map[string]any{
+				// Loopback management: api inbound traffic only ever talks
+				// to the api outbound (the StatsService).
 				{
 					"type":        "field",
 					"inboundTag":  []string{"api-in"},
 					"outboundTag": "api",
 				},
+				// DNS hijack protection — route all DNS-protocol traffic to
+				// the dns-out outbound so the upstream resolver can't see the
+				// client's real IP.
+				{
+					"type":        "field",
+					"protocol":    []string{"dns"},
+					"outboundTag": "dns-out",
+				},
+				// BLOCK rules — slice 24c part 2 anti-abuse:
+				//   - BitTorrent: most VPS providers' AUP forbids it; one
+				//     subscriber's torrenting can get the whole node nuked.
+				//   - SMTP (port 25): outbound mail abuse / spam — providers
+				//     blacklist the IP within hours.
+				{
+					"type":        "field",
+					"protocol":    []string{"bittorrent"},
+					"outboundTag": "blocked",
+				},
+				{
+					"type":        "field",
+					"port":        "25",
+					"outboundTag": "blocked",
+				},
 			},
 		},
 	}
 	return json.MarshalIndent(doc, "", "  ")
+}
+
+// buildStreamSettings selects the right Xray streamSettings shape for the
+// configured network transport. REALITY+Vision canonical is `raw`; other
+// transports are slice 24c part 2 additions.
+func buildStreamSettings(cfg InboundConfig) map[string]any {
+	network := cfg.Network
+	if network == "" {
+		network = "raw"
+	}
+	path := cfg.Path
+	if path == "" {
+		path = "/"
+	}
+
+	stream := map[string]any{
+		"network":  network,
+		"security": "reality",
+		"realitySettings": map[string]any{
+			"show":        false,
+			"dest":        cfg.RealityDest,
+			"xver":        0,
+			"serverNames": cfg.RealityServerNames,
+			"privateKey":  cfg.RealityPrivateKey,
+			"shortIds":    cfg.RealityShortIDs,
+		},
+	}
+
+	switch network {
+	case "raw", "":
+		// nothing extra — REALITY+Vision canonical
+	case "ws":
+		ws := map[string]any{"path": path}
+		if cfg.HostHeader != "" {
+			ws["headers"] = map[string]any{"Host": cfg.HostHeader}
+		}
+		stream["wsSettings"] = ws
+	case "xhttp":
+		xh := map[string]any{"path": path, "mode": "auto"}
+		if cfg.HostHeader != "" {
+			xh["host"] = cfg.HostHeader
+		}
+		stream["xhttpSettings"] = xh
+	case "httpupgrade":
+		hu := map[string]any{"path": path}
+		if cfg.HostHeader != "" {
+			hu["host"] = cfg.HostHeader
+		}
+		stream["httpupgradeSettings"] = hu
+	case "grpc":
+		stream["grpcSettings"] = map[string]any{
+			"serviceName": cfg.ServiceName,
+			"multiMode":   false,
+		}
+	case "kcp":
+		// mKCP is UDP-based; collides with Hysteria on the same UDP port —
+		// the panel-side schema validation should reject overlap when
+		// creating an inbound on a node that already has a Hysteria inbound
+		// using the same port. We don't enforce that here (one node →
+		// possibly multiple adapters → cross-adapter awareness lives on
+		// the panel side).
+		stream["kcpSettings"] = map[string]any{
+			"mtu":              1350,
+			"tti":              50,
+			"uplinkCapacity":   100,
+			"downlinkCapacity": 100,
+			"congestion":       false,
+			"readBufferSize":   2,
+			"writeBufferSize":  2,
+			"header":           map[string]any{"type": "none"},
+		}
+	}
+	return stream
 }
 
 // writeConfig atomically writes the config to disk. Uses temp file + rename so

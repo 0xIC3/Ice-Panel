@@ -43,11 +43,16 @@ export const XrayConfigSchema = z.object({
    * `splithttp`). REALITY+Vision canonical is `raw`. `ws`/`grpc`/`xhttp` work
    * but Vision is incompatible with `ws`/`grpc` — the adapter doesn't enforce
    * this at write time, the operator must align flow + network themselves.
+   *
+   * Slice 24c part 2 added `httpupgrade` (CDN-friendly, no WebSocket
+   * handshake overhead) and `kcp` (UDP-based, useful on lossy networks).
+   * `kcp` collides with Hysteria on the same UDP port — admin must avoid
+   * port overlap manually (the panel doesn't cross-validate today).
    */
-  network: z.enum(['raw', 'xhttp', 'ws', 'grpc']).default('raw'),
-  /** Path for `ws` and `xhttp`. Default `/`. Ignored for `raw`/`grpc`. */
+  network: z.enum(['raw', 'xhttp', 'ws', 'grpc', 'httpupgrade', 'kcp']).default('raw'),
+  /** Path for `ws`, `xhttp`, `httpupgrade`. Default `/`. Ignored for `raw`/`grpc`/`kcp`. */
   path: z.string().max(255).optional(),
-  /** Host header override for `ws`/`xhttp`. Empty → use connect host. */
+  /** Host header override for `ws`/`xhttp`/`httpupgrade`. Empty → use connect host. */
   host: z.string().max(255).optional(),
   /** gRPC serviceName. Required when network=grpc. */
   serviceName: z.string().max(64).optional(),
