@@ -83,6 +83,15 @@ interface FormValues {
   naiveHostname: string;
   naiveTlsEmail: string;
   naiveMasquerade: string;
+
+  // Shadowsocks (slice 24d)
+  ssMethod:
+    | '2022-blake3-aes-128-gcm'
+    | '2022-blake3-aes-256-gcm'
+    | '2022-blake3-chacha20-poly1305'
+    | 'chacha20-ietf-poly1305'
+    | 'aes-256-gcm'
+    | 'aes-128-gcm';
 }
 
 const TSPU_PRESET = { jc: 4, jmin: 40, jmax: 89, s1: 72, s2: 56, s3: 32, s4: 16 };
@@ -136,6 +145,8 @@ function defaults(rule: Inbound | null, defaultNodeId: string): FormValues {
     naiveHostname: '',
     naiveTlsEmail: '',
     naiveMasquerade: '/var/www/html',
+
+    ssMethod: '2022-blake3-aes-256-gcm',
   };
 
   if (!rule) return base;
@@ -193,6 +204,11 @@ function defaults(rule: Inbound | null, defaultNodeId: string): FormValues {
         naiveHostname: (cfg.hostname as string) ?? '',
         naiveTlsEmail: (cfg.tlsEmail as string) ?? '',
         naiveMasquerade: (cfg.masqueradeRoot as string) ?? base.naiveMasquerade,
+      };
+    case 'shadowsocks':
+      return {
+        ...base,
+        ssMethod: ((cfg.method as FormValues['ssMethod']) ?? base.ssMethod),
       };
     default:
       return base;
@@ -317,6 +333,11 @@ export function InboundFormModal({ opened, onClose, inbound, nodes, onSubmit, lo
           masqueradeRoot: values.naiveMasquerade,
         };
         break;
+      case 'shadowsocks':
+        config = {
+          method: values.ssMethod,
+        };
+        break;
     }
 
     // Slice 25: empty string → null (clears the override on update, omits
@@ -375,9 +396,10 @@ export function InboundFormModal({ opened, onClose, inbound, nodes, onSubmit, lo
             label="Protocol"
             data={[
               { value: 'hysteria', label: 'Hysteria 2' },
-              { value: 'xray', label: 'Xray (VLESS+REALITY)' },
+              { value: 'xray', label: 'Xray (VLESS / Trojan + REALITY)' },
               { value: 'amneziawg', label: 'AmneziaWG' },
               { value: 'naive', label: 'NaiveProxy' },
+              { value: 'shadowsocks', label: 'Shadowsocks 2022' },
             ]}
             disabled={isEdit}
             allowDeselect={false}
@@ -657,6 +679,32 @@ export function InboundFormModal({ opened, onClose, inbound, nodes, onSubmit, lo
                 description="Static-files dir Caddy serves to non-authed probers"
                 {...form.getInputProps('naiveMasquerade')}
               />
+            </Stack>
+          )}
+
+          {form.values.protocol === 'shadowsocks' && (
+            <Stack>
+              <Select
+                label="Cipher method"
+                description="SS2022 (2022-blake3-*) recommended for new deployments. Legacy AEAD kept for compat with old clients."
+                data={[
+                  { value: '2022-blake3-aes-256-gcm', label: '2022-blake3-aes-256-gcm (recommended)' },
+                  { value: '2022-blake3-aes-128-gcm', label: '2022-blake3-aes-128-gcm' },
+                  { value: '2022-blake3-chacha20-poly1305', label: '2022-blake3-chacha20-poly1305' },
+                  { value: 'chacha20-ietf-poly1305', label: 'chacha20-ietf-poly1305 (legacy AEAD)' },
+                  { value: 'aes-256-gcm', label: 'aes-256-gcm (legacy AEAD)' },
+                  { value: 'aes-128-gcm', label: 'aes-128-gcm (legacy AEAD)' },
+                ]}
+                allowDeselect={false}
+                {...form.getInputProps('ssMethod')}
+              />
+              <Alert color="blue" variant="light">
+                <Text size="sm">
+                  Per-user password reuses each user's <Code>xrayUuid</Code> — no
+                  separate credential to manage. Make sure SS users have <Code>xray</Code>
+                  enabled in their protocol list (the same UUID drives both).
+                </Text>
+              </Alert>
             </Stack>
           )}
 

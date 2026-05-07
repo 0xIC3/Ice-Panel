@@ -44,6 +44,22 @@ skipped cleanly so single-protocol nodes don't pay for Xray.
 | `XRAY_API_PORT` | `8080` | Loopback port for the gRPC StatsService inbound (slice 24c). The adapter shells out to `xray api statsquery -server 127.0.0.1:<port>` to read+drain per-user byte counters every poll. Always binds 127.0.0.1 — never expose externally. |
 | `XRAY_CONFIG` | `/etc/xray/config.json` | Path the adapter writes the generated config to. |
 
+### Shadowsocks adapter (slice 24d)
+
+Shares the xray binary — auto-registered when `XRAY_BINARY` is set. Stays
+inert (deferred-method mode) until the panel pushes an `ApplyInbound`
+with a method, at which point it spawns its own xray subprocess on a
+separate config + listen port.
+
+| Var | Default | Description |
+|---|---|---|
+| `SHADOWSOCKS_CONFIG` | `/etc/xray/shadowsocks.json` | Path for the SS-specific xray config (separate from the VLESS one). |
+| `SHADOWSOCKS_PORT` | `8388` | TCP port the SS inbound listens on (historic SS default). |
+| `SHADOWSOCKS_API_PORT` | `8081` | Loopback port for the gRPC StatsService — set one above `XRAY_API_PORT` (8080) to avoid conflict if both run on the same node. Always binds 127.0.0.1. |
+| `SHADOWSOCKS_METHOD` | (none) | Cipher pre-seed. Empty → wait for first ApplyInbound. Valid: `2022-blake3-aes-{128,256}-gcm`, `2022-blake3-chacha20-poly1305`, `chacha20-ietf-poly1305`, `aes-{128,256}-gcm`. |
+
+Per-user password = `user.xrayUuid` (no separate credential).
+
 ### NaiveProxy adapter (slice 20, in progress)
 
 NaiveProxy multi-user mode requires a custom Caddy build with the

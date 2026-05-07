@@ -30,9 +30,10 @@ const STRATEGY_OPTIONS: { value: TrafficLimitStrategy; label: string }[] = [
 
 const PROTOCOL_OPTIONS: { value: ProtocolName; label: string }[] = [
   { value: 'hysteria', label: 'Hysteria2' },
-  { value: 'xray', label: 'Xray (VLESS+REALITY)' },
+  { value: 'xray', label: 'Xray (VLESS / Trojan + REALITY)' },
   { value: 'amneziawg', label: 'AmneziaWG' },
   { value: 'naive', label: 'NaiveProxy' },
+  { value: 'shadowsocks', label: 'Shadowsocks 2022' },
 ];
 
 interface FormValues {

@@ -9,7 +9,7 @@
  * may eventually need string encoding; revisit when quotas exceed ~8 PB.
  */
 
-export type ProtocolName = 'hysteria' | 'xray' | 'amneziawg' | 'naive';
+export type ProtocolName = 'hysteria' | 'xray' | 'amneziawg' | 'naive' | 'shadowsocks';
 
 export interface ProtocolCredentials {
   hysteriaPassword?: string;
@@ -67,7 +67,8 @@ export interface InboundDto {
     | XrayInboundCfg
     | HysteriaInboundCfg
     | AmneziawgInboundCfg
-    | NaiveInboundCfg;
+    | NaiveInboundCfg
+    | ShadowsocksInboundCfg;
 }
 
 export interface XrayInboundCfg {
@@ -121,6 +122,21 @@ export interface NaiveInboundCfg {
   hostname: string;               // public FQDN; Caddy ACME uses this
   tlsEmail: string;               // LE account
   masqueradeRoot?: string;        // dir served when probed (default: /var/www/empty)
+}
+
+/**
+ * Shadowsocks 2022 inbound config (slice 24d). Method = AEAD/SS2022 cipher.
+ * Per-user passwords are derived from `user.xrayUuid` on both sides — we
+ * don't grow the credential surface for a fifth protocol.
+ */
+export interface ShadowsocksInboundCfg {
+  method:
+    | '2022-blake3-aes-128-gcm'
+    | '2022-blake3-aes-256-gcm'
+    | '2022-blake3-chacha20-poly1305'
+    | 'chacha20-ietf-poly1305'
+    | 'aes-256-gcm'
+    | 'aes-128-gcm';
 }
 
 export interface ApplyInboundsRequest {

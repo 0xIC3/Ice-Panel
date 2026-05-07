@@ -6,7 +6,7 @@ export const TrafficLimitStrategy = z.enum(['no_reset', 'day', 'week', 'month', 
 
 export const UserStatus = z.enum(['active', 'disabled', 'expired', 'limited']);
 
-export const ProtocolName = z.enum(['hysteria', 'xray', 'amneziawg', 'naive']);
+export const ProtocolName = z.enum(['hysteria', 'xray', 'amneziawg', 'naive', 'shadowsocks']);
 export type ProtocolNameT = z.infer<typeof ProtocolName>;
 
 const UsernameSchema = z

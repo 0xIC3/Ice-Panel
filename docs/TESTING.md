@@ -435,6 +435,36 @@ Per-slice verification checklists. Use when **closing** a slice or when re-valid
 
 ---
 
+## Slice 24d — Shadowsocks (SS2022) ✅ (code) / ⏭️ (VPS)
+
+### Local checks
+- [x] `ProtocolName` enum extended with `'shadowsocks'` — both panel Zod (`users.schemas.ts`, `inbounds.schemas.ts`) and shared `transport.ts`
+- [x] `ShadowsocksConfigSchema` — curated cipher enum (3 SS2022 + 3 legacy AEAD; insecure ciphers explicitly omitted)
+- [x] `ShadowsocksInboundCfg` shared wire type
+- [x] `buildShadowsocksUri`: SIP002 format, base64url-no-padding userinfo, name fragment URI-encoded
+- [x] URI tests — 6 cases (scheme, base64url alphabet validation against `+/`, no padding, fragment encoding, legacy AEAD)
+- [x] `ShadowsocksSubscriptionEndpoint` type added to discriminated union
+- [x] `subscription.service.ts` — emit branch when user has `xrayUuid` and inbound has `protocol === 'shadowsocks'`; password reuses `user.xrayUuid`
+- [x] Node-side `internal/core/shadowsocks/` package — config, adapter, stats
+- [x] `renderConfig` deterministic: SS inbound (protocol `shadowsocks`, settings.method+clients+network=tcp,udp), api-in on `127.0.0.1:8081`, routing defaults (sniffing, dns-out, blackhole, BLOCK rules: bittorrent + port:25), sockopt-BBR + tcpFastOpen
+- [x] `ApplyInbound` parses wire, idempotent on identical method, regenerates+restarts on change, rejects empty/missing method
+- [x] AddUser uses `user.XrayUUID` as password; idempotent; deferred until method configured
+- [x] `GetStats` — soft-fails to zero counters on statsquery failure (doesn't starve other adapters' stats)
+- [x] Adapter registers in `main.go` when `XRAY_BINARY` set; env: `SHADOWSOCKS_CONFIG`/`SHADOWSOCKS_PORT`/`SHADOWSOCKS_API_PORT`/`SHADOWSOCKS_METHOD`
+- [x] Frontend `lib/api.ts` — types (`ShadowsocksMethod`, `ShadowsocksInboundConfig`, `InboundConfig` union extended)
+- [x] `InboundFormModal` — protocol Select option, Cipher Select section, info Alert about UUID-as-password
+- [x] `UserFormModal` — protocol Select option for shadowsocks
+- [x] `UsersPage` — protocol color (pink) for shadowsocks badge
+- [x] Adapter unit tests — 14 cases covering Name, AddUser/RemoveUser, ApplyInbound paths, parser, stats soft-fail
+- [x] Config render tests — 5 cases (validation, defaults, inbound shape, stats wiring, routing defaults, api-in loopback)
+
+### TODO (separate commits)
+- [ ] singbox formatter — emit `{type: 'shadowsocks', server, server_port, method, password}` outbound
+- [ ] clash formatter — emit `{name, type: ss, server, port, cipher, password}` proxy
+- [ ] VPS validation: real SS2022 client (Shadowrocket/Outline/sing-box) connects through ice-panel-issued URI
+
+---
+
 ## Slice 26 — Squad ACL (group_inbounds wiring) 🟡 backend done, frontend TODO
 
 ### Pre-conditions

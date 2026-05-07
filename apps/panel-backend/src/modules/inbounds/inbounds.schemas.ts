@@ -107,12 +107,40 @@ export const NaiveConfigSchema = z.object({
   masqueradeRoot: z.string().min(1).max(255).default('/var/www/html'),
 });
 
+/**
+ * Shadowsocks 2022 ciphers we expose. Slice 24d.
+ *
+ * Why a curated list rather than free-text:
+ *   - SS2022 ciphers (`2022-blake3-aes-...`) require Xray ≥ v1.8 and use a
+ *     pre-shared key model that's incompatible with the legacy AEAD
+ *     ciphers — clients fail silently if mismatched.
+ *   - Legacy AEAD (`chacha20-ietf-poly1305`, `aes-256-gcm`) work with every
+ *     SS client back to ~2018, but are increasingly fingerprintable. We
+ *     keep them for compat with old client builds.
+ *   - Other ciphers (AES-CFB, RC4-MD5, etc) are insecure — explicitly
+ *     omitted from the enum to prevent admin misconfiguration.
+ */
+export const ShadowsocksMethodSchema = z.enum([
+  '2022-blake3-aes-128-gcm',
+  '2022-blake3-aes-256-gcm',
+  '2022-blake3-chacha20-poly1305',
+  'chacha20-ietf-poly1305',
+  'aes-256-gcm',
+  'aes-128-gcm',
+]);
+
+export const ShadowsocksConfigSchema = z.object({
+  /** Cipher method. SS2022 (`2022-blake3-*`) recommended for new deployments. */
+  method: ShadowsocksMethodSchema.default('2022-blake3-aes-256-gcm'),
+});
+
 // Discriminated union over `protocol`. Used for create/update body validation.
 export const InboundConfigByProtocol = z.discriminatedUnion('protocol', [
   z.object({ protocol: z.literal('hysteria'), config: HysteriaConfigSchema }),
   z.object({ protocol: z.literal('xray'), config: XrayConfigSchema }),
   z.object({ protocol: z.literal('amneziawg'), config: AmneziawgConfigSchema }),
   z.object({ protocol: z.literal('naive'), config: NaiveConfigSchema }),
+  z.object({ protocol: z.literal('shadowsocks'), config: ShadowsocksConfigSchema }),
 ]);
 
 // Public-facing host the panel emits in client URIs. Must be a hostname or
@@ -167,11 +195,12 @@ export const PROTOCOL_CONFIG_SCHEMAS = {
   xray: XrayConfigSchema,
   amneziawg: AmneziawgConfigSchema,
   naive: NaiveConfigSchema,
+  shadowsocks: ShadowsocksConfigSchema,
 } as const;
 
 export const ListInboundsQuerySchema = z.object({
   nodeId: z.uuid().optional(),
-  protocol: z.enum(['hysteria', 'xray', 'amneziawg', 'naive']).optional(),
+  protocol: z.enum(['hysteria', 'xray', 'amneziawg', 'naive', 'shadowsocks']).optional(),
 });
 export type ListInboundsQuery = z.infer<typeof ListInboundsQuerySchema>;
 

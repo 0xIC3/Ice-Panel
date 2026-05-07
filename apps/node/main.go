@@ -12,6 +12,7 @@ import (
 
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core/hysteria"
+	"github.com/0xIC3/Ice-Panel/apps/node/internal/core/shadowsocks"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core/xray"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/payload"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/server"
@@ -111,6 +112,25 @@ func buildAdapters(logger *slog.Logger) []core.CoreAdapter {
 		}
 		adapters = append(adapters, xray.New(cfg, logger))
 		logger.Info("xray adapter registered")
+	}
+
+	// Slice 24d — Shadowsocks shares the xray binary. We register the SS
+	// adapter whenever XRAY_BINARY is set; the panel decides whether the
+	// node actually has an SS inbound by either sending an ApplyInbound or
+	// not. Adapter starts in deferred-method mode (no Method set) until the
+	// first ApplyInbound flips it on.
+	if os.Getenv("XRAY_BINARY") != "" {
+		ssCfg := shadowsocks.Config{
+			BinaryPath: os.Getenv("XRAY_BINARY"),
+			ConfigPath: getenv("SHADOWSOCKS_CONFIG", "/etc/xray/shadowsocks.json"),
+			Inbound: shadowsocks.InboundConfig{
+				ListenPort: getenvInt("SHADOWSOCKS_PORT", 8388),
+				ApiPort:    getenvInt("SHADOWSOCKS_API_PORT", 8081),
+				Method:     os.Getenv("SHADOWSOCKS_METHOD"), // empty → deferred until ApplyInbound
+			},
+		}
+		adapters = append(adapters, shadowsocks.New(ssCfg, logger))
+		logger.Info("shadowsocks adapter registered")
 	}
 
 	return adapters

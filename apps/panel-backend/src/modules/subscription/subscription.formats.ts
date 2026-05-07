@@ -11,6 +11,11 @@ export {
   buildTrojanRealityUri,
   type TrojanRealityUriOpts,
 } from '../../core-adapters/xray/index.js';
+export {
+  buildShadowsocksUri,
+  type ShadowsocksUriOpts,
+  type ShadowsocksMethod,
+} from '../../core-adapters/shadowsocks/index.js';
 
 /**
  * Strip the optional `:port` suffix from a `host[:port]` string. Returns
@@ -99,11 +104,26 @@ export interface NaiveSubscriptionEndpoint extends SubscriptionEndpointBase {
   password: string;
 }
 
+export interface ShadowsocksSubscriptionEndpoint extends SubscriptionEndpointBase {
+  protocol: 'shadowsocks';
+  /** SS2022 / legacy AEAD cipher. Drives the URI's method tuple and the
+   *  outbound shape in sing-box / Clash formatters. */
+  method:
+    | '2022-blake3-aes-128-gcm'
+    | '2022-blake3-aes-256-gcm'
+    | '2022-blake3-chacha20-poly1305'
+    | 'chacha20-ietf-poly1305'
+    | 'aes-256-gcm'
+    | 'aes-128-gcm';
+  password: string;
+}
+
 export type SubscriptionEndpoint =
   | HysteriaSubscriptionEndpoint
   | XraySubscriptionEndpoint
   | AmneziawgSubscriptionEndpoint
-  | NaiveSubscriptionEndpoint;
+  | NaiveSubscriptionEndpoint
+  | ShadowsocksSubscriptionEndpoint;
 
 export interface SubscriptionJsonResponse {
   user: {

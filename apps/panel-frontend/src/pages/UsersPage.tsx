@@ -19,10 +19,12 @@ import {
   IconCheck,
   IconCopy,
   IconEdit,
+  IconExternalLink,
   IconPlus,
   IconRefresh,
   IconTrash,
 } from '@tabler/icons-react';
+import { Code } from '@mantine/core';
 import {
   createUser,
   deleteUser,
@@ -35,7 +37,15 @@ import {
 } from '../lib/api';
 import { UserFormModal } from '../components/UserFormModal';
 
-function SubscriptionCopyIcon({ url }: { url: string }) {
+/**
+ * Subscription cell. Shows the full URL truncated with ellipsis (clickable
+ * for full-text reveal via tooltip) plus copy + open-in-new-tab actions.
+ *
+ * Slice 26.1 (commercial sprint) — admins kept asking "where do I get the
+ * URL to give the user?" because only a small clipboard icon was rendered
+ * before. Now the URL itself is right there.
+ */
+function SubscriptionCell({ url }: { url: string }) {
   const [copied, setCopied] = useState(false);
   async function handleCopy() {
     try {
@@ -50,12 +60,47 @@ function SubscriptionCopyIcon({ url }: { url: string }) {
       });
     }
   }
+
   return (
-    <Tooltip label={copied ? 'Copied' : 'Copy subscription URL'}>
-      <ActionIcon variant="subtle" color={copied ? 'green' : undefined} onClick={handleCopy}>
-        {copied ? <IconCheck size={16} /> : <IconCopy size={16} />}
-      </ActionIcon>
-    </Tooltip>
+    <Group gap={4} wrap="nowrap">
+      <Tooltip label={url} multiline w={420} openDelay={300}>
+        <Code
+          style={{
+            maxWidth: 220,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            cursor: 'pointer',
+            fontSize: 11,
+          }}
+          onClick={handleCopy}
+        >
+          {url}
+        </Code>
+      </Tooltip>
+      <Tooltip label={copied ? 'Copied' : 'Copy subscription URL'}>
+        <ActionIcon
+          variant="subtle"
+          color={copied ? 'green' : undefined}
+          onClick={handleCopy}
+          aria-label="Copy subscription URL"
+        >
+          {copied ? <IconCheck size={16} /> : <IconCopy size={16} />}
+        </ActionIcon>
+      </Tooltip>
+      <Tooltip label="Open in new tab">
+        <ActionIcon
+          variant="subtle"
+          component="a"
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Open subscription URL"
+        >
+          <IconExternalLink size={16} />
+        </ActionIcon>
+      </Tooltip>
+    </Group>
   );
 }
 
@@ -71,6 +116,7 @@ const PROTOCOL_COLORS: Record<string, string> = {
   xray: 'violet',
   amneziawg: 'teal',
   naive: 'orange',
+  shadowsocks: 'pink',
 };
 
 const GB = 1_073_741_824;
@@ -173,7 +219,7 @@ export function UsersPage() {
         </Group>
       </Group>
 
-      <Table.ScrollContainer minWidth={900}>
+      <Table.ScrollContainer minWidth={1100}>
         <Table verticalSpacing="sm" highlightOnHover withTableBorder>
           <Table.Thead>
             <Table.Tr>
@@ -182,6 +228,7 @@ export function UsersPage() {
               <Table.Th>Traffic</Table.Th>
               <Table.Th>Strategy</Table.Th>
               <Table.Th>Protocols</Table.Th>
+              <Table.Th>Subscription</Table.Th>
               <Table.Th>Expires</Table.Th>
               <Table.Th>Tag</Table.Th>
               <Table.Th style={{ width: 1 }}>Actions</Table.Th>
@@ -190,7 +237,7 @@ export function UsersPage() {
           <Table.Tbody>
             {usersQuery.data?.users.length === 0 && (
               <Table.Tr>
-                <Table.Td colSpan={8}>
+                <Table.Td colSpan={9}>
                   <Text c="dimmed" ta="center" py="md">
                     No users yet. Click "Create user".
                   </Text>
@@ -221,11 +268,13 @@ export function UsersPage() {
                     ))}
                   </Group>
                 </Table.Td>
+                <Table.Td>
+                  <SubscriptionCell url={subscriptionUrl(u.subscriptionToken)} />
+                </Table.Td>
                 <Table.Td>{formatExpire(u.expireAt)}</Table.Td>
                 <Table.Td>{u.tag ?? '—'}</Table.Td>
                 <Table.Td>
                   <Group gap={4} wrap="nowrap">
-                    <SubscriptionCopyIcon url={subscriptionUrl(u.subscriptionToken)} />
                     <Tooltip label="Edit">
                       <ActionIcon variant="subtle" onClick={() => setEditing(u)}>
                         <IconEdit size={16} />

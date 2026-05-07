@@ -69,7 +69,19 @@ export async function register(username: string, password: string): Promise<Regi
 
 export type TrafficLimitStrategy = 'no_reset' | 'day' | 'week' | 'month' | 'rolling';
 
-export type ProtocolName = 'hysteria' | 'xray' | 'amneziawg' | 'naive';
+export type ProtocolName = 'hysteria' | 'xray' | 'amneziawg' | 'naive' | 'shadowsocks';
+
+export type ShadowsocksMethod =
+  | '2022-blake3-aes-128-gcm'
+  | '2022-blake3-aes-256-gcm'
+  | '2022-blake3-chacha20-poly1305'
+  | 'chacha20-ietf-poly1305'
+  | 'aes-256-gcm'
+  | 'aes-128-gcm';
+
+export interface ShadowsocksInboundConfig {
+  method: ShadowsocksMethod;
+}
 
 export interface User {
   id: string;
@@ -357,7 +369,8 @@ export type InboundConfig =
   | HysteriaInboundConfig
   | XrayInboundConfig
   | AmneziawgInboundConfig
-  | NaiveInboundConfig;
+  | NaiveInboundConfig
+  | ShadowsocksInboundConfig;
 
 export interface Inbound {
   id: string;

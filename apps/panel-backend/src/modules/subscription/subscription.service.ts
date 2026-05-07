@@ -4,11 +4,13 @@ import { allocatePeer } from '../amneziawg/amneziawg.service.js';
 import { buildNaiveUri } from '../../core-adapters/naive/index.js';
 import {
   buildHysteriaUri,
+  buildShadowsocksUri,
   buildSubscriptionJson,
   buildTrojanRealityUri,
   buildVlessRealityUri,
   encodePlainList,
   hostFromAddress,
+  type ShadowsocksMethod,
   type SubscriptionEndpoint,
   type SubscriptionJsonResponse,
 } from './subscription.formats.js';
@@ -259,6 +261,28 @@ export async function generateSubscription(
         h4: cfg.obfuscation.h4,
         // No standardised URI format for AmneziaWG; clients fetch ?format=wgconf.
         uri: '',
+      });
+    } else if (ib.protocol === 'shadowsocks' && user.xrayUuid) {
+      // Slice 24d — Shadowsocks (SS2022). Per-user password reuses
+      // user.xrayUuid: UUIDs have plenty of entropy and admins are already
+      // managing them; growing user.shadowsocksPassword would just be
+      // another credential row that's never independent of xrayUuid in
+      // practice.
+      const cfg = ib.config as unknown as { method: ShadowsocksMethod };
+      endpoints.push({
+        protocol: 'shadowsocks',
+        nodeName,
+        host,
+        port,
+        method: cfg.method,
+        password: user.xrayUuid,
+        uri: buildShadowsocksUri({
+          method: cfg.method,
+          password: user.xrayUuid,
+          host,
+          port,
+          name: nodeName,
+        }),
       });
     } else if (ib.protocol === 'naive' && user.naivePassword) {
       const cfg = ib.config as unknown as NaiveInboundConfig;
