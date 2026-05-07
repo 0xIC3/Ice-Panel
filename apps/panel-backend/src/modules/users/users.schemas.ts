@@ -67,7 +67,10 @@ export type UpdateUserInput = z.infer<typeof UpdateUserSchema>;
 
 export const ListUsersQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().max(100).default(50),
+  // 500 is generous; UsersPage front asks for 200 to render the table without
+  // pagination at typical commercial-scale (≤500 users). When the install
+  // grows past that, swap to server-side pagination on the page.
+  limit: z.coerce.number().int().positive().max(500).default(50),
   status: UserStatus.optional(),
   search: z.string().min(1).max(64).optional(),                  // matches username/email/telegramId/tag
   groupId: z.uuid().optional(),
