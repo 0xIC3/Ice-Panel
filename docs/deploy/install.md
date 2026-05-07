@@ -250,6 +250,71 @@ upstream limitation.
 > Hiddify doesn't natively parse `naive+https://` URIs in singbox format;
 > for testing use **NekoBox** or the Naïve Chrome extension.
 
+### 2.5 Shadowsocks 2022 (runs inside xray-core)
+
+No separate binary — SS2022 multi-user is driven by the same xray-core
+that powers VLESS REALITY. The installer reuses the xray install path.
+
+```bash
+sudo -i
+bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
+  --panel-url https://panel.example.com \
+  --bootstrap bs_xxx \
+  --protocol shadowsocks
+```
+
+The SS adapter on the node-agent spawns its own xray-api inbound at
+`127.0.0.1:8081` (one above the VLESS adapter's `:8080` so they don't
+collide if both run on the same node). Listens on TCP+UDP/443 by default;
+firewall opens both. Cipher defaults to `2022-blake3-aes-256-gcm` —
+override via `SHADOWSOCKS_METHOD` env if you have legacy clients.
+
+> Default per-user PSK is the user's `xrayUuid` — no separate
+> `users.shadowsocksPassword` column. xray-core hashes the UUID string
+> down to the right key length internally; modern SS2022 clients
+> (Outline, NekoBox, sing-box, Hiddify) accept this transparently.
+
+### 2.6 MTProto (Telegram-only, via 9seconds/mtg)
+
+```bash
+sudo -i
+bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
+  --panel-url https://panel.example.com \
+  --bootstrap bs_xxx \
+  --protocol mtproto
+```
+
+Chains `apps/node/scripts/bootstrap-mtg.sh` to install the latest mtg
+release at `/usr/local/bin/mtg`. ENV file gets `MTG_BINARY`,
+`MTG_CONFIG=/etc/mtg/config.toml`, `MTG_PORT=443`, `MTG_STATS_PORT=3129`.
+Domain is per-inbound (set in panel UI when creating the MTProto
+inbound) — Fake-TLS handshake masquerades as that real HTTPS host.
+
+> Architectural caveat: mtg is intentionally **single-secret upstream**
+> ("multiple secrets solve no problems and just complex software" — per
+> the upstream maintainer). One MTProto inbound = one secret = every
+> squad member shares the same URI. Per-user accounting is not
+> available; for that, use Xray instead.
+
+### 2.7 Mieru (stealth proxy via enfein/mieru)
+
+```bash
+sudo -i
+bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \
+  --panel-url https://panel.example.com \
+  --bootstrap bs_xxx \
+  --protocol mieru
+```
+
+Chains `apps/node/scripts/bootstrap-mieru.sh` to place `mita` at
+`/usr/local/bin/mita`. ENV file gets `MITA_BINARY` +
+`MITA_CONFIG=/etc/mita/server.json`. The node-agent invokes
+`mita apply config <path>` and `mita reload` to manage user lists.
+
+> Per-user creds reuse `username + xrayUuid` — no separate password
+> column. Subscription endpoint serves a JSON profile via
+> `?format=mieru-json` for mieru-cli / GoMieru-Android / mieru-iOS.
+
 ---
 
 ## 3. Verification

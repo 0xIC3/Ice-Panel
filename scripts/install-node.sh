@@ -6,10 +6,13 @@
 #   2. Clones repo into $ICE_NODE_DIR (default /opt/ice-panel-node)
 #   3. Builds the static node-agent binary → /usr/local/bin/ice-panel-node
 #   4. (per --protocol) chains the protocol-specific bootstrap:
-#        hysteria   → installs official hysteria via get.hy2.sh
-#        xray       → installs official xray via XTLS install-script
-#        amneziawg  → runs apps/node/scripts/bootstrap-amneziawg.sh
-#        naive      → runs apps/node/scripts/bootstrap-naive.sh (xcaddy + plugin)
+#        hysteria     → installs official hysteria via get.hy2.sh
+#        xray         → installs official xray via XTLS install-script
+#        amneziawg    → runs apps/node/scripts/bootstrap-amneziawg.sh
+#        naive        → runs apps/node/scripts/bootstrap-naive.sh (xcaddy + plugin)
+#        shadowsocks  → reuses xray-core (SS2022 multi-user runs inside xray)
+#        mtproto      → runs apps/node/scripts/bootstrap-mtg.sh (9seconds/mtg)
+#        mieru        → runs apps/node/scripts/bootstrap-mieru.sh (enfein/mieru)
 #   5. Drops a systemd unit at /etc/systemd/system/ice-panel-node.service
 #   6. Writes /etc/ice-panel-node/env with NODE_PAYLOAD + protocol env
 #   7. Enables + starts the service, waits for /healthz
@@ -188,23 +191,27 @@ prompt_protocol() {
 Pick a protocol for this node (one protocol per VPS is the recommended
 pattern — resource isolation, simpler firewall):
 
-  1) Xray         VLESS+REALITY+Vision (TCP/443, transports raw/xhttp/ws/grpc)
-  2) Hysteria 2   UDP/443, QUIC, Brutal CC — best throughput on lossy links
-  3) AmneziaWG    DPI-resistant WireGuard fork (needs kernel module, best
-                  throughput when DKMS works)
-  4) NaiveProxy   Caddy fork with klzgrad/forwardproxy@naive (needs ≥2 GB RAM
-                  for the xcaddy build; no per-user stats)
+  1) Xray          VLESS+REALITY+Vision (TCP/443, raw/xhttp/ws/grpc transports)
+  2) Hysteria 2    UDP/443, QUIC, Brutal CC — best throughput on lossy links
+  3) AmneziaWG     DPI-resistant WireGuard fork (needs kernel module + DKMS)
+  4) NaiveProxy    Caddy fork with klzgrad/forwardproxy@naive (≥2 GB RAM build)
+  5) Shadowsocks   SS2022 multi-user via xray-core (TCP+UDP/443, no separate bin)
+  6) MTProto       Telegram-only proxy via 9seconds/mtg (Fake-TLS over TCP/443)
+  7) Mieru         Stealth proxy via enfein/mieru (mita server, TCP+UDP)
 
 EOF
   local choice
   while true; do
-    read -rp "Select [1-4]: " choice </dev/tty || fail "no /dev/tty — pass --protocol explicitly"
+    read -rp "Select [1-7]: " choice </dev/tty || fail "no /dev/tty — pass --protocol explicitly"
     case "$choice" in
-      1) PROTOCOL=xray;       break ;;
-      2) PROTOCOL=hysteria;   break ;;
-      3) PROTOCOL=amneziawg;  break ;;
-      4) PROTOCOL=naive;      break ;;
-      *) echo "  → invalid choice '$choice'; enter 1-4." ;;
+      1) PROTOCOL=xray;        break ;;
+      2) PROTOCOL=hysteria;    break ;;
+      3) PROTOCOL=amneziawg;   break ;;
+      4) PROTOCOL=naive;       break ;;
+      5) PROTOCOL=shadowsocks; break ;;
+      6) PROTOCOL=mtproto;     break ;;
+      7) PROTOCOL=mieru;       break ;;
+      *) echo "  → invalid choice '$choice'; enter 1-7." ;;
     esac
   done
   log "Selected protocol: $PROTOCOL"
@@ -246,15 +253,15 @@ EOF
 }
 
 case "$PROTOCOL" in
-  hysteria|xray|amneziawg|naive) ;;
+  hysteria|xray|amneziawg|naive|shadowsocks|mtproto|mieru) ;;
   "")
     if [[ -e /dev/tty ]]; then
       prompt_protocol
     else
-      fail "Pass --protocol hysteria|xray|amneziawg|naive (no /dev/tty for interactive menu)"
+      fail "Pass --protocol hysteria|xray|amneziawg|naive|shadowsocks|mtproto|mieru (no /dev/tty for interactive menu)"
     fi
     ;;
-  *)  fail "Unknown protocol: $PROTOCOL (valid: hysteria|xray|amneziawg|naive)" ;;
+  *)  fail "Unknown protocol: $PROTOCOL (valid: hysteria|xray|amneziawg|naive|shadowsocks|mtproto|mieru)" ;;
 esac
 
 # ───── 1. Distro ─────
@@ -362,6 +369,35 @@ case "$PROTOCOL" in
     PROTO_BINARY=/usr/local/bin/caddy-naive
     PROTO_CONFIG=/etc/caddy/Caddyfile
     ;;
+  shadowsocks)
+    # SS2022 multi-user runs INSIDE xray-core (slice 24d). No separate binary.
+    # Reuse the xray install path; the SS adapter on the node-agent shells out
+    # to its own xray-api inbound on 127.0.0.1:8081 (one above the VLESS
+    # adapter's :8080 to avoid collision when both adapters live on one node).
+    if ! command -v xray >/dev/null; then
+      log "Installing xray (SS2022 runs inside xray-core)"
+      bash -c "$(curl -fsSL https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
+    else
+      log "xray already present: $(xray version | head -1)"
+    fi
+    systemctl stop xray.service  >/dev/null 2>&1 || true
+    systemctl disable xray.service >/dev/null 2>&1 || true
+    log "XTLS xray.service disabled — ice-panel-node manages xray directly"
+    PROTO_BINARY=$(command -v xray)
+    PROTO_CONFIG=/etc/xray/shadowsocks.json
+    ;;
+  mtproto)
+    log "Chaining bootstrap-mtg.sh"
+    bash "$ICE_NODE_DIR/apps/node/scripts/bootstrap-mtg.sh"
+    PROTO_BINARY=/usr/local/bin/mtg
+    PROTO_CONFIG=/etc/mtg/config.toml
+    ;;
+  mieru)
+    log "Chaining bootstrap-mieru.sh"
+    bash "$ICE_NODE_DIR/apps/node/scripts/bootstrap-mieru.sh"
+    PROTO_BINARY=/usr/local/bin/mita
+    PROTO_CONFIG=/etc/mita/server.json
+    ;;
 esac
 
 # ───── 7. Env file ─────
@@ -372,7 +408,7 @@ mkdir -p "$ENV_DIR"
 # explicit ReadWritePaths. ReadWritePaths can't *create* directories, only
 # permit writes inside existing ones — so we pre-create every per-protocol
 # config dir here, even if the protocol isn't installed on this node.
-mkdir -p /etc/xray /etc/hysteria /etc/amneziawg /etc/caddy
+mkdir -p /etc/xray /etc/hysteria /etc/amneziawg /etc/caddy /etc/mtg /etc/mita
 ENV_FILE="$ENV_DIR/env"
 
 # Honour --payload only if the env file doesn't exist OR the user passed one.
@@ -430,6 +466,34 @@ NAIVE_BINARY=${PROTO_BINARY}
 NAIVE_CONFIG=${PROTO_CONFIG}
 EOF
       ;;
+    shadowsocks)
+      # SS2022 multi-user is driven by xray-core; the SS adapter spawns its own
+      # api-inbound at :8081 separate from the VLESS adapter at :8080.
+      cat >> "$ENV_FILE" <<EOF
+XRAY_BINARY=${PROTO_BINARY}
+SHADOWSOCKS_CONFIG=${PROTO_CONFIG}
+# Cipher (default 2022-blake3-aes-256-gcm). Override only if you have a
+# legacy-client compatibility need.
+# SHADOWSOCKS_METHOD=2022-blake3-aes-256-gcm
+EOF
+      ;;
+    mtproto)
+      cat >> "$ENV_FILE" <<EOF
+MTG_BINARY=${PROTO_BINARY}
+MTG_CONFIG=${PROTO_CONFIG}
+MTG_PORT=443
+MTG_STATS_PORT=3129
+# Fake-TLS masquerade domain — must be a real, popular HTTPS host. Filled
+# in via panel UI when you create the MTProto inbound; safe default below.
+# MTG_DOMAIN=www.cloudflare.com
+EOF
+      ;;
+    mieru)
+      cat >> "$ENV_FILE" <<EOF
+MITA_BINARY=${PROTO_BINARY}
+MITA_CONFIG=${PROTO_CONFIG}
+EOF
+      ;;
   esac
   chmod 600 "$ENV_FILE"
 else
@@ -458,6 +522,21 @@ if [[ "${SKIP_FIREWALL:-0}" != "1" ]]; then
       ufw allow 443/tcp                  >/dev/null 2>&1 || true
       ufw allow 80/tcp                   >/dev/null 2>&1 || true  # Caddy ACME
       ;;
+    shadowsocks)
+      # SS2022 listens on TCP+UDP; UDP needed for relay (DNS/QUIC/realtime).
+      ufw allow 443/tcp                  >/dev/null 2>&1 || true
+      ufw allow 443/udp                  >/dev/null 2>&1 || true
+      ;;
+    mtproto)
+      # mtg Fake-TLS handshake mimics HTTPS — TCP/443 is the canonical port.
+      ufw allow 443/tcp                  >/dev/null 2>&1 || true
+      ;;
+    mieru)
+      # mita supports either TCP or UDP transport per port-binding entry.
+      # Allow both; firewall extras can be tightened post-install.
+      ufw allow 443/tcp                  >/dev/null 2>&1 || true
+      ufw allow 443/udp                  >/dev/null 2>&1 || true
+      ;;
   esac
   ufw default deny incoming  >/dev/null
   ufw default allow outgoing >/dev/null
@@ -484,7 +563,7 @@ LimitNOFILE=1048576
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=-/var/log -/etc/ice-panel-node -/etc/hysteria -/etc/xray -/usr/local/etc/xray -/etc/amneziawg -/etc/caddy
+ReadWritePaths=-/var/log -/etc/ice-panel-node -/etc/hysteria -/etc/xray -/usr/local/etc/xray -/etc/amneziawg -/etc/caddy -/etc/mtg -/etc/mita -/var/lib/mita
 PrivateTmp=true
 
 # Journald log limits — without these a node running for months can balloon
