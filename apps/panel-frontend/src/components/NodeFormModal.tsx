@@ -3,10 +3,13 @@ import { useForm } from '@mantine/form';
 import { type CreateNodeInput, type Node, type NodeProtocol, type UpdateNodeInput } from '../lib/api';
 
 const PROTOCOL_OPTIONS: { value: NodeProtocol; label: string }[] = [
-  { value: 'xray', label: 'Xray (VLESS REALITY)' },
+  { value: 'xray', label: 'Xray (VLESS / Trojan + REALITY)' },
   { value: 'hysteria', label: 'Hysteria 2' },
   { value: 'amneziawg', label: 'AmneziaWG' },
   { value: 'naive', label: 'NaiveProxy' },
+  { value: 'shadowsocks', label: 'Shadowsocks 2022' },
+  { value: 'mtproto', label: 'MTProto (Telegram-only)' },
+  { value: 'mieru', label: 'Mieru (stealth proxy)' },
 ];
 
 interface FormValues {

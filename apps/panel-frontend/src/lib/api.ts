@@ -192,7 +192,14 @@ export function subscriptionUrl(token: string): string {
 
 // ───── Nodes ─────
 
-export type NodeProtocol = 'xray' | 'hysteria' | 'amneziawg' | 'naive';
+export type NodeProtocol =
+  | 'xray'
+  | 'hysteria'
+  | 'amneziawg'
+  | 'naive'
+  | 'shadowsocks'
+  | 'mtproto'
+  | 'mieru';
 
 export interface Node {
   id: string;

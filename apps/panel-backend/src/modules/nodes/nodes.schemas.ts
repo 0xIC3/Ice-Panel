@@ -18,7 +18,18 @@ const AddressSchema = z
 
 const CountryCodeSchema = z.string().length(2).regex(/^[A-Z]{2}$/);
 
-const ProtocolSchema = z.enum(['xray', 'hysteria', 'amneziawg', 'naive']);
+// Slice 27 — keep parity with the inbound/profile protocol enum in
+// inbounds.schemas.ts. Node.protocol is a label for "which adapter is the
+// primary / installed on this VPS"; the actual deployment is per-binding.
+const ProtocolSchema = z.enum([
+  'xray',
+  'hysteria',
+  'amneziawg',
+  'naive',
+  'shadowsocks',
+  'mtproto',
+  'mieru',
+]);
 
 export const CreateNodeSchema = z.object({
   name: NameSchema,
