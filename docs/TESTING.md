@@ -19,32 +19,73 @@ Per-slice verification checklists. Use when **closing** a slice or when re-valid
 
 4 VPS: panel + xray (`ice-xray-test`) + AWG (`ice-wg-test`) + hy2 (`ice-naive-test`).
 
-| Проверка | Результат |
-|---|---|
-| Xray REALITY traffic в Hiddify | ✅ работает |
-| AWG нода online + applyInbounds принят | ✅ (но adapter stub — без живого трафика, ждёт slice 24b3) |
-| Hysteria2 pipeline (loopback на VPS) | ✅ `hysteria client` через `127.0.0.1:443` → curl `https://example.com` → 200 OK за 4ms |
-| Hysteria2 real client (RU мобильный ISP → ice-naive-test) | ❌ Streisand iOS — пакеты не выходят (timeout). Happ iOS — пакеты долетают, auth ✅, `tx: 0`, читаемый таймаут на upstream TCP. |
-| Salamander obfs (`ice-test-obfs-2026`) | ❌ не помог |
-| QUIC tuning (`disablePathMTUDiscovery: true` + расширенные windows) | ❌ не помог |
-| TCP egress с самой VPS (`curl https://8.8.8.8`) | ✅ работает |
+#### Что проверяли (все checks)
 
-**Вывод:** pipeline корректен (доказан loopback'ом). Нерабочесть real-client'а — ISP-уровневый блок/тротлинг QUIC специфичный для пары `RU-mobile-ISP ↔ 89.22.239.22`, не баг кода. xray на другом VPS с того же ISP работает, что подтверждает изолированность проблемы.
+| # | Проверка | Команда / способ | Результат |
+|---|---|---|---|
+| 1 | Xray REALITY traffic | Hiddify (iOS), реальный сёрфинг | ✅ работает |
+| 2 | AWG нода online | Panel UI: status badge | ✅ ONLINE |
+| 3 | AWG applyInbounds | Panel логи `[event] inbound.created → enqueue` | ✅ принят (но adapter — stub, без живого трафика, ждёт 24b3) |
+| 4 | hy2 server up | `systemctl status hysteria-server` | ✅ active, listening :443 UDP |
+| 5 | hy2 ACME-cert | journalctl: `obtain certificate obtained successfully` | ✅ Let's Encrypt issued |
+| 6 | hy2 auth callback | journalctl: `hysteria auth accepted addr=... userId=...` | ✅ работает |
+| 7 | hy2 pipeline (loopback) | `hysteria client -c local.yaml → curl -x http://127.0.0.1:8080 https://example.com` | ✅ HTTP/2 200 за 4 ms |
+| 8 | TCP egress с VPS | `curl -v https://8.8.8.8`, `https://www.google.com`, `https://dns.google` | ✅ всё проходит |
+| 9 | UDP к VPS от клиента | `tcpdump -ni any 'udp port 443' -c 20` параллельно с попыткой Happ | ⚠️ пакеты долетают, но handshake → `tx: 0` |
+| 10 | hy2 real client (Streisand iOS) | RU mobile ISP `193.143.67.170` → `89.22.239.22:443` | ❌ connection timeout (пакеты вообще не выходят с iPhone) |
+| 11 | hy2 real client (Happ iOS) | то же | ❌ auth ✅, `tx: 0`, страницы не грузятся |
+| 12 | hy2 real client (Safari через VPN) | example.com через включённый Streisand-туннель | ❌ не грузится |
+| 13 | URI/конфиг согласованы | sub `curl /sub/<token>` → base64 decode → совпадает с серверным | ✅ ни obfs-mismatch'а, ни SNI-mismatch'а |
+| 14 | Subscription generates obfs | проверено что URI содержит `&obfs=salamander&obfs-password=...` когда `inbound.config.obfsPassword` есть | ✅ после `ae8d857` |
+| 15 | `obfs: salamander` на сервере | `cat /etc/hysteria/config.yaml` | ✅ применено вручную (`ice-test-obfs-2026`) |
+| 16 | obfs клиент↔сервер вместе | новый URI с obfs в Streisand + Happ | ❌ всё равно `tx: 0` |
+| 17 | QUIC tuning | `disablePathMTUDiscovery: true`, `maxIdleTimeout: 30s`, расширенные `initStreamReceiveWindow`/`maxStreamReceiveWindow` | ❌ не помогло |
+| 18 | Path MTU check | `ping -M do -s 1400/1200/1000 193.143.67.170` | ICMP режется RU мобильным (нормально) |
+| 19 | Backups перед изменениями | `/etc/hysteria/config.yaml.bak` (без obfs), `.bak2` (obfs без QUIC tuning) | ✅ есть на VPS |
 
-**Что пофиксили в pipeline во время теста:**
-- `feat(panel-backend)`: emit Salamander obfs в hy2 subscription URI / sing-box / Clash, когда у inbound выставлен `obfsPassword`. Раньше поле было в БД, но в подписку не попадало — обфускация была инертной.
+#### Что пофиксили в коде (panel-backend, commit `ae8d857`)
 
-**Закрытые баги предыдущей сессии (см. snapshot в memory):**
+- `core-adapters/hysteria/uri.ts` — `buildHysteriaUri` принимает `obfsPassword?`, эмитит `obfs=salamander&obfs-password=...` в URI
+- `modules/subscription/subscription.formats.ts` — добавил `obfsPassword?` в `HysteriaSubscriptionEndpoint`
+- `modules/subscription/subscription.service.ts` — читает `ib.config.obfsPassword`, прокидывает в URI builder и endpoint
+- `modules/subscription/formats/singbox.ts` — `obfs: { type: salamander, password }` в outbound
+- `modules/subscription/formats/clash.ts` — `obfs: salamander` + `obfs-password:` строки в proxy
+
+#### Что решили НЕ делать (отброшенные гипотезы)
+
+- ❌ Streisand bug — Happ повторил тот же `tx: 0`, не клиент
+- ❌ obfs mismatch URI vs server — оба проверены, совпадают
+- ❌ MTU фрагментация — `disablePathMTUDiscovery` (1252 байта) не помог
+- ❌ TCP egress блок на VPS — curl до 8.8.8.8 / google.com / dns.google проходит
+- ❌ Server config баг — loopback на самой VPS работает
+
+#### Вывод
+
+**Pipeline корректен.** Нерабочесть real-client'а — ISP-уровневый блок/тротлинг QUIC, специфичный для пары `RU-mobile-ISP ↔ 89.22.239.22`. Тот же клиентский ISP с Xray на другом VPS работает идеально, что подтверждает изолированность проблемы.
+
+#### Что НЕ пробовали (для следующего cycle)
+
+- Port hopping (`listen: :443,20000-30000`) — обход агрессивного DPI на :443
+- Другой клиентский ISP (Wi-Fi, другой мобильный оператор)
+- Другой VPS / провайдер для hy2-ноды
+- Brutal CC с явными `bandwidth: { up, down }` на сервере
+
+#### Closed bugs (карры-овер из предыдущих сессий, всё ✅)
+
 - Bootstrap command `http://` → `https://` через `PUBLIC_URL` env var
 - Bootstrap expiry: «expires in N min» вместо абсолютного времени
 - Node без protocol поля → добавлена колонка + Select в UI
 - Hysteria ACME `mkdir read-only` → `WorkingDirectory=/etc/hysteria` в systemd unit
 - BullMQ failed job deduplication: документирован Redis cleanup runbook
+- `bootstrap-hysteria.sh` отсутствовал → добавлен (commit `91e8b1a`)
+- hy2 subscription URI не эмитил obfs → исправлено (commit `ae8d857`)
 
-**Известные carry-over в следующий cycle:**
-- Slice 24b2 — node-agent должен сам писать `/etc/hysteria/config.yaml` (включая `obfs:` блок из inbound config) и рестартить hysteria.service. Сейчас admin правит руками.
-- Hysteria validation на не-RU/не-мобильном ISP — нужна другая клиентская сеть для повторного e2e
+#### Carry-over в следующий cycle
+
+- Slice 24b2 — node-agent должен сам писать `/etc/hysteria/config.yaml` (включая `obfs:` блок из inbound config) и рестартить `hysteria.service`. Сейчас admin правит руками.
+- Hysteria validation на не-RU / не-мобильном ISP — нужна другая клиентская сеть для повторного e2e
 - AWG real applyInbound — slice 24b3
+- Решить: добавлять port-hopping в server config для DPI-resistance, или делегировать админу
 
 ---
 
