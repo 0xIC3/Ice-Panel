@@ -58,6 +58,7 @@ model Node {
   // the DB layer as a defense-in-depth.
   name                  String    @db.VarChar(64)
   address               String    @db.VarChar(255)
+  protocol              String    @default("xray") @db.VarChar(32)
   publicKey             Bytes?    @map("public_key")
   countryCode           String?   @map("country_code") @db.Char(2)
   status                String    @default("unknown") @db.VarChar(16)

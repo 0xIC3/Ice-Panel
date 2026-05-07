@@ -154,10 +154,13 @@ export function subscriptionUrl(token: string): string {
 
 // ───── Nodes ─────
 
+export type NodeProtocol = 'xray' | 'hysteria' | 'amneziawg' | 'naive';
+
 export interface Node {
   id: string;
   name: string;
   address: string;
+  protocol: NodeProtocol;
   countryCode: string | null;
   status: string;
   lastStatusChange: string | null;
@@ -197,6 +200,7 @@ export interface NodesListResponse {
 export interface CreateNodeInput {
   name: string;
   address: string;
+  protocol: NodeProtocol;
   countryCode?: string | null;
   consumptionMultiplier?: number;
 }
@@ -204,6 +208,7 @@ export interface CreateNodeInput {
 export interface UpdateNodeInput {
   name?: string;
   address?: string;
+  protocol?: NodeProtocol;
   countryCode?: string | null;
   consumptionMultiplier?: number;
 }

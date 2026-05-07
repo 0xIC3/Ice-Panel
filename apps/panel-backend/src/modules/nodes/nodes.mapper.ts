@@ -4,6 +4,7 @@ export interface PublicNodeDto {
   id: string;
   name: string;
   address: string;
+  protocol: string;
   countryCode: string | null;
   status: string;
   lastStatusChange: string | null;
@@ -22,6 +23,7 @@ export function mapNodeToPublic(node: Node): PublicNodeDto {
     id: node.id,
     name: node.name,
     address: node.address,
+    protocol: node.protocol,
     countryCode: node.countryCode,
     status: node.status,
     lastStatusChange: node.lastStatusChange?.toISOString() ?? null,

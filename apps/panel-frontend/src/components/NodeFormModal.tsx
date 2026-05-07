@@ -1,10 +1,18 @@
-import { Button, Modal, NumberInput, Stack, TextInput } from '@mantine/core';
+import { Button, Modal, NumberInput, Select, Stack, TextInput } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { type CreateNodeInput, type Node, type UpdateNodeInput } from '../lib/api';
+import { type CreateNodeInput, type Node, type NodeProtocol, type UpdateNodeInput } from '../lib/api';
+
+const PROTOCOL_OPTIONS: { value: NodeProtocol; label: string }[] = [
+  { value: 'xray', label: 'Xray (VLESS REALITY)' },
+  { value: 'hysteria', label: 'Hysteria 2' },
+  { value: 'amneziawg', label: 'AmneziaWG' },
+  { value: 'naive', label: 'NaiveProxy' },
+];
 
 interface FormValues {
   name: string;
   address: string;
+  protocol: NodeProtocol;
   countryCode: string;
   consumptionMultiplier: number | '';
 }
@@ -13,6 +21,7 @@ function defaults(node: Node | null): FormValues {
   return {
     name: node?.name ?? '',
     address: node?.address ?? '',
+    protocol: node?.protocol ?? 'xray',
     countryCode: node?.countryCode ?? '',
     consumptionMultiplier: node ? Number(node.consumptionMultiplier) : 1,
   };
@@ -54,6 +63,7 @@ export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Prop
     const base = {
       name: values.name,
       address: values.address,
+      protocol: values.protocol,
       countryCode: values.countryCode || null,
       consumptionMultiplier:
         values.consumptionMultiplier === '' ? 1 : Number(values.consumptionMultiplier),
@@ -91,6 +101,13 @@ export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Prop
             description="Control-plane address. Hysteria's public UDP port (443) is configured separately."
             required
             {...form.getInputProps('address')}
+          />
+          <Select
+            label="Protocol"
+            description="Main protocol installed on this node."
+            data={PROTOCOL_OPTIONS}
+            allowDeselect={false}
+            {...form.getInputProps('protocol')}
           />
           <TextInput
             label="Country code"

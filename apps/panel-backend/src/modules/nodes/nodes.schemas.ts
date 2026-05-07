@@ -18,9 +18,12 @@ const AddressSchema = z
 
 const CountryCodeSchema = z.string().length(2).regex(/^[A-Z]{2}$/);
 
+const ProtocolSchema = z.enum(['xray', 'hysteria', 'amneziawg', 'naive']);
+
 export const CreateNodeSchema = z.object({
   name: NameSchema,
   address: AddressSchema,
+  protocol: ProtocolSchema.default('xray'),
   countryCode: CountryCodeSchema.nullish(),
   consumptionMultiplier: z.number().int().positive().default(1),
 });
@@ -29,6 +32,7 @@ export type CreateNodeInput = z.infer<typeof CreateNodeSchema>;
 export const UpdateNodeSchema = z.object({
   name: NameSchema.optional(),
   address: AddressSchema.optional(),
+  protocol: ProtocolSchema.optional(),
   countryCode: CountryCodeSchema.nullish(),
   consumptionMultiplier: z.number().int().positive().optional(),
 });

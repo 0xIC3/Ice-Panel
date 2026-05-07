@@ -76,8 +76,8 @@ export async function nodesRoutes(app: FastifyInstance): Promise<void> {
         command: [
           'bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \\',
           `  --panel-url ${publicUrlFromRequest(request)} \\`,
-          `  --bootstrap ${tokenInfo.token}`,
-          '# Tip: append `--protocol xray` (or hysteria | amneziawg | naive) to skip the interactive prompt',
+          `  --bootstrap ${tokenInfo.token} \\`,
+          `  --protocol ${node.protocol}`,
         ].join('\n'),
       });
     } catch (err) {

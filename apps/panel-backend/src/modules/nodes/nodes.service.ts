@@ -60,6 +60,7 @@ export async function createNode(
     node = await repo.create({
       name: input.name,
       address: input.address,
+      protocol: input.protocol,
       countryCode: input.countryCode ?? null,
       consumptionMultiplier: BigInt(input.consumptionMultiplier),
     });
@@ -91,7 +92,7 @@ export async function createNode(
   const bootstrap: BootstrapInfo = {
     token: tokenInfo.token,
     expiresAt: tokenInfo.expiresAt.toISOString(),
-    command: renderBootstrapCommand(ctx.panelUrl, tokenInfo.token),
+    command: renderBootstrapCommand(ctx.panelUrl, tokenInfo.token, node.protocol),
   };
 
   // Trigger backfill so existing active users land on this fresh node.
@@ -103,12 +104,12 @@ export async function createNode(
   return mapNodeWithPayload(node, payload, bootstrap);
 }
 
-function renderBootstrapCommand(panelUrl: string, token: string): string {
+function renderBootstrapCommand(panelUrl: string, token: string, protocol: string): string {
   return [
     'bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \\',
     `  --panel-url ${panelUrl} \\`,
-    `  --bootstrap ${token}`,
-    '# Tip: append `--protocol xray` (or hysteria | amneziawg | naive) to skip the interactive prompt',
+    `  --bootstrap ${token} \\`,
+    `  --protocol ${protocol}`,
   ].join('\n');
 }
 
@@ -158,6 +159,7 @@ export async function updateNode(id: string, input: UpdateNodeInput): Promise<Pu
   const data: Parameters<typeof repo.updateById>[1] = {};
   if (input.name !== undefined) data.name = input.name;
   if (input.address !== undefined) data.address = input.address;
+  if (input.protocol !== undefined) data.protocol = input.protocol;
   if (input.countryCode !== undefined) data.countryCode = input.countryCode;
   if (input.consumptionMultiplier !== undefined) {
     data.consumptionMultiplier = BigInt(input.consumptionMultiplier);
