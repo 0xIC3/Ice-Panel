@@ -7,7 +7,9 @@
 >
 > **Changelog:** v3.4 (2026-05-07) дедуп таблиц + 24b2/24b3/26 done. v3.3 (2026-05-07) VPS-тест #2 — обфускация Salamander добавлена в subscription pipeline. v3.2 (2026-05-06) slice 24b разбит на 24b1+24b2+24b3+24b4; появился TESTING.md.
 
-> **Companion doc:** [TESTING.md](./TESTING.md) — конкретные чек-листы что и как проверять при закрытии каждого slice'а (local checks / VPS checks / edge cases / done criteria). Обновляется при закрытии slice + при поимке новых багов.
+> **Companion docs:**
+> - [TESTING.md](./TESTING.md) — per-slice чек-листы (local / VPS / edge cases / done criteria). Обновляется при закрытии slice + при поимке новых багов.
+> - [PROTOCOL_STATUS.md](./PROTOCOL_STATUS.md) — **authoritative protocol-validation status**: что реально подтверждено боевым трафиком, что pipeline-only, что won't-work. Читать ПЕРВЫМ когда отвечаешь «что работает прямо сейчас / что можно продавать / что приоритет на следующий VPS-цикл». Обновляется per VPS cycle.
 
 ---
 
