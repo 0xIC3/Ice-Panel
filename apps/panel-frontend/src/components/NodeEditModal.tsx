@@ -41,6 +41,7 @@ import {
   getDashboardOverview,
   listBindings,
   listProfiles,
+  listSquads,
   type Node as PanelNode,
   type NodeProtocol,
   type UpdateNodeInput,
@@ -133,10 +134,35 @@ export function NodeEditModal({
     queryFn: () => listProfiles(),
     enabled: opened,
   });
+
+  // Squads — used to count users that can reach THIS node via squad → profile
+  // → binding chain. Approximate (we sum memberCount across squads, can
+  // overcount a user who's in multiple squads bound to the same node).
+  // Good enough for an at-a-glance number; ground truth is dashboard's
+  // dedup'd per-protocol counter.
+  const squadsQuery = useQuery({
+    queryKey: ['squads'],
+    queryFn: () => listSquads(),
+    enabled: opened,
+  });
   const bindingsWithProfile = (bindingsQuery.data?.bindings ?? []).map((b) => {
     const p = (profilesQuery.data?.profiles ?? []).find((x) => x.id === b.profileId);
     return { binding: b, profile: p };
   });
+
+  // Approximate "user reach" — squads that have at least one of this node's
+  // profiles, summed by memberCount. Overcounts cross-squad shared users.
+  const reachingUsersApprox = (() => {
+    const profileIds = new Set(bindingsWithProfile.map((bp) => bp.binding.profileId));
+    if (profileIds.size === 0) return 0;
+    let sum = 0;
+    for (const sq of squadsQuery.data?.squads ?? []) {
+      if (sq.profileIds.some((pid) => profileIds.has(pid))) {
+        sum += sq.memberCount;
+      }
+    }
+    return sum;
+  })();
 
   const removeBindingMutation = useMutation({
     mutationFn: deleteBinding,
@@ -226,14 +252,55 @@ export function NodeEditModal({
       size="xl"
     >
       <Stack>
-        {/* Status row — degraded reason если есть */}
-        {node.lastStatusMessage && (
-          <Alert color="yellow" variant="light" p="xs">
-            <Text size="xs" ff="monospace">
-              {node.lastStatusMessage}
-            </Text>
-          </Alert>
-        )}
+        {/* Status row — parse `degraded: {...}` JSON and surface per-core
+            status as readable badges instead of raw JSON noise. */}
+        {node.lastStatusMessage &&
+          (() => {
+            const m = node.lastStatusMessage.match(/^degraded:\s*(\{.+\})/);
+            if (!m) {
+              return (
+                <Alert color="yellow" variant="light" p="xs">
+                  <Text size="xs" ff="monospace">
+                    {node.lastStatusMessage}
+                  </Text>
+                </Alert>
+              );
+            }
+            try {
+              const parsed = JSON.parse(m[1]!) as {
+                cores?: { name: string; running: boolean }[];
+              };
+              if (!parsed.cores) throw new Error('no cores');
+              return (
+                <Alert color="yellow" variant="light" p="xs">
+                  <Group gap={6} wrap="wrap">
+                    <Text size="xs" fw={500}>
+                      Cores:
+                    </Text>
+                    {parsed.cores.map((c) => (
+                      <Badge
+                        key={c.name}
+                        size="xs"
+                        variant="light"
+                        color={c.running ? 'teal' : 'gray'}
+                        tt="uppercase"
+                      >
+                        {c.running ? '✓' : '✗'} {c.name}
+                      </Badge>
+                    ))}
+                  </Group>
+                </Alert>
+              );
+            } catch {
+              return (
+                <Alert color="yellow" variant="light" p="xs">
+                  <Text size="xs" ff="monospace">
+                    {node.lastStatusMessage}
+                  </Text>
+                </Alert>
+              );
+            }
+          })()}
 
         <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
           {/* LEFT — параметры */}
@@ -245,14 +312,16 @@ export function NodeEditModal({
               <Text fw={600}>Параметры</Text>
             </Group>
             <Stack gap="sm">
-              <Group grow>
+              <Group grow align="flex-start">
                 <TextInput
                   label="Имя"
+                  description="уникальное"
                   required
                   {...form.getInputProps('name')}
                 />
                 <Select
                   label="Протокол"
+                  description="основной core ноды"
                   data={PROTOCOL_OPTIONS}
                   allowDeselect={false}
                   {...form.getInputProps('protocol')}
@@ -264,9 +333,10 @@ export function NodeEditModal({
                 required
                 {...form.getInputProps('address')}
               />
-              <Group grow>
+              <Group grow align="flex-start">
                 <Select
                   label="Страна"
+                  description="ISO 3166-1"
                   data={COUNTRY_OPTIONS}
                   searchable
                   clearable
@@ -335,6 +405,16 @@ export function NodeEditModal({
                   </Text>
                   <Text size="sm" fw={600}>
                     {overviewNode?.inboundCount ?? bindingsWithProfile.length}
+                  </Text>
+                </Group>
+                <Group justify="space-between">
+                  <Tooltip label="Юзеры в squad'ах с хотя бы одним профилем этой ноды (approx — может overcount'нуть cross-squad)">
+                    <Text size="xs" c="dimmed" style={{ cursor: 'help' }}>
+                      Доступна юзерам
+                    </Text>
+                  </Tooltip>
+                  <Text size="sm" fw={600}>
+                    {reachingUsersApprox === 0 ? '—' : `~${reachingUsersApprox}`}
                   </Text>
                 </Group>
               </Stack>
