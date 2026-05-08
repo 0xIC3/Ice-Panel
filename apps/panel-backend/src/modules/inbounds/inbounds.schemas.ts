@@ -36,7 +36,14 @@ export const XrayConfigSchema = z.object({
   realityPrivateKey: z.string().min(1).max(128),
   /** REALITY public key paired with privateKey — emitted in client URI. */
   realityPublicKey: z.string().min(1).max(128),
-  flow: z.string().max(64).default('xtls-rprx-vision'),
+  // Mantine Select returns null when the empty option is picked. Coerce to
+  // '' so the schema accepts the "no flow" choice the same way it accepts
+  // 'xtls-rprx-vision'. Empty string is the canonical "no flow" wire value.
+  flow: z
+    .union([z.string(), z.null()])
+    .transform((v) => v ?? '')
+    .pipe(z.string().max(64))
+    .default('xtls-rprx-vision'),
   fingerprint: z.string().max(32).default('chrome'),
   /**
    * Stream transport. v24.9.30 names: `raw` (was `tcp`), `xhttp` (was
