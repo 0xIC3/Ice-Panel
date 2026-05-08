@@ -265,7 +265,7 @@ export const RECIPES: Recipe[] = [
     name: 'Mieru (Chinese GFW)',
     description: 'Специально под Great Firewall — random padding',
     details:
-      'Mieru от enfein — современный stealth-протокол с агрессивным padding'ом, разработан против Chinese GFW. Trafic выглядит как noise — нет сигнатур. Поддерживается sing-box. Используй когда другие протоколы режутся в CN-mainland.',
+      'Mieru от enfein — современный stealth-протокол с агрессивным паддингом, разработан против Chinese GFW. Trafic выглядит как noise — нет сигнатур. Поддерживается sing-box. Используй когда другие протоколы режутся в CN-mainland.',
     dpiResistance: 5,
     speed: 3,
     apply: {
