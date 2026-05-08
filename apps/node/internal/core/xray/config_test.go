@@ -56,8 +56,10 @@ func TestInboundDefaults(t *testing.T) {
 	if d.ListenPort != 443 {
 		t.Errorf("ListenPort default: got %d", d.ListenPort)
 	}
-	if d.Flow != "xtls-rprx-vision" {
-		t.Errorf("Flow default: got %q", d.Flow)
+	// Flow is no longer defaulted — empty is the canonical "no Vision"
+	// value for non-raw transports. Panel sets it explicitly when needed.
+	if d.Flow != "" {
+		t.Errorf("Flow default: got %q, want empty", d.Flow)
 	}
 }
 

@@ -82,9 +82,12 @@ func (c *InboundConfig) withDefaults() InboundConfig {
 	if out.ListenPort == 0 {
 		out.ListenPort = 443
 	}
-	if out.Flow == "" {
-		out.Flow = "xtls-rprx-vision"
-	}
+	// Empty Flow is intentional for non-raw transports (xhttp/ws/grpc/kcp/
+	// httpupgrade) — Vision only works with raw (TCP). Earlier versions
+	// forced empty → "xtls-rprx-vision" as a default, which broke xhttp:
+	// xray rejected clients with "client flow is empty" because the server
+	// account had Vision flow set while the client (xhttp transport)
+	// connected without it. Trust the panel-side value as-is.
 	if out.ApiPort == 0 {
 		out.ApiPort = 8080
 	}
