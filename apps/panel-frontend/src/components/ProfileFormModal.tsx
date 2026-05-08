@@ -418,8 +418,58 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
 
           <RecipePicker
             protocol={form.values.protocol}
-            onPick={(recipe) => {
+            onPick={async (recipe) => {
+              // Apply recipe field overrides first.
               form.setValues((current) => ({ ...current, ...recipe.apply }));
+
+              // Auto-fill missing crypto material so admin doesn't have to
+              // chase 4 separate buttons (private key, public key, shortIds,
+              // peer keys). Recipe = "I want this combo working" should mean
+              // "form is ready to submit" after one click.
+              if (recipe.protocol === 'xray') {
+                const shortIdsEmpty = !form.values.xrayShortIds.trim();
+                const keysEmpty = !form.values.xrayPrivateKey;
+                const updates: Partial<FormValues> = {};
+
+                if (shortIdsEmpty) {
+                  // 6 random 16-hex-char shortIds — clients can pick any of
+                  // them in their URI, REALITY accepts whichever matches.
+                  // Multiple shortIds let admin rotate without breaking
+                  // existing subscriptions.
+                  updates.xrayShortIds = Array.from({ length: 6 }, () =>
+                    Array.from({ length: 16 }, () =>
+                      Math.floor(Math.random() * 16).toString(16),
+                    ).join(''),
+                  ).join(', ');
+                }
+
+                if (keysEmpty) {
+                  try {
+                    const kp = await keypairMutation.mutateAsync('xray');
+                    updates.xrayPrivateKey = kp.privateKey;
+                    updates.xrayPublicKey = kp.publicKey;
+                  } catch {
+                    // Soft-fail — admin can still hit "Сгенерировать" manually.
+                  }
+                }
+
+                if (Object.keys(updates).length > 0) {
+                  form.setValues((current) => ({ ...current, ...updates }));
+                }
+              }
+
+              if (recipe.protocol === 'amneziawg' && !form.values.awgServerPriv) {
+                try {
+                  const kp = await keypairMutation.mutateAsync('amneziawg');
+                  form.setValues((current) => ({
+                    ...current,
+                    awgServerPriv: kp.privateKey,
+                    awgServerPub: kp.publicKey,
+                  }));
+                } catch {
+                  /* soft-fail */
+                }
+              }
             }}
           />
 
