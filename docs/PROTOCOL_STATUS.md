@@ -4,7 +4,7 @@ What's actually validated by real traffic vs what's scaffolded. **Updated after 
 
 > **Companion docs:** [ROADMAP.md](./ROADMAP.md) tracks slices; [TESTING.md](./TESTING.md) carries per-slice checklists; **this file** answers "what can I sell to a paying user today, vs what's still a science experiment".
 
-> **Last updated:** 2026-05-08 (after slice 27b — DeployProfileModal UI + healthcheck-degraded semantics fix + install-panel.sh PUBLIC_URL fix). VPS cycle #3 in progress: panel installed on fresh `ice-panel-test 89.169.32.239`, mTLS verified end-to-end against `ice-xray-test`, Bearer `icp_*` auth verified on prod (200 + 403 privilege escalation). Per-protocol verification status unchanged from cycle #2 — Profile→Binding deployment of VLESS+REALITY pending.
+> **Last updated:** 2026-05-08 (VPS cycle #3 — VLESS+REALITY+Vision **re-validated through Profile+Binding model end-to-end** on fresh `ice-panel-test 89.169.32.239` → `ice-xray-test 89.169.34.14`). Critical assertion: slice 27 refactor did not break the only paid-user-ready path. Bearer `icp_*` auth + mTLS + DeployProfileModal UI + cron healthcheck-degraded semantics + install-panel.sh PUBLIC_URL all verified on prod. New BullMQ foot-gun found and fixed: `removeOnFail: { age: 86400 }` on `apply-${nodeId}` jobId would lock the slot for 24h after a transient failure — replaced with `removeOnFail: true`.
 
 ## ✅ Confirmed by real traffic
 
@@ -12,11 +12,12 @@ The only one. Anything else listed below is some shade of "tested locally / loop
 
 ### VLESS + REALITY + Vision (raw transport)
 
-- **Slice:** 17, ongoing
-- **Verified:** VPS test #1 (2026-05-06) and #2 (2026-05-07)
+- **Slice:** 17, validated through 27 (Profile+Binding refactor)
+- **Verified:** VPS test #1 (2026-05-06), #2 (2026-05-07), **#3 (2026-05-08 — through new Profile+Binding model)**
 - **Clients confirmed:** Hiddify (iOS, Android), Streisand (iOS) — real browser traffic, not just connect-indicator
 - **Per-user stats:** rolled in slice 24c part 1 — verify on next cycle
 - **Status when shipping a paying user today:** safe
+- **Cycle #3 confirms:** Profile created via UI (with REALITY keypair generated through new `/api/profiles/generate-keypair` endpoint) → DeployProfileModal binding to node → worker `inbound-sync` mTLS-pushed wire payload → agent rendered xray config (with realityPrivateKey field correctly deserialised) → xray.service started, listening on `:443` → subscription URL `/sub/<token>` returned valid `vless://...?security=reality&...` → client connected, real traffic. **No regression from slice 27.**
 
 This is the single protocol path you should default new commercial users to.
 
@@ -55,6 +56,17 @@ Slices that landed in this batch but haven't seen ANY VPS — even loopback.
 |---|---|---|
 | **MTProto multi-user** (real per-user accounting / per-user kick) | upstream `9seconds/mtg` rejects multi-secret model. Our impl is "one secret per inbound, all squad members share it" — works for the simple case but no per-user knobs | Either accept the limitation forever, or migrate to `dolonet/mtg-multi` fork (lags upstream security fixes) |
 | **Hysteria2 on RU-mobile ISPs** | DPI throttle to `tx: 0` observed in VPS cycle #2 | Out-of-scope for code; depends on ISP / VPS provider / port choice. Document as "test on a non-restricted network first" in user docs. |
+
+## Bugs caught during VPS cycles (cumulative)
+
+- **Cycle #1 (2026-05-06):** 10 bugs.
+- **Cycle #2 (2026-05-07):** 8 bugs + 3 upstream-mismatch (mtg secrets array, mieru YAML, SS2022 missing serverPSK).
+- **Cycle #3 (2026-05-08):**
+  1. **`install-panel.sh`: PUBLIC_URL invalid URL crash-loop.** Backend Zod `z.url().optional()` rejected empty string supplied by docker-compose `${PUBLIC_URL}` substitution. Fixed: install-panel writes `PUBLIC_URL` into `.env.production` from `PANEL_DOMAIN` / public IP; config schema additionally tolerates empty string.
+  2. **TS `noUnusedLocals` killing prod build:** `Badge` import in SquadsPage and `GiB` constant in UsersPage left over after slice 27 cleanup. Fixed.
+  3. **Cron healthcheck conflated `degraded` with `unreachable`.** Fresh node with no Profile+Binding pushed yet returns `{status: 'degraded'}` from agent (xray/ss have no config → not running) — but agent itself is reachable + healthy. Old cron flipped status to `unreachable`. Fixed: `degraded` → `online` with detail in `lastStatusMessage`.
+  4. **`/api/inbounds/generate-keypair` 404** after slice 27 retired the inbounds module. Endpoint moved to `/api/profiles/generate-keypair`.
+  5. **BullMQ `removeOnFail: { age: 86400 }` poisoned the apply-${nodeId} jobId for 24 hours** after a single transient failure (here: failed during initial install before backend stabilised). Coalescing logic (`jobId: apply-X`) treated the dead job as still owning the slot, silently dropping every subsequent enqueue from binding/profile events. Fixed: `removeOnFail: true` so failures vacate the slot immediately and the next event re-enqueues a fresh attempt.
 
 ## What real-traffic verification needs (per protocol)
 
