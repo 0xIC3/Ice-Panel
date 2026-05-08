@@ -21,6 +21,7 @@ import { squadsRoutes } from './modules/squads/squads.routes.js';
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes.js';
 import { profilesRoutes } from './modules/profiles/profiles.routes.js';
 import { apiTokensRoutes } from './modules/api-tokens/api-tokens.routes.js';
+import { settingsRoutes } from './modules/settings/settings.routes.js';
 
 /**
  * Build the Fastify instance with all plugins and routes registered.
@@ -122,6 +123,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(dashboardRoutes);
   await app.register(profilesRoutes);
   await app.register(apiTokensRoutes);
+  await app.register(settingsRoutes);
 
   return app;
 }

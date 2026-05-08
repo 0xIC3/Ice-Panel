@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActionIcon,
   Alert,
@@ -41,10 +41,10 @@ import {
   createApiToken,
   deleteApiToken,
   listApiTokens,
+  getSettings,
+  updateSettings,
   type ApiToken,
 } from '../lib/api';
-
-const BRAND_NAME_KEY = 'ice-panel:brandName';
 
 export function SettingsPage() {
   return (
@@ -450,20 +450,41 @@ function RevealTokenModal({
 // ───── Customization ─────
 
 function CustomizationCard() {
-  const initial = typeof window !== 'undefined'
-    ? window.localStorage.getItem(BRAND_NAME_KEY) ?? 'Ice-Panel'
-    : 'Ice-Panel';
-  const [brandName, setBrandName] = useState(initial);
-  const [saving, setSaving] = useState(false);
+  const qc = useQueryClient();
+  const settingsQuery = useQuery({
+    queryKey: ['settings', 'all'],
+    queryFn: getSettings,
+  });
+  const [brandName, setBrandName] = useState('');
+
+  // Hydrate local edit state once when the server value lands.
+  useEffect(() => {
+    if (settingsQuery.data?.brandName && brandName === '') {
+      setBrandName(settingsQuery.data.brandName);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsQuery.data]);
+
+  const saveMutation = useMutation({
+    mutationFn: (input: { brandName: string }) => updateSettings(input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings'] });
+      notifications.show({
+        color: 'green',
+        message: 'Сохранено — обновится у всех админов после refresh',
+      });
+    },
+    onError: (err) =>
+      notifications.show({
+        color: 'red',
+        title: 'Не получилось сохранить',
+        message: err instanceof Error ? err.message : String(err),
+      }),
+  });
 
   function save() {
-    setSaving(true);
-    window.localStorage.setItem(BRAND_NAME_KEY, brandName.trim() || 'Ice-Panel');
-    notifications.show({
-      color: 'green',
-      message: 'Сохранено локально (браузер) — для централизации нужен backend',
-    });
-    setSaving(false);
+    const trimmed = brandName.trim() || 'Ice-Panel';
+    saveMutation.mutate({ brandName: trimmed });
   }
 
   return (
@@ -475,7 +496,7 @@ function CustomizationCard() {
         <Stack gap={0}>
           <Text fw={600}>Кастомизация</Text>
           <Text size="xs" c="dimmed">
-            Бренд и оформление панели (на этом этапе хранится в localStorage)
+            Бренд и оформление панели — хранится централизованно в БД
           </Text>
         </Stack>
       </Group>
@@ -489,7 +510,12 @@ function CustomizationCard() {
           placeholder="Ice-Panel"
         />
         <Group justify="flex-end">
-          <Button onClick={save} loading={saving} leftSection={<IconCheck size={14} />}>
+          <Button
+            onClick={save}
+            loading={saveMutation.isPending}
+            disabled={settingsQuery.isLoading}
+            leftSection={<IconCheck size={14} />}
+          >
             Сохранить
           </Button>
         </Group>

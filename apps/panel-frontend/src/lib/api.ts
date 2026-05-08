@@ -772,3 +772,32 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
   const { data } = await api.get<DashboardOverview>('/api/dashboard/overview');
   return data;
 }
+
+// ───── Settings ─────
+
+export interface PublicSettings {
+  brandName?: string;
+}
+
+/** Fetch public-flagged settings — no auth required. Used by LoginPage so
+ *  the brand title shows correctly before sign-in. */
+export async function getPublicSettings(): Promise<PublicSettings> {
+  const { data } = await api.get<PublicSettings>('/api/settings/public');
+  return data;
+}
+
+/** Admin-only — full settings dump. */
+export async function getSettings(): Promise<PublicSettings> {
+  const { data } = await api.get<PublicSettings>('/api/settings');
+  return data;
+}
+
+export async function updateSettings(
+  input: { brandName?: string },
+): Promise<{ ok: boolean; updated: string[] }> {
+  const { data } = await api.put<{ ok: boolean; updated: string[] }>(
+    '/api/settings',
+    input,
+  );
+  return data;
+}

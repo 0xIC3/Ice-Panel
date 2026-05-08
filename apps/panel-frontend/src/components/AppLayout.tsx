@@ -12,11 +12,13 @@ import {
   IconSettings,
 } from '@tabler/icons-react';
 import { useAuth } from '../stores/auth';
+import { useBrandName } from '../hooks/useBrandName';
 
 export function AppLayout() {
   const [opened, { toggle }] = useDisclosure();
   const navigate = useNavigate();
   const { admin, clearSession } = useAuth();
+  const brandName = useBrandName();
 
   function handleLogout() {
     clearSession();
@@ -34,7 +36,7 @@ export function AppLayout() {
           <Group>
             <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
             <Text fw={700} size="lg">
-              Ice-Panel
+              {brandName}
             </Text>
           </Group>
           {admin && (

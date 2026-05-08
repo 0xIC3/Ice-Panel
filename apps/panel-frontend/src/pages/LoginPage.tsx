@@ -5,10 +5,12 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { fetchAuthStatus, login, register, type LoginResponse } from '../lib/api';
 import { useAuth } from '../stores/auth';
+import { useBrandName } from '../hooks/useBrandName';
 
 export function LoginPage() {
   const navigate = useNavigate();
   const setSession = useAuth((s) => s.setSession);
+  const brandName = useBrandName();
 
   const statusQuery = useQuery({
     queryKey: ['auth', 'status'],
@@ -59,7 +61,9 @@ export function LoginPage() {
       <Paper withBorder shadow="md" p="xl" radius="md" w={360}>
         <Stack>
           <Stack gap={4}>
-            <Title order={3}>{isBootstrap ? 'Create the first admin' : 'Ice-Panel sign in'}</Title>
+            <Title order={3}>
+              {isBootstrap ? `${brandName} — create first admin` : `${brandName} sign in`}
+            </Title>
             {isBootstrap && (
               <Text size="sm" c="dimmed">
                 No admins exist yet. The first registration creates the bootstrap account.
