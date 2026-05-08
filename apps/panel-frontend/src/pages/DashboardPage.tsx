@@ -370,7 +370,7 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
           </Group>
           {byProtocol.length === 0 ? (
             <Text c="dimmed" size="sm">
-              Inbound'ов пока нет.
+              Профилей пока нет.
             </Text>
           ) : (
             <Stack gap="xs">
@@ -382,7 +382,7 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
                         {p.protocol}
                       </Badge>
                       <Text size="sm" c="dimmed">
-                        {p.inboundCount} inbound{p.inboundCount === 1 ? '' : 's'}
+                        {p.inboundCount} {p.inboundCount === 1 ? 'профиль' : 'профилей'}
                       </Text>
                     </Group>
                     <Group gap={4}>

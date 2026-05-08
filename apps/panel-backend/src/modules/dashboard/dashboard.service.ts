@@ -280,15 +280,22 @@ async function protocolMetrics(): Promise<DashboardOverview['byProtocol']> {
     _count: { _all: true },
   });
 
-  // Per-protocol enabled-user count requires raw SQL because enabledProtocols
-  // is a JSON column; do a plain ANY() check via $queryRaw.
+  // Slice 27: per-protocol user count walks squad ACL → groupProfiles →
+  // profile.protocol. The legacy users.enabled_protocols JSON column still
+  // exists (kept for migration window) but is no longer authoritative —
+  // squad membership is. A user is counted under a protocol if at least
+  // one of their squads has a profile of that protocol.
   const userByProto = await prisma.$queryRaw<{ protocol: string; count: bigint }[]>`
     SELECT
-      jsonb_array_elements_text(enabled_protocols) AS protocol,
-      COUNT(*)::bigint AS count
-    FROM users
-    WHERE deleted_at IS NULL
-    GROUP BY protocol
+      p.protocol,
+      COUNT(DISTINCT u.id)::bigint AS count
+    FROM users u
+    INNER JOIN group_members gm ON gm.user_id = u.id
+    INNER JOIN group_profiles gp ON gp.group_id = gm.group_id
+    INNER JOIN profiles p ON p.id = gp.profile_id
+    WHERE u.deleted_at IS NULL
+      AND p.enabled = true
+    GROUP BY p.protocol
   `;
   const userMap = new Map<string, number>();
   for (const r of userByProto) userMap.set(r.protocol, Number(r.count));
