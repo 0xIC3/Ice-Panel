@@ -99,6 +99,29 @@ interface FormValues {
 const TSPU_PRESET = { jc: 4, jmin: 40, jmax: 89, s1: 72, s2: 56, s3: 32, s4: 16 };
 const MOBILE_PRESET = { jc: 3, jmin: 40, jmax: 70, s1: 72, s2: 56, s3: 32, s4: 16 };
 
+/**
+ * AmneziaWG H1-H4 magic-header bytes. Spec says they must be:
+ *   - strictly > 4 (1-4 are reserved for actual WireGuard message types)
+ *   - pairwise distinct (otherwise DPI sees repeated patterns)
+ *   - random in int32 range so they don't fingerprint Ice-Panel deployments
+ *
+ * Replaces the previous "run `shuf -i 5-2147483647 -n 4` yourself" admin
+ * hint — admin shouldn't need a shell to set up obfuscation.
+ */
+function randomAwgHeaders(): { h1: number; h2: number; h3: number; h4: number } {
+  const seen = new Set<number>();
+  const vals: number[] = [];
+  while (vals.length < 4) {
+    // Math.random() floors to int32 max ≈ 2.14e9. Skip 1-4 as required.
+    const n = 5 + Math.floor(Math.random() * (2_147_483_643 - 5));
+    if (!seen.has(n)) {
+      seen.add(n);
+      vals.push(n);
+    }
+  }
+  return { h1: vals[0]!, h2: vals[1]!, h3: vals[2]!, h4: vals[3]! };
+}
+
 function defaults(profile: Profile | null): FormValues {
   const base: FormValues = {
     protocol: profile?.protocol ?? 'hysteria',
@@ -282,10 +305,47 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
 
   function applyAwgPreset(preset: 'tspu' | 'mobile' | 'custom') {
     form.setFieldValue('awgPreset', preset);
+    // Always re-roll H1-H4 on preset apply — each profile should have unique
+    // headers so it's not fingerprinted as "another Ice-Panel TSPU node".
+    const headers = randomAwgHeaders();
     if (preset === 'tspu') {
-      form.setValues({ ...form.values, awgPreset: preset, ...renameAwg(TSPU_PRESET) });
+      form.setValues({
+        ...form.values,
+        awgPreset: preset,
+        ...renameAwg(TSPU_PRESET),
+        awgH1: headers.h1,
+        awgH2: headers.h2,
+        awgH3: headers.h3,
+        awgH4: headers.h4,
+      });
     } else if (preset === 'mobile') {
-      form.setValues({ ...form.values, awgPreset: preset, ...renameAwg(MOBILE_PRESET) });
+      form.setValues({
+        ...form.values,
+        awgPreset: preset,
+        ...renameAwg(MOBILE_PRESET),
+        awgH1: headers.h1,
+        awgH2: headers.h2,
+        awgH3: headers.h3,
+        awgH4: headers.h4,
+      });
+    } else {
+      // custom — only re-roll headers if all 4 are blank, so admin's manual
+      // tweaks aren't clobbered by accident.
+      const allEmpty =
+        form.values.awgH1 === '' &&
+        form.values.awgH2 === '' &&
+        form.values.awgH3 === '' &&
+        form.values.awgH4 === '';
+      if (allEmpty) {
+        form.setValues({
+          ...form.values,
+          awgPreset: preset,
+          awgH1: headers.h1,
+          awgH2: headers.h2,
+          awgH3: headers.h3,
+          awgH4: headers.h4,
+        });
+      }
     }
   }
 
@@ -707,16 +767,79 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
                 <NumberInput label="S3" min={0} {...form.getInputProps('awgS3')} />
                 <NumberInput label="S4" min={0} {...form.getInputProps('awgS4')} />
               </Group>
-              <Group grow>
-                <NumberInput label="H1" min={5} {...form.getInputProps('awgH1')} />
-                <NumberInput label="H2" min={5} {...form.getInputProps('awgH2')} />
-                <NumberInput label="H3" min={5} {...form.getInputProps('awgH3')} />
-                <NumberInput label="H4" min={5} {...form.getInputProps('awgH4')} />
+              <Group align="flex-end" gap="xs" wrap="nowrap">
+                <NumberInput
+                  flex={1}
+                  label="H1"
+                  description="magic header byte"
+                  min={5}
+                  max={2147483647}
+                  {...form.getInputProps('awgH1')}
+                />
+                <NumberInput
+                  flex={1}
+                  label="H2"
+                  description="должен отличаться"
+                  min={5}
+                  max={2147483647}
+                  {...form.getInputProps('awgH2')}
+                />
+                <NumberInput
+                  flex={1}
+                  label="H3"
+                  description="попарно уникален"
+                  min={5}
+                  max={2147483647}
+                  {...form.getInputProps('awgH3')}
+                />
+                <NumberInput
+                  flex={1}
+                  label="H4"
+                  description="> 4 и unique"
+                  min={5}
+                  max={2147483647}
+                  {...form.getInputProps('awgH4')}
+                />
+                <Button
+                  variant="light"
+                  type="button"
+                  leftSection={<IconKey size={14} />}
+                  onClick={() => {
+                    const h = randomAwgHeaders();
+                    form.setValues({
+                      ...form.values,
+                      awgH1: h.h1,
+                      awgH2: h.h2,
+                      awgH3: h.h3,
+                      awgH4: h.h4,
+                    });
+                  }}
+                >
+                  Re-roll
+                </Button>
               </Group>
-              <Alert color="yellow" title="H1-H4">
-                Должны быть {'>'}4 и попарно различные. Сгенерируй через{' '}
-                <Code>shuf -i 5-2147483647 -n 4</Code>.
-              </Alert>
+              {(() => {
+                // Live H-uniqueness validator. Empty values pass — let the
+                // `required` semantics fire on submit instead.
+                const vals = [
+                  form.values.awgH1,
+                  form.values.awgH2,
+                  form.values.awgH3,
+                  form.values.awgH4,
+                ].filter((v) => v !== '');
+                const set = new Set(vals);
+                if (vals.length === 4 && set.size < 4) {
+                  return (
+                    <Alert color="red" variant="light" p="xs">
+                      <Text size="xs">
+                        H1-H4 должны быть попарно уникальны — сейчас есть
+                        дубликаты. Жми «Re-roll» чтобы сгенерировать заново.
+                      </Text>
+                    </Alert>
+                  );
+                }
+                return null;
+              })()}
             </Stack>
           )}
 

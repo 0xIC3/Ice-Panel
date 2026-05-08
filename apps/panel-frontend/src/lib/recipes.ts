@@ -57,6 +57,35 @@ function randPath(): string {
   return `/${a}`;
 }
 
+// AmneziaWG H1-H4 magic-header bytes. Spec requires > 4 + pairwise unique
+// + random within int32 — a hardcoded 100/200/300/400 fingerprints every
+// "Iran-tuned recipe" deploy as Ice-Panel. Roll fresh on apply.
+function randAwgHeader(): number {
+  return 5 + Math.floor(Math.random() * (2_147_483_643 - 5));
+}
+function randAwgHeaders(): {
+  awgH1: number;
+  awgH2: number;
+  awgH3: number;
+  awgH4: number;
+} {
+  const seen = new Set<number>();
+  const vals: number[] = [];
+  while (vals.length < 4) {
+    const n = randAwgHeader();
+    if (!seen.has(n)) {
+      seen.add(n);
+      vals.push(n);
+    }
+  }
+  return {
+    awgH1: vals[0]!,
+    awgH2: vals[1]!,
+    awgH3: vals[2]!,
+    awgH4: vals[3]!,
+  };
+}
+
 export const RECIPES: Recipe[] = [
   // ───── Xray (3) ─────
   {
@@ -198,10 +227,7 @@ export const RECIPES: Recipe[] = [
       awgS2: 56,
       awgS3: 32,
       awgS4: 16,
-      awgH1: 100,
-      awgH2: 200,
-      awgH3: 300,
-      awgH4: 400,
+      ...randAwgHeaders(),
       awgSubnet: '10.0.0.0/24',
     },
   },
