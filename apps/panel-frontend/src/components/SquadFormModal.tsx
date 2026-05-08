@@ -289,7 +289,7 @@ export function SquadFormModal({
             />
           )}
 
-          <Stack gap="sm" mah={400} style={{ overflowY: 'auto' }}>
+          <Stack gap="sm" mah={520} style={{ overflowY: 'auto', paddingRight: 4 }}>
             {grouped.length === 0 ? (
               <Paper withBorder p="md" radius="sm" ta="center">
                 <Text c="dimmed" size="sm">
@@ -357,15 +357,26 @@ function ProtocolGroup({
   const color = PROTOCOL_COLORS[protocol] ?? 'gray';
 
   return (
-    <Card withBorder padding="xs" radius="sm">
-      <Group gap="sm" wrap="nowrap" mb="xs">
-        <ThemeIcon variant="light" color={color} size="sm">
-          <IconBolt size={12} />
+    <Card
+      withBorder
+      padding="sm"
+      radius="md"
+      style={{
+        borderLeft: `3px solid var(--mantine-color-${color}-6)`,
+      }}
+    >
+      <Group gap="sm" wrap="nowrap" mb="sm">
+        <ThemeIcon variant="light" color={color} size="md">
+          <IconBolt size={14} />
         </ThemeIcon>
-        <Text size="sm" fw={600} tt="uppercase" style={{ flex: 1 }}>
+        <Text size="sm" fw={700} tt="uppercase" style={{ flex: 1, letterSpacing: 0.5 }}>
           {protocol}
         </Text>
-        <Badge variant="light" color={allSelected ? 'teal' : 'gray'} size="sm">
+        <Badge
+          variant={allSelected ? 'filled' : 'light'}
+          color={allSelected ? 'teal' : 'gray'}
+          size="sm"
+        >
           {ids.filter((id) => selectedIds.has(id)).length}/{ids.length}
         </Badge>
         <Tooltip label={allSelected ? 'Снять все' : 'Выбрать все'}>
@@ -378,7 +389,7 @@ function ProtocolGroup({
         </Tooltip>
       </Group>
 
-      <Stack gap={4} pl="lg">
+      <Stack gap={6}>
         {profiles.map((p) => (
           <ProfileRow
             key={p.id}
