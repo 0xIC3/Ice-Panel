@@ -60,8 +60,6 @@ const STATUS_COLORS: Record<string, string> = {
   limited: 'yellow',
 };
 
-const GiB = 1_073_741_824;
-
 function formatBytes(n: number): string {
   if (n === 0) return '0 B';
   const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
