@@ -46,6 +46,16 @@ export async function pollNodeStats(): Promise<{ ok: number; failed: number }> {
       try {
         const transport = new NodeTransport(node);
         const res = await transport.getStats();
+        const rawTotal =
+          (res.users ?? []).reduce(
+            (acc, u) => acc + (u.bytesIn || 0) + (u.bytesOut || 0),
+            0,
+          );
+        if (rawTotal > 0) {
+          console.log(
+            `[cron] node-stats-poll ${node.id} — ${res.users.length} entries, total=${rawTotal}B`,
+          );
+        }
         if (!res.users || res.users.length === 0) {
           ok++;
           return;
