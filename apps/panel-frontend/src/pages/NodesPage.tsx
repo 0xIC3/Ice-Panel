@@ -38,6 +38,7 @@ import {
   type UpdateNodeInput,
 } from '../lib/api';
 import { NodeFormModal } from '../components/NodeFormModal';
+import { NodeEditModal } from '../components/NodeEditModal';
 import { NodePayloadModal } from '../components/NodePayloadModal';
 import { NodeCard } from '../components/NodeCard';
 import { countryFlag } from '../lib/countries';
@@ -404,17 +405,28 @@ export function NodesPage() {
         }}
       />
 
-      <NodeFormModal
+      <NodeEditModal
         opened={editing !== null}
         onClose={() => setEditing(null)}
         node={editing}
-        loading={updateMutation.isPending}
+        saving={updateMutation.isPending}
+        refreshing={
+          refreshBootstrapMutation.isPending &&
+          refreshBootstrapMutation.variables?.id === editing?.id
+        }
         onSubmit={async (input) => {
-          // Edit mode: bindings are managed via DeployProfileModal on the
-          // profile card, not here. The wizard's step 2 still renders but
-          // selections are ignored on this branch.
           if (!editing) return;
-          await updateMutation.mutateAsync({ id: editing.id, input: input as UpdateNodeInput });
+          await updateMutation.mutateAsync({ id: editing.id, input });
+          setEditing(null);
+        }}
+        onDelete={() => {
+          if (!editing) return;
+          handleDelete(editing);
+          setEditing(null);
+        }}
+        onRefreshBootstrap={() => {
+          if (!editing) return;
+          refreshBootstrapMutation.mutate(editing);
         }}
       />
 
