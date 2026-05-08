@@ -502,13 +502,11 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
               </Group>
               <Select
                 label="Network (transport)"
+                description="REALITY поддерживает только raw / xhttp / grpc. ws/httpupgrade/kcp xray отвергает на уровне config-load."
                 data={[
-                  { value: 'raw', label: 'raw (TCP, canonical)' },
+                  { value: 'raw', label: 'raw (TCP, canonical) — supports Vision' },
                   { value: 'xhttp', label: 'xhttp (HTTP/2 chunked)' },
-                  { value: 'ws', label: 'ws (WebSocket)' },
                   { value: 'grpc', label: 'gRPC' },
-                  { value: 'httpupgrade', label: 'httpupgrade (CDN-friendly)' },
-                  { value: 'kcp', label: 'kcp (UDP, lossy networks)' },
                 ]}
                 allowDeselect={false}
                 {...form.getInputProps('xrayNetwork')}
