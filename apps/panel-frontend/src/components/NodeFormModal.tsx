@@ -180,12 +180,14 @@ export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Prop
             <Group grow>
               <TextInput
                 label="Имя"
+                description="уникальное в рамках панели"
                 placeholder="eu-1"
                 required
                 {...form.getInputProps('name')}
               />
               <Select
                 label="Протокол"
+                description="основной core ноды"
                 data={PROTOCOL_OPTIONS}
                 allowDeselect={false}
                 {...form.getInputProps('protocol')}
@@ -193,7 +195,7 @@ export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Prop
             </Group>
             <TextInput
               label="Адрес"
-              description="host:port для panel-mTLS (control-plane, не protocol-port)"
+              description="host:port для panel-mTLS"
               placeholder="n1.example.com:8443"
               required
               {...form.getInputProps('address')}
@@ -201,6 +203,7 @@ export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Prop
             <Group grow>
               <Select
                 label="Страна"
+                description="ISO 3166-1 для GeoIP"
                 placeholder="Не указана"
                 data={COUNTRY_OPTIONS}
                 searchable
@@ -210,7 +213,7 @@ export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Prop
               />
               <NumberInput
                 label="Consumption multiplier"
-                placeholder="1.0"
+                description="1 = норма, > 1 премиум"
                 min={0.1}
                 max={10}
                 step={0.1}
@@ -218,11 +221,6 @@ export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Prop
                 {...form.getInputProps('consumptionMultiplier')}
               />
             </Group>
-            <Text size="xs" c="dimmed">
-              Имя — уникальное в рамках панели · Протокол — основной core ноды
-              (install-node ставит этот бинарь) · Multiplier — 1 = норма,
-              {'>'} 1 для премиум-регионов
-            </Text>
             <Group justify="space-between" mt="md">
               <Button variant="default" onClick={handleClose}>
                 Отмена
