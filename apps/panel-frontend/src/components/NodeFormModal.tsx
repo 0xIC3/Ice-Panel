@@ -180,7 +180,23 @@ export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Prop
       size="lg"
     >
       <Stack>
-        <Stepper active={step} onStepClick={setStep} size="sm">
+        <Stepper
+          active={step}
+          // Жмём по цифре только в рамках уже валидной формы:
+          //   - назад (step 1 → 0) разрешено всегда
+          //   - вперёд (0 → 1) только если параметры валидны
+          // Без проверки stepper позволял прыгнуть мимо required-полей.
+          onStepClick={(target) => {
+            if (target < step) {
+              setStep(target);
+              return;
+            }
+            const result = form.validate();
+            if (!result.hasErrors) setStep(target);
+          }}
+          allowNextStepsSelect={false}
+          size="sm"
+        >
           <Stepper.Step label="Параметры" description="Имя, адрес, протокол" />
           <Stepper.Step
             label="Профили"
