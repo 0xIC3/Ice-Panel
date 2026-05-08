@@ -19,6 +19,14 @@ The only one. Anything else listed below is some shade of "tested locally / loop
 - **Status when shipping a paying user today:** safe
 - **Cycle #3 confirms:** Profile created via UI (with REALITY keypair generated through new `/api/profiles/generate-keypair` endpoint) → DeployProfileModal binding to node → worker `inbound-sync` mTLS-pushed wire payload → agent rendered xray config (with realityPrivateKey field correctly deserialised) → xray.service started, listening on `:443` → subscription URL `/sub/<token>` returned valid `vless://...?security=reality&...` → client connected, real traffic. **No regression from slice 27.**
 
+### VLESS + REALITY + xhttp (HTTP/2 chunked transport, no Vision)
+
+- **Slice:** 24c part 2
+- **Verified:** **VPS test #3 (2026-05-08)** — first real-traffic confirmation
+- **Clients confirmed:** Hiddify — real browser traffic to telegram + apple endpoints, agent log shows `accepted tcp:... [vless-in >> direct] email: <userId>`
+- **Path forward:** Vision is incompatible with non-raw transports — `flow` must be empty. Panel form lets admin pick `(none)` from Flow dropdown; agent stopped force-coercing empty→vision (was a defensive default, broke xhttp). xray uses `splithttp` listener under the hood (`listening TCP for XHTTP on 0.0.0.0:443`).
+- **Status when shipping a paying user today:** safe (alongside REALITY+Vision-raw, now the second proven path)
+
 This is the single protocol path you should default new commercial users to.
 
 ## ⚠️ Pipeline proven, real traffic NOT proven
@@ -43,7 +51,7 @@ Slices that landed in this batch but haven't seen ANY VPS — even loopback.
 | 24b3 | AWG smart-diff classifier (syncconf vs full restart) | Unit-tested; logic mirrors AmneziaWG upstream's documented behaviour. VPS test will catch real-world edge cases. |
 | 24b4 | Naive ApplyInbound (Caddyfile rewrite + caddy reload) | Same — caddy reload is a known graceful operation; render verified by tests. |
 | 24c part 1 | Xray per-user stats via `xray api statsquery -reset` | Mechanism documented in xray-core; render emits the right `stats:{}` + `policy.levels` + api-in inbound. Until VPS test confirms numbers actually reach the panel poller, treat as untested. |
-| 24c part 2 | Xray transports `httpupgrade` + `kcp` + routing defaults (sniffing/dns-out/blackhole/BLOCK rules + sockopt-BBR) | Render shape verified against xray docs; client-side URIs round-trip. Per-network real connect on next cycle. |
+| 24c part 2 | Xray transports `httpupgrade` + `kcp` + routing defaults (sniffing/dns-out/blackhole/BLOCK rules + sockopt-BBR) | xhttp ✅ in cycle #3. `httpupgrade` / `kcp` / `ws` / `grpc` render shape verified against xray docs; client-side URIs round-trip. Per-network real connect pending next sub-cycle. |
 | 24c part 3a | Trojan subprotocol over REALITY | Trojan inbound shape and URI scheme verified against XTLS docs. No live connect. |
 | 26 | Squad ACL (groups CRUD + subscription filter) | Pure backend logic; integration tests work locally with sqlite-style stand-in. Production flow path has never been exercised end-to-end. |
 | 24d | Shadowsocks 2022 — see ⚠️ table above | — |
@@ -67,6 +75,7 @@ Slices that landed in this batch but haven't seen ANY VPS — even loopback.
   3. **Cron healthcheck conflated `degraded` with `unreachable`.** Fresh node with no Profile+Binding pushed yet returns `{status: 'degraded'}` from agent (xray/ss have no config → not running) — but agent itself is reachable + healthy. Old cron flipped status to `unreachable`. Fixed: `degraded` → `online` with detail in `lastStatusMessage`.
   4. **`/api/inbounds/generate-keypair` 404** after slice 27 retired the inbounds module. Endpoint moved to `/api/profiles/generate-keypair`.
   5. **BullMQ `removeOnFail: { age: 86400 }` poisoned the apply-${nodeId} jobId for 24 hours** after a single transient failure (here: failed during initial install before backend stabilised). Coalescing logic (`jobId: apply-X`) treated the dead job as still owning the slot, silently dropping every subsequent enqueue from binding/profile events. Fixed: `removeOnFail: true` so failures vacate the slot immediately and the next event re-enqueues a fresh attempt.
+  6. **xray adapter (Go) force-coerced empty Flow → `xtls-rprx-vision`** in two places (`adapter.go:addUser` and `config.go:withDefaults`). Was a defensive default for the old Inbound model — became a bug for xhttp/ws/grpc/kcp where Vision is incompatible. xray rejected every client with `account ... is rejected since the client flow is empty`. Mantine Select also returns `null` (not `""`) when the empty option is picked, so the panel-side Zod schema `flow: z.string()` 400'd; coerce `null → ""` and add an explicit `(none) — без flow` label so admins can see the option exists. Combined fix unblocked first ✅ for xhttp transport.
 
 ## What real-traffic verification needs (per protocol)
 
