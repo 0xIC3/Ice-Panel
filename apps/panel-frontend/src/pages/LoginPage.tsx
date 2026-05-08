@@ -3,6 +3,7 @@ import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { fetchAuthStatus, login, register, type LoginResponse } from '../lib/api';
 import { useAuth } from '../stores/auth';
 import { useBrandName } from '../hooks/useBrandName';
@@ -11,6 +12,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const setSession = useAuth((s) => s.setSession);
   const brandName = useBrandName();
+  const { t } = useTranslation();
 
   const statusQuery = useQuery({
     queryKey: ['auth', 'status'],
@@ -62,11 +64,13 @@ export function LoginPage() {
         <Stack>
           <Stack gap={4}>
             <Title order={3}>
-              {isBootstrap ? `${brandName} — create first admin` : `${brandName} sign in`}
+              {isBootstrap
+                ? t('login.bootstrapTitle', { brand: brandName })
+                : t('login.signInTitle', { brand: brandName })}
             </Title>
             {isBootstrap && (
               <Text size="sm" c="dimmed">
-                No admins exist yet. The first registration creates the bootstrap account.
+                {t('login.bootstrapHint')}
               </Text>
             )}
           </Stack>
@@ -74,19 +78,21 @@ export function LoginPage() {
           <form onSubmit={form.onSubmit((vals) => submitMutation.mutate(vals))}>
             <Stack>
               <TextInput
-                label="Username"
+                label={t('login.username')}
                 placeholder="admin"
                 autoComplete="username"
                 {...form.getInputProps('username')}
               />
               <PasswordInput
-                label="Password"
+                label={t('login.password')}
                 placeholder="••••••••"
                 autoComplete={isBootstrap ? 'new-password' : 'current-password'}
                 {...form.getInputProps('password')}
               />
               <Button type="submit" loading={submitMutation.isPending} fullWidth>
-                {isBootstrap ? 'Create admin & sign in' : 'Sign in'}
+                {isBootstrap
+                  ? t('login.submitRegister')
+                  : t('login.submitLogin')}
               </Button>
             </Stack>
           </form>

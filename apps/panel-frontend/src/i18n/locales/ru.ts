@@ -1,0 +1,120 @@
+/**
+ * Русский — base/native locale. Maps `keys.in.dot.notation` → strings.
+ *
+ * Convention: namespace by feature area (sidebar.users, nodes.create.title,
+ * etc) so we can split files later without rename. Keep keys descriptive
+ * enough that a missing translation defaults to a meaningful fallback.
+ */
+export default {
+  common: {
+    save: 'Сохранить',
+    cancel: 'Отмена',
+    delete: 'Удалить',
+    edit: 'Редактировать',
+    create: 'Создать',
+    refresh: 'Обновить',
+    confirm: 'Подтвердить',
+    close: 'Закрыть',
+    back: 'Назад',
+    next: 'Далее',
+    loading: 'Загрузка…',
+    yes: 'Да',
+    no: 'Нет',
+    online: 'онлайн',
+    offline: 'оффлайн',
+    enabled: 'включён',
+    disabled: 'отключён',
+  },
+  sidebar: {
+    home: 'Главная',
+    users: 'Пользователи',
+    profiles: 'Профили',
+    squads: 'Сквады',
+    nodes: 'Ноды',
+    srr: 'SRR',
+    settings: 'Настройки',
+    logout: 'Выйти',
+  },
+  login: {
+    bootstrapTitle: '{{brand}} — создать первого админа',
+    signInTitle: '{{brand}} — вход',
+    bootstrapHint:
+      'Админов ещё нет. Первая регистрация создаёт bootstrap-аккаунт.',
+    username: 'Имя пользователя',
+    password: 'Пароль',
+    submitLogin: 'Войти',
+    submitRegister: 'Создать админа',
+  },
+  nodes: {
+    title: 'Ноды',
+    countOnline: '{{count}} нод · {{online}} онлайн',
+    create: 'Создать ноду',
+    edit: 'Редактировать ноду',
+    layoutCards: 'Карточки',
+    layoutCompact: 'Список',
+    empty: 'Нод ещё нет. Жми «Создать ноду».',
+    deleteTitle: 'Удалить ноду «{{name}}»?',
+    deleteBody:
+      'Нода будет soft-deleted. Существующие пользователи перестанут синхронизироваться с ней. mTLS-payload станет невалидным; для замены нужна новая нода.',
+    refreshBootstrapTitle: 'Перевыпустить bootstrap для «{{name}}»?',
+    refreshBootstrapBody:
+      'Текущий bootstrap-токен станет невалидным. На работающем агенте действие безопасное — он продолжит работать с прежним сертом. Свежий токен пригодится для переустановки или после смены адреса.',
+    refreshBootstrap: 'Перевыпустить bootstrap',
+    metricsLoading: 'Метрики ещё не пришли — первый poll в течение 15 сек.',
+    bindingsCount: '{{count}} bindings',
+    todayLabel: 'сегодня',
+    table: {
+      name: 'Имя',
+      address: 'Адрес',
+      country: 'Страна',
+      status: 'Статус',
+      bindings: 'Bindings',
+      today: 'Сегодня',
+      actions: 'Действия',
+    },
+    form: {
+      stepParams: 'Параметры',
+      stepProfiles: 'Профили',
+      stepParamsDesc: 'Имя, адрес, протокол',
+      stepProfilesDesc: 'Auto-deploy ({{count}})',
+      name: 'Имя',
+      nameDesc: 'уникальное в рамках панели',
+      protocol: 'Протокол',
+      protocolDesc: 'основной core ноды',
+      address: 'Адрес',
+      addressDesc: 'host:port для panel-mTLS',
+      country: 'Страна',
+      countryDesc: 'ISO 3166-1 для GeoIP',
+      multiplier: 'Consumption multiplier',
+      multiplierDesc: '1 = норма, > 1 премиум',
+      profilesAlert:
+        'Отметь профили которые сразу развернуть на этой ноде. Bindings создадутся автоматически.',
+      compatibleGroup: 'Совместимые с протоколом',
+      compatibleHint: 'Эти профили сразу заработают на {{protocol}}-ноде',
+      mismatchGroup: 'Других протоколов',
+      mismatchHint:
+        'Binding создастся, но клиенты не подключатся пока install-node не поставит соответствующий бинарь',
+      noProfiles:
+        'Профилей в системе пока нет — пропусти этот шаг и создай ноду без bindings.',
+      submitCreate: 'Создать ноду',
+      submitWithBindings: 'Создать ноду + {{count}} bindings',
+      submitEdit: 'Сохранить',
+    },
+    edit: {
+      params: 'Параметры',
+      system: 'Система',
+      bindings: 'Bindings',
+      bindingsCount: 'Bindings ({{count}})',
+      noBindings:
+        'На эту ноду пока ничего не задеплоено. Используй «Развернуть на нодах» в карточке Profile, или quick-deploy ниже.',
+      quickDeployHint: 'Quick-deploy — совместимые профили:',
+      removeBindingTooltip: 'Снять с этой ноды',
+      uptime: 'uptime {{value}}',
+    },
+  },
+  language: {
+    label: 'Язык',
+    russian: 'Русский',
+    english: 'English',
+  },
+} as const;

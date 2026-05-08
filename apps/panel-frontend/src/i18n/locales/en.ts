@@ -1,0 +1,118 @@
+/**
+ * English — secondary locale. Mirrors ru.ts shape; missing keys fall back
+ * to the key itself (i18next default), which we'd see as "untranslated.key"
+ * in QA — easy to spot.
+ */
+export default {
+  common: {
+    save: 'Save',
+    cancel: 'Cancel',
+    delete: 'Delete',
+    edit: 'Edit',
+    create: 'Create',
+    refresh: 'Refresh',
+    confirm: 'Confirm',
+    close: 'Close',
+    back: 'Back',
+    next: 'Next',
+    loading: 'Loading…',
+    yes: 'Yes',
+    no: 'No',
+    online: 'online',
+    offline: 'offline',
+    enabled: 'enabled',
+    disabled: 'disabled',
+  },
+  sidebar: {
+    home: 'Home',
+    users: 'Users',
+    profiles: 'Profiles',
+    squads: 'Squads',
+    nodes: 'Nodes',
+    srr: 'SRR',
+    settings: 'Settings',
+    logout: 'Log out',
+  },
+  login: {
+    bootstrapTitle: '{{brand}} — create first admin',
+    signInTitle: '{{brand}} — sign in',
+    bootstrapHint:
+      'No admins exist yet. The first registration creates the bootstrap account.',
+    username: 'Username',
+    password: 'Password',
+    submitLogin: 'Sign in',
+    submitRegister: 'Create admin',
+  },
+  nodes: {
+    title: 'Nodes',
+    countOnline: '{{count}} nodes · {{online}} online',
+    create: 'Create node',
+    edit: 'Edit node',
+    layoutCards: 'Cards',
+    layoutCompact: 'Compact',
+    empty: 'No nodes yet. Click "Create node".',
+    deleteTitle: 'Delete node "{{name}}"?',
+    deleteBody:
+      'The node will be soft-deleted. Existing users stop being synced to it. The mTLS payload becomes invalid; provisioning a replacement requires a new node.',
+    refreshBootstrapTitle: 'Re-issue bootstrap for "{{name}}"?',
+    refreshBootstrapBody:
+      'The current bootstrap token becomes invalid. Safe on a running agent — it keeps working with the existing cert. The fresh token is for reinstall or after an address change.',
+    refreshBootstrap: 'Re-issue bootstrap',
+    metricsLoading: 'Metrics not yet collected — first poll within 15s.',
+    bindingsCount: '{{count}} bindings',
+    todayLabel: 'today',
+    table: {
+      name: 'Name',
+      address: 'Address',
+      country: 'Country',
+      status: 'Status',
+      bindings: 'Bindings',
+      today: 'Today',
+      actions: 'Actions',
+    },
+    form: {
+      stepParams: 'Parameters',
+      stepProfiles: 'Profiles',
+      stepParamsDesc: 'Name, address, protocol',
+      stepProfilesDesc: 'Auto-deploy ({{count}})',
+      name: 'Name',
+      nameDesc: 'unique within the panel',
+      protocol: 'Protocol',
+      protocolDesc: 'main core of the node',
+      address: 'Address',
+      addressDesc: 'host:port for panel mTLS',
+      country: 'Country',
+      countryDesc: 'ISO 3166-1 for GeoIP',
+      multiplier: 'Consumption multiplier',
+      multiplierDesc: '1 = normal, > 1 premium',
+      profilesAlert:
+        'Pick profiles to deploy on this node. Bindings will be created automatically.',
+      compatibleGroup: 'Compatible with protocol',
+      compatibleHint: 'These will work right away on the {{protocol}} node',
+      mismatchGroup: 'Other protocols',
+      mismatchHint:
+        'Binding will be created, but clients won\'t connect until install-node provisions the matching binary',
+      noProfiles:
+        'No profiles in the system yet — skip this step and create the node without bindings.',
+      submitCreate: 'Create node',
+      submitWithBindings: 'Create node + {{count}} bindings',
+      submitEdit: 'Save',
+    },
+    edit: {
+      params: 'Parameters',
+      system: 'System',
+      bindings: 'Bindings',
+      bindingsCount: 'Bindings ({{count}})',
+      noBindings:
+        'Nothing deployed on this node yet. Use "Deploy to nodes" in a profile card, or quick-deploy below.',
+      quickDeployHint: 'Quick-deploy — compatible profiles:',
+      removeBindingTooltip: 'Undeploy from this node',
+      uptime: 'uptime {{value}}',
+    },
+  },
+  language: {
+    label: 'Language',
+    russian: 'Русский',
+    english: 'English',
+  },
+} as const;
