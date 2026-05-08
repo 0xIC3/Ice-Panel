@@ -315,12 +315,14 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
             <Stack gap="md">
               <SectionCard icon={<IconShield size={16} />} title="Внутренние сквады">
                 <Text size="xs" c="dimmed" mb="xs">
-                  В каких группах состоит пользователь. «All» включена всегда автоматически.
+                  В каких squad'ах состоит пользователь. «All» — system-managed
+                  fallback (auto-add только если не выбран ни один другой
+                  squad).
                 </Text>
                 <Stack gap={6}>
                   {(squadsQuery.data?.squads ?? []).map((s) => {
                     const isAll = s.id === ALL_SQUAD_ID;
-                    const checked = isAll || form.values.groupIds.includes(s.id);
+                    const checked = form.values.groupIds.includes(s.id);
                     return (
                       <SquadRow
                         key={s.id}
