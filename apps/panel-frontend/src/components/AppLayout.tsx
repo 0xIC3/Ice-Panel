@@ -63,15 +63,15 @@ export function AppLayout() {
             />
             <NavLink
               component={RouterNavLink}
-              to="/nodes"
-              label="Nodes"
-              leftSection={<IconServer2 size={18} />}
-            />
-            <NavLink
-              component={RouterNavLink}
               to="/profiles"
               label="Профили"
               leftSection={<IconBolt size={18} />}
+            />
+            <NavLink
+              component={RouterNavLink}
+              to="/nodes"
+              label="Nodes"
+              leftSection={<IconServer2 size={18} />}
             />
             <NavLink
               component={RouterNavLink}
