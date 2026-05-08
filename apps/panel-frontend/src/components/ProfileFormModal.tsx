@@ -27,6 +27,8 @@ import {
   type ProtocolName,
   type UpdateProfileInput,
 } from '../lib/api';
+import { RecipePicker } from './RecipePicker';
+import { validateXrayConfig } from '../lib/recipes';
 
 type Mode = 'create' | 'edit';
 
@@ -413,6 +415,42 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
           <Switch label="Включён" {...form.getInputProps('enabled', { type: 'checkbox' })} />
 
           <Divider label={`Конфигурация: ${form.values.protocol}`} labelPosition="center" />
+
+          <RecipePicker
+            protocol={form.values.protocol}
+            onPick={(recipe) => {
+              form.setValues((current) => ({ ...current, ...recipe.apply }));
+            }}
+          />
+
+          {form.values.protocol === 'xray' && (() => {
+            const issues = validateXrayConfig({
+              xrayNetwork: form.values.xrayNetwork,
+              xrayFlow: form.values.xrayFlow,
+              xraySubprotocol: form.values.xraySubprotocol,
+            });
+            if (issues.length === 0) return null;
+            return (
+              <Stack gap={4}>
+                {issues.map((iss, i) => (
+                  <Alert
+                    key={i}
+                    color={
+                      iss.level === 'error'
+                        ? 'red'
+                        : iss.level === 'warning'
+                          ? 'yellow'
+                          : 'blue'
+                    }
+                    variant="light"
+                    p="xs"
+                  >
+                    <Text size="xs">{iss.message}</Text>
+                  </Alert>
+                ))}
+              </Stack>
+            );
+          })()}
 
           {form.values.protocol === 'hysteria' && (
             <Stack>
