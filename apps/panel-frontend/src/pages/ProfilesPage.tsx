@@ -22,9 +22,9 @@ import {
   IconBolt,
   IconDotsVertical,
   IconEdit,
-  IconLink,
   IconPlus,
   IconRefresh,
+  IconRocket,
   IconSearch,
   IconServer2,
   IconTrash,
@@ -41,6 +41,7 @@ import {
   type UpdateProfileInput,
 } from '../lib/api';
 import { ProfileFormModal } from '../components/ProfileFormModal';
+import { DeployProfileModal } from '../components/DeployProfileModal';
 
 const PROTOCOL_COLORS: Record<string, string> = {
   hysteria: 'blue',
@@ -66,6 +67,7 @@ export function ProfilesPage() {
   const qc = useQueryClient();
   const [createOpen, { open: openCreate, close: closeCreate }] = useDisclosure(false);
   const [editing, setEditing] = useState<Profile | null>(null);
+  const [deploying, setDeploying] = useState<Profile | null>(null);
   const [search, setSearch] = useState('');
   const [protocolFilter, setProtocolFilter] = useState<ProtocolName | 'all'>('all');
 
@@ -231,6 +233,7 @@ export function ProfilesPage() {
               bindingCount={bindingsByProfile.get(p.id) ?? p.bindingCount}
               onEdit={() => setEditing(p)}
               onDelete={() => handleDelete(p)}
+              onDeploy={() => setDeploying(p)}
             />
           ))}
         </SimpleGrid>
@@ -257,6 +260,11 @@ export function ProfilesPage() {
             input: input as UpdateProfileInput,
           });
         }}
+      />
+
+      <DeployProfileModal
+        profile={deploying}
+        onClose={() => setDeploying(null)}
       />
     </Stack>
   );
@@ -291,11 +299,13 @@ function ProfileCard({
   bindingCount,
   onEdit,
   onDelete,
+  onDeploy,
 }: {
   profile: Profile;
   bindingCount: number;
   onEdit: () => void;
   onDelete: () => void;
+  onDeploy: () => void;
 }) {
   const color = PROTOCOL_COLORS[profile.protocol] ?? 'gray';
   return (
@@ -332,6 +342,9 @@ function ProfileCard({
             </ActionIcon>
           </Menu.Target>
           <Menu.Dropdown>
+            <Menu.Item leftSection={<IconRocket size={14} />} onClick={onDeploy}>
+              Развернуть на нодах
+            </Menu.Item>
             <Menu.Item leftSection={<IconEdit size={14} />} onClick={onEdit}>
               Редактировать
             </Menu.Item>
@@ -362,10 +375,10 @@ function ProfileCard({
         variant="light"
         color={color}
         fullWidth
-        leftSection={<IconLink size={14} />}
-        onClick={onEdit}
+        leftSection={<IconRocket size={14} />}
+        onClick={onDeploy}
       >
-        Изменить
+        Развернуть на нодах
       </Button>
     </Card>
   );
