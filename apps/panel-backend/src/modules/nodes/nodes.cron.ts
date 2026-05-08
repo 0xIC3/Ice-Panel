@@ -128,9 +128,13 @@ async function checkOne(node: {
     if (res.status === 'ok') {
       return { status: 'online', message: null };
     }
-    // node-agent itself is up but reports degraded (one of the cores down)
+    // node-agent reachable + healthy, but one of the protocol sub-cores
+    // isn't running. Normal for a fresh node with no Profile+Binding yet
+    // (xray/ss/etc have no config → not started). Keep status online,
+    // surface detail in lastStatusMessage; it auto-clears once a binding
+    // lands and the core boots.
     return {
-      status: 'unreachable',
+      status: 'online',
       message: `degraded: ${JSON.stringify(res).slice(0, 160)}`,
     };
   } catch (err) {
