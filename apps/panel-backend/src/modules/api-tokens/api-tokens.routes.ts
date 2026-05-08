@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../auth/auth.hook.js';
 import { PermissiveUuid } from '../../lib/uuid-schema.js';
@@ -11,8 +11,30 @@ const CreateInput = z.object({
 
 const IdParam = z.object({ id: PermissiveUuid });
 
+/**
+ * API-tokens management endpoints are admin-JWT-only — a leaked API token
+ * shouldn't be able to mint or revoke other tokens (privilege escalation).
+ * The session must come from a real admin login.
+ *
+ * Async hook signature is REQUIRED — a sync `function` without a `done`
+ * callback parameter hangs the request lifecycle in Fastify v5 (Fastify
+ * waits forever for the hook to signal completion).
+ */
+async function blockApiTokenAccess(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  if (request.apiToken) {
+    return reply.code(403).send({
+      error: 'FORBIDDEN',
+      message: 'API tokens cannot manage other API tokens — log in as admin',
+    });
+  }
+}
+
 export async function apiTokensRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('onRequest', requireAuth);
+  app.addHook('onRequest', blockApiTokenAccess);
 
   app.get('/api/api-tokens', async (_req, reply) => {
     return reply.send({ tokens: await svc.listTokens() });

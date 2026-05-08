@@ -1,5 +1,7 @@
+import { createHash } from 'node:crypto';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { findAdminById } from '../admin/admin.service.js';
+import { prisma } from '../../prisma.js';
 
 interface JwtSignPayload {
   sub: string;
@@ -17,6 +19,14 @@ declare module 'fastify' {
       id: string;
       role: string;
     };
+    /** Set when the request is authenticated via API token (icp_*) instead
+     *  of an admin JWT. Routes that need to distinguish (e.g. block API
+     *  tokens from managing other API tokens) check this. */
+    apiToken?: {
+      id: string;
+      name: string;
+      scopes: string[];
+    };
   }
 }
 
@@ -27,10 +37,83 @@ declare module '@fastify/jwt' {
   }
 }
 
+const API_TOKEN_PREFIX = 'icp_';
+
+function hashApiToken(plaintext: string): string {
+  return createHash('sha256').update(plaintext).digest('hex');
+}
+
+/**
+ * Bearer-token alternative to JWT. When the Authorization header carries an
+ * `icp_*` token (issued via /api/api-tokens), look it up by SHA-256 hash and,
+ * if found, treat the request as authenticated with admin-level access.
+ *
+ * Trade-offs vs JWT:
+ *   - Stateless? No — every request hits api_tokens. Acceptable: the table
+ *     is tiny (admin-issued, dozens of rows max). Could memoize in Redis
+ *     later if it becomes a hotspot.
+ *   - Revocation? Instant via DELETE /api/api-tokens/:id. JWT can't do that
+ *     short of rotating the signing secret.
+ *   - Expiry? Tokens don't expire today — admin manually revokes when no
+ *     longer needed.
+ */
+async function tryApiToken(
+  request: FastifyRequest,
+): Promise<
+  | {
+      adminId: string;
+      role: string;
+      tokenId: string;
+      tokenName: string;
+      scopes: string[];
+    }
+  | null
+> {
+  const auth = request.headers.authorization;
+  if (!auth) return null;
+  const matched = /^Bearer\s+(icp_[A-Za-z0-9_-]+)$/.exec(auth);
+  if (!matched) return null;
+  const plaintext = matched[1]!;
+
+  const tokenHash = hashApiToken(plaintext);
+  const row = await prisma.apiToken.findUnique({ where: { tokenHash } });
+  if (!row) return null;
+
+  // Best-effort lastUsedAt — fire-and-forget so the request response time
+  // doesn't pay for the audit write. Failure is non-critical.
+  void prisma.apiToken
+    .update({ where: { id: row.id }, data: { lastUsedAt: new Date() } })
+    .catch(() => undefined);
+
+  const scopes = Array.isArray(row.scopes) ? (row.scopes as string[]) : [];
+  // API tokens act with admin role today (no scope-enforcement yet — that's
+  // a follow-up once we have call-sites that distinguish read vs write).
+  return {
+    adminId: row.id,
+    role: 'admin',
+    tokenId: row.id,
+    tokenName: row.name,
+    scopes,
+  };
+}
+
 export async function requireAuth(
   request: FastifyRequest,
   reply: FastifyReply,
 ): Promise<void> {
+  // Try API-token path first — when the header is unmistakably
+  // `Bearer icp_*` we skip jwtVerify entirely.
+  const apiAuth = await tryApiToken(request);
+  if (apiAuth) {
+    request.admin = { id: apiAuth.adminId, role: apiAuth.role };
+    request.apiToken = {
+      id: apiAuth.tokenId,
+      name: apiAuth.tokenName,
+      scopes: apiAuth.scopes,
+    };
+    return;
+  }
+
   try {
     await request.jwtVerify();
   } catch {
@@ -47,3 +130,6 @@ export async function requireAuth(
 
   request.admin = { id: admin.id, role: admin.role };
 }
+
+// Re-export for tests / future call-sites.
+export { API_TOKEN_PREFIX };
