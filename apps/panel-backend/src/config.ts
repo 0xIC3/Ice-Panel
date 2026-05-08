@@ -38,7 +38,11 @@ const ConfigSchema = z.object({
   // Public-facing base URL of this panel (e.g. https://panel.example.com).
   // Used to generate bootstrap commands and subscription links.
   // When unset, the URL is derived from the incoming request headers.
-  PUBLIC_URL: z.url().optional(),
+  PUBLIC_URL: z
+    .string()
+    .optional()
+    .transform((v) => (v === '' ? undefined : v))
+    .pipe(z.url().optional()),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
