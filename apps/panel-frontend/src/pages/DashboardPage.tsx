@@ -287,7 +287,7 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
                     <Table.Th>CPU</Table.Th>
                     <Table.Th>RAM</Table.Th>
                     <Table.Th>Диск</Table.Th>
-                    <Table.Th ta="right">Inbounds</Table.Th>
+                    <Table.Th ta="right">Профили</Table.Th>
                     <Table.Th ta="right">Сегодня</Table.Th>
                   </Table.Tr>
                 </Table.Thead>
