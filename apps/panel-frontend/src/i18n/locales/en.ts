@@ -47,7 +47,7 @@ export default {
     title: 'Nodes',
     countOnline: '{{count}} nodes · {{online}} online',
     create: 'Create node',
-    edit: 'Edit node',
+    editTitle: 'Edit node',
     layoutCards: 'Cards',
     layoutCompact: 'Compact',
     empty: 'No nodes yet. Click "Create node".',

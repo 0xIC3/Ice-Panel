@@ -49,7 +49,7 @@ export default {
     title: 'Ноды',
     countOnline: '{{count}} нод · {{online}} онлайн',
     create: 'Создать ноду',
-    edit: 'Редактировать ноду',
+    editTitle: 'Редактировать ноду',
     layoutCards: 'Карточки',
     layoutCompact: 'Список',
     empty: 'Нод ещё нет. Жми «Создать ноду».',
