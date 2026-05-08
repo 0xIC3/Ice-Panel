@@ -18,7 +18,6 @@ import { NodeTransport, NodeRequestError } from '../nodes/nodes.transport.js';
  * the cron loop on one slow/down node.
  */
 export async function pollNodeStats(): Promise<{ ok: number; failed: number }> {
-  console.log('[cron] node-stats-poll TICK');
   const nodes = await prisma.node.findMany({
     where: {
       deletedAt: null,
