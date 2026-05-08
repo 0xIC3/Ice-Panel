@@ -27,11 +27,26 @@ import { countryFlag } from '../lib/countries';
 
 type DashboardNode = DashboardOverview['nodes'][number];
 
+/**
+ * Card props are a relaxed shape — only the fields the card actually
+ * renders. NodesPage feeds either the full DashboardNode (when overview
+ * has caught up) or a synthetic stub (when /api/dashboard hasn't returned
+ * yet), so we don't insist on `address` / `protocol` here.
+ */
+interface CardNode {
+  id: string;
+  name: string;
+  status: string;
+  countryCode: string | null;
+  lastStatusChange: string | null;
+  inboundCount: number;
+  todayBytes: number;
+  metrics: DashboardNode['metrics'];
+  rawId: string;
+}
+
 interface Props {
-  node: DashboardNode & {
-    /** From the canonical /api/nodes payload — used for action handlers. */
-    rawId: string;
-  };
+  node: CardNode;
   onEdit: () => void;
   onDelete: () => void;
   onRefreshBootstrap: () => void;
@@ -162,7 +177,7 @@ export function NodeCard({
             <MetricBar
               icon={<IconCpu size={12} />}
               label="CPU"
-              value={m.cpu.percent}
+              value={m.cpu.usagePercent}
               tooltip={`${m.cpu.cores} ядер · LA ${m.cpu.loadAvg1.toFixed(2)} / ${m.cpu.loadAvg5.toFixed(2)} / ${m.cpu.loadAvg15.toFixed(2)}`}
             />
             <MetricBar
