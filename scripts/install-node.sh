@@ -313,6 +313,12 @@ if $NEED_GO; then
 fi
 export PATH=/usr/local/go/bin:$PATH
 
+# Persist `go` in PATH for future SSH sessions — symlink into /usr/local/bin
+# (which is on every distro's default PATH) so admins can rebuild the agent
+# manually after a `git pull` without having to re-run install-node.sh.
+ln -sf /usr/local/go/bin/go /usr/local/bin/go
+ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
+
 # ───── 4. Source ─────
 if [[ ! -d "$ICE_NODE_DIR/.git" ]]; then
   log "Cloning $ICE_NODE_REPO@$ICE_NODE_REF"
