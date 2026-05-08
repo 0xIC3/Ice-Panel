@@ -4,7 +4,7 @@ What's actually validated by real traffic vs what's scaffolded. **Updated after 
 
 > **Companion docs:** [ROADMAP.md](./ROADMAP.md) tracks slices; [TESTING.md](./TESTING.md) carries per-slice checklists; **this file** answers "what can I sell to a paying user today, vs what's still a science experiment".
 
-> **Last updated:** 2026-05-08 (after slice 27 — Profile + ProfileNodeBinding refactor + slice 27a install-node parity for shadowsocks/mtproto/mieru + Settings page with API tokens; per-protocol verification status unchanged from VPS cycle #2).
+> **Last updated:** 2026-05-08 (after slice 27b — DeployProfileModal UI + healthcheck-degraded semantics fix + install-panel.sh PUBLIC_URL fix). VPS cycle #3 in progress: panel installed on fresh `ice-panel-test 89.169.32.239`, mTLS verified end-to-end against `ice-xray-test`, Bearer `icp_*` auth verified on prod (200 + 403 privilege escalation). Per-protocol verification status unchanged from cycle #2 — Profile→Binding deployment of VLESS+REALITY pending.
 
 ## ✅ Confirmed by real traffic
 
