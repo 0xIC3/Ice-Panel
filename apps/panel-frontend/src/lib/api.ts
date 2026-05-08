@@ -471,7 +471,7 @@ export async function generateInboundKeypair(
   protocol: 'xray' | 'amneziawg' = 'amneziawg',
 ): Promise<KeypairResponse> {
   const { data } = await api.post<KeypairResponse>(
-    `/api/inbounds/generate-keypair?protocol=${protocol}`,
+    `/api/profiles/generate-keypair?protocol=${protocol}`,
   );
   return data;
 }

@@ -1,5 +1,10 @@
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import { requireAuth } from '../auth/auth.hook.js';
+import {
+  generateWireguardKeyPair,
+  generateRealityKeyPair,
+} from '../../lib/credentials.js';
 import {
   BindingIdParamSchema,
   CreateBindingSchema,
@@ -12,8 +17,21 @@ import {
 } from './profiles.schemas.js';
 import * as svc from './profiles.service.js';
 
+const KeypairQuery = z.object({
+  protocol: z.enum(['xray', 'amneziawg']).default('amneziawg'),
+});
+
 export async function profilesRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('onRequest', requireAuth);
+
+  // curve25519 keypair for REALITY (xray) or AmneziaWG. Same crypto, the
+  // alphabets differ — REALITY needs base64url, AWG needs standard base64.
+  app.post('/api/profiles/generate-keypair', async (req, reply) => {
+    const { protocol } = KeypairQuery.parse(req.query);
+    const pair =
+      protocol === 'xray' ? generateRealityKeyPair() : generateWireguardKeyPair();
+    return reply.send(pair);
+  });
 
   // ───── Profiles ─────
 
