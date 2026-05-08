@@ -240,7 +240,16 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
   const form = useForm<FormValues>({
     initialValues: defaults(profile),
     validate: {
-      name: (v) => (v.length < 1 ? 'Required' : null),
+      name: (v) => {
+        if (v.length < 1) return 'Required';
+        // Mirror backend Zod regex — Letters, digits, dot, underscore, hyphen
+        // (no spaces, no Cyrillic). Catch the violation client-side so the
+        // admin doesn't ride a 400 round-trip to find out.
+        if (!/^[a-zA-Z0-9._-]+$/.test(v)) {
+          return 'Только латиница, цифры, точка, _ и -. Без пробелов и кириллицы.';
+        }
+        return null;
+      },
     },
   });
 
