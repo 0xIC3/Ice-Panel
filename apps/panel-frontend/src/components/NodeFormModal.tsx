@@ -177,33 +177,33 @@ export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Prop
 
         {step === 0 && (
           <Stack>
-            <Group grow align="flex-start">
+            <Group grow align="flex-end">
               <TextInput
                 label="Имя"
-                description="уникальное в рамках панели"
+                description="уникальное"
                 placeholder="eu-1"
                 required
                 {...form.getInputProps('name')}
               />
               <Select
                 label="Протокол"
-                description="основной core ноды (install-node ставит этот бинарь)"
+                description="основной core ноды"
                 data={PROTOCOL_OPTIONS}
                 allowDeselect={false}
                 {...form.getInputProps('protocol')}
               />
             </Group>
             <TextInput
-              label="Адрес (host:port для panel-mTLS)"
-              description="control-plane endpoint. Hysteria/xray protocol-port — отдельно."
+              label="Адрес"
+              description="host:port для panel-mTLS"
               placeholder="n1.example.com:8443"
               required
               {...form.getInputProps('address')}
             />
-            <Group grow align="flex-start">
+            <Group grow align="flex-end">
               <Select
                 label="Страна"
-                description="ISO 3166-1 — для GeoIP routing и UI badge"
+                description="ISO 3166-1"
                 placeholder="Не указана"
                 data={COUNTRY_OPTIONS}
                 searchable
@@ -213,7 +213,7 @@ export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Prop
               />
               <NumberInput
                 label="Consumption multiplier"
-                description="множитель учёта трафика (1 = норма)"
+                description="1 = норма"
                 min={0.1}
                 max={10}
                 step={0.1}
