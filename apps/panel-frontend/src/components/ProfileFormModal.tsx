@@ -528,25 +528,37 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
 
           {form.values.protocol === 'xray' && (
             <Stack>
-              <TextInput
-                label="REALITY dest (target site)"
-                description="host:port — fronting decoy"
-                placeholder="www.cloudflare.com:443"
-                required
-                {...form.getInputProps('xrayDest')}
-              />
-              <TextInput
-                label="REALITY serverNames (через запятую)"
-                placeholder="www.cloudflare.com, cdn.cloudflare.com"
-                required
-                {...form.getInputProps('xrayServerNames')}
-              />
-              <TextInput
-                label="REALITY shortIds (через запятую, hex)"
-                placeholder="abc123, deadbeef"
-                required
-                {...form.getInputProps('xrayShortIds')}
-              />
+              <Group grow align="flex-start">
+                <TextInput
+                  label="REALITY dest (target site)"
+                  description="host:port — fronting decoy"
+                  placeholder="www.cloudflare.com:443"
+                  required
+                  {...form.getInputProps('xrayDest')}
+                />
+                <TextInput
+                  label="REALITY serverNames"
+                  description="через запятую"
+                  placeholder="www.cloudflare.com, cdn.cloudflare.com"
+                  required
+                  {...form.getInputProps('xrayServerNames')}
+                />
+              </Group>
+              <Group grow align="flex-start">
+                <TextInput
+                  label="REALITY shortIds"
+                  description="hex, через запятую"
+                  placeholder="abc123, deadbeef"
+                  required
+                  {...form.getInputProps('xrayShortIds')}
+                />
+                <Select
+                  label="Fingerprint"
+                  description="TLS fingerprint клиента"
+                  data={['chrome', 'firefox', 'safari', 'ios', 'android', 'edge', 'random']}
+                  {...form.getInputProps('xrayFingerprint')}
+                />
+              </Group>
               <Group align="end" wrap="nowrap" gap="xs">
                 <PasswordInput
                   flex={1}
@@ -565,21 +577,28 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
                   Сгенерировать
                 </Button>
               </Group>
-              <TextInput label="REALITY public key" required {...form.getInputProps('xrayPublicKey')} />
-              <Select
-                label="Subprotocol"
-                description="VLESS — каноничный, поддерживает Vision flow. Trojan — пароль вместо UUID, без Vision."
-                data={[
-                  { value: 'vless', label: 'VLESS (canonical, supports Vision flow)' },
-                  { value: 'trojan', label: 'Trojan (password auth, no Vision)' },
-                ]}
-                allowDeselect={false}
-                {...form.getInputProps('xraySubprotocol')}
-              />
-              <Group grow>
+              <Group grow align="flex-start">
+                <TextInput
+                  label="REALITY public key"
+                  description="auto-derived из private"
+                  required
+                  {...form.getInputProps('xrayPublicKey')}
+                />
+                <Select
+                  label="Subprotocol"
+                  description="VLESS — Vision-ready. Trojan — password auth."
+                  data={[
+                    { value: 'vless', label: 'VLESS (canonical)' },
+                    { value: 'trojan', label: 'Trojan (no Vision)' },
+                  ]}
+                  allowDeselect={false}
+                  {...form.getInputProps('xraySubprotocol')}
+                />
+              </Group>
+              <Group grow align="flex-start">
                 <Select
                   label="Flow"
-                  description="Vision работает только с raw (TCP). Для xhttp/ws/grpc/kcp/httpupgrade ставь «none»"
+                  description="Vision работает только с raw"
                   data={[
                     { value: 'xtls-rprx-vision', label: 'xtls-rprx-vision' },
                     { value: 'xtls-rprx-vision-udp443', label: 'xtls-rprx-vision-udp443' },
@@ -588,29 +607,28 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
                   {...form.getInputProps('xrayFlow')}
                 />
                 <Select
-                  label="Fingerprint"
-                  data={['chrome', 'firefox', 'safari', 'ios', 'android', 'edge', 'random']}
-                  {...form.getInputProps('xrayFingerprint')}
+                  label="Network (transport)"
+                  description="REALITY: только raw / xhttp / grpc"
+                  data={[
+                    { value: 'raw', label: 'raw (TCP) — Vision-compatible' },
+                    { value: 'xhttp', label: 'xhttp (HTTP/2 chunked)' },
+                    { value: 'grpc', label: 'gRPC' },
+                  ]}
+                  allowDeselect={false}
+                  {...form.getInputProps('xrayNetwork')}
                 />
               </Group>
-              <Select
-                label="Network (transport)"
-                description="REALITY поддерживает только raw / xhttp / grpc. ws/httpupgrade/kcp xray отвергает на уровне config-load."
-                data={[
-                  { value: 'raw', label: 'raw (TCP, canonical) — supports Vision' },
-                  { value: 'xhttp', label: 'xhttp (HTTP/2 chunked)' },
-                  { value: 'grpc', label: 'gRPC' },
-                ]}
-                allowDeselect={false}
-                {...form.getInputProps('xrayNetwork')}
-              />
-              {(form.values.xrayNetwork === 'ws' ||
-                form.values.xrayNetwork === 'xhttp' ||
-                form.values.xrayNetwork === 'httpupgrade') && (
-                <Group grow>
-                  <TextInput label="Path" placeholder="/" {...form.getInputProps('xrayPath')} />
+              {form.values.xrayNetwork === 'xhttp' && (
+                <Group grow align="flex-start">
+                  <TextInput
+                    label="Path"
+                    description="HTTP path для xhttp transport"
+                    placeholder="/api/v1/stream"
+                    {...form.getInputProps('xrayPath')}
+                  />
                   <TextInput
                     label="Host header"
+                    description="опционально, по умолчанию = SNI"
                     placeholder="cdn.example.com"
                     {...form.getInputProps('xrayHostHeader')}
                   />
@@ -619,6 +637,7 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
               {form.values.xrayNetwork === 'grpc' && (
                 <TextInput
                   label="gRPC serviceName"
+                  description="Имя gRPC сервиса"
                   placeholder="GunService"
                   required
                   {...form.getInputProps('xrayServiceName')}
