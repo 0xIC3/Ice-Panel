@@ -171,6 +171,7 @@ export function DeployProfileModal({ profile, onClose }: Props) {
               <NodeRow
                 key={node.id}
                 node={node}
+                profileProtocol={profile?.protocol ?? null}
                 checked={selected.has(node.id)}
                 onToggle={() => toggle(node.id)}
               />
@@ -198,21 +199,35 @@ export function DeployProfileModal({ profile, onClose }: Props) {
 
 function NodeRow({
   node,
+  profileProtocol,
   checked,
   onToggle,
 }: {
   node: PanelNode;
+  profileProtocol: string | null;
   checked: boolean;
   onToggle: () => void;
 }) {
   const statusColor =
     node.status === 'online' ? 'teal' : node.status === 'disabled' ? 'gray' : 'red';
+  // Compatibility hint: install-node.sh installs binaries for ONE protocol
+  // (chosen at provisioning time). Cross-protocol binding works at the
+  // panel/agent level but the agent will fall back to "callback-only mode"
+  // because the protocol-server binary isn't on disk → subscription URL
+  // points at a non-listening port.
+  const protocolMismatch =
+    profileProtocol !== null && node.protocol !== profileProtocol;
   return (
     <Paper
       withBorder
       p="sm"
       radius="sm"
-      style={{ cursor: 'pointer' }}
+      style={{
+        cursor: 'pointer',
+        borderColor: protocolMismatch
+          ? 'var(--mantine-color-yellow-6)'
+          : undefined,
+      }}
       onClick={onToggle}
     >
       <Group justify="space-between" wrap="nowrap">
@@ -234,6 +249,24 @@ function NodeRow({
               {node.countryCode}
             </Badge>
           )}
+          <Tooltip
+            label={
+              protocolMismatch
+                ? `Нода провижена под "${node.protocol}" — бинарь "${profileProtocol}" не установлен. Binding создастся, но клиенты не подключатся пока не запустишь install-node заново с --protocol ${profileProtocol}.`
+                : `Нода поддерживает "${node.protocol}"`
+            }
+            multiline
+            w={280}
+          >
+            <Badge
+              variant={protocolMismatch ? 'filled' : 'light'}
+              color={protocolMismatch ? 'yellow' : 'cyan'}
+              size="sm"
+              tt="uppercase"
+            >
+              {protocolMismatch ? `⚠ ${node.protocol}` : node.protocol}
+            </Badge>
+          </Tooltip>
           <Tooltip label={node.lastStatusMessage ?? node.status}>
             <Badge variant="dot" color={statusColor} size="sm">
               {node.status}
