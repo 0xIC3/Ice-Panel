@@ -99,7 +99,13 @@ function defaultValues(user: User | null): FormValues {
     email: user?.email ?? '',
     telegramId: user?.telegramId ?? '',
     hwidDeviceLimit: user?.hwidDeviceLimit ?? '',
-    groupIds: user?.groupIds ?? [ALL_SQUAD_ID],
+    // Empty by default — backend falls back to ALL squad if no squads
+    // picked. Pre-checking ALL here doubles up: admin checks Basic too →
+    // form sends [ALL, Basic] → user ends up in BOTH squads, which inflates
+    // dashboard per-protocol counters and surprises admins ("я ж только в
+    // Basic положил"). Leave it empty — admin explicitly picks, otherwise
+    // server auto-falls back to ALL.
+    groupIds: user?.groupIds ?? [],
   };
 }
 
@@ -135,9 +141,12 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
   }
 
   async function handleSubmit(values: FormValues) {
-    const groupIds = values.groupIds.includes(ALL_SQUAD_ID)
-      ? values.groupIds
-      : [ALL_SQUAD_ID, ...values.groupIds];
+    // Send what admin picked, no automatic ALL squad injection. Backend
+    // falls back to ALL only when groupIds is empty (so users without an
+    // explicit squad still get a subscription). Earlier code force-merged
+    // ALL into every submit, which doubled users into multiple squads and
+    // broke the per-squad-ACL invariant.
+    const groupIds = values.groupIds;
 
     if (isEdit) {
       const input: UpdateUserInput = {

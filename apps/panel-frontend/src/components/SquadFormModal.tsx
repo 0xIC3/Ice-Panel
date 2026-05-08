@@ -418,41 +418,51 @@ function ProfileRow({
   disabled?: boolean;
   onToggle: () => void;
 }) {
+  // Plain Group wrapped in a borderless container — nesting Paper inside
+  // Card creates overflow clipping in Mantine 7.x because both wrap content
+  // in `position: relative` boxes and the inner Stack ends up taller than
+  // the parent Card thinks it is. Flat row keeps the same UX without the
+  // visual artifacts.
   return (
-    <Paper
-      withBorder
-      p="xs"
-      radius="sm"
+    <Group
+      justify="space-between"
+      wrap="nowrap"
       onClick={disabled ? undefined : onToggle}
-      style={{ cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1 }}
+      px="xs"
+      py={6}
+      style={{
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.6 : 1,
+        borderRadius: 6,
+        background: checked ? 'var(--mantine-color-dark-6)' : 'transparent',
+        transition: 'background 0.1s',
+      }}
     >
-      <Group justify="space-between" wrap="nowrap">
-        <Group gap="sm" wrap="nowrap" style={{ minWidth: 0 }}>
-          <Checkbox checked={checked} disabled={disabled} readOnly />
-          <Stack gap={0} style={{ minWidth: 0 }}>
-            <Group gap={6} wrap="nowrap">
-              <Text size="sm" fw={500} truncate>
-                {profile.name}
-              </Text>
-              {!profile.enabled && (
-                <Badge variant="default" color="gray" size="xs">
-                  off
-                </Badge>
-              )}
-            </Group>
-            {profile.description && (
-              <Text size="xs" c="dimmed" lineClamp={1}>
-                {profile.description}
-              </Text>
+      <Group gap="sm" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
+        <Checkbox checked={checked} disabled={disabled} readOnly tabIndex={-1} />
+        <Stack gap={0} style={{ minWidth: 0, flex: 1 }}>
+          <Group gap={6} wrap="nowrap">
+            <Text size="sm" fw={500} truncate>
+              {profile.name}
+            </Text>
+            {!profile.enabled && (
+              <Badge variant="default" color="gray" size="xs">
+                off
+              </Badge>
             )}
-          </Stack>
-        </Group>
-        <Tooltip label="Развёрнут на нодах">
-          <Badge variant="outline" color="gray" size="sm">
-            {bindingCount}
-          </Badge>
-        </Tooltip>
+          </Group>
+          {profile.description && (
+            <Text size="xs" c="dimmed" lineClamp={1}>
+              {profile.description}
+            </Text>
+          )}
+        </Stack>
       </Group>
-    </Paper>
+      <Tooltip label="Развёрнут на нодах">
+        <Badge variant="outline" color="gray" size="sm">
+          {bindingCount}
+        </Badge>
+      </Tooltip>
+    </Group>
   );
 }
