@@ -158,7 +158,11 @@ export async function applyInboundsForNode(nodeId: string): Promise<void> {
         : err instanceof Error
         ? err.message
         : String(err);
-    console.log(`[worker:inbound-sync] applyInbounds ${node.name} FAILED: ${detail}`);
+    const cause = err instanceof Error && err.cause ? err.cause : null;
+    console.log(
+      `[worker:inbound-sync] applyInbounds ${node.name} FAILED: ${detail}`,
+      cause ? { cause } : '',
+    );
     throw err;
   }
 
