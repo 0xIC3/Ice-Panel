@@ -285,16 +285,34 @@ function ApiTokensCard() {
                       : ' · ни разу не использовался'}
                   </Text>
                 </Stack>
-                <Tooltip label="Удалить">
-                  <ActionIcon
-                    variant="subtle"
-                    color="red"
-                    size="sm"
-                    onClick={() => handleDelete(t)}
-                  >
-                    <IconTrash size={14} />
-                  </ActionIcon>
-                </Tooltip>
+                <Group gap={4} wrap="nowrap">
+                  <Tooltip label="Скопировать ID">
+                    <ActionIcon
+                      variant="subtle"
+                      size="sm"
+                      onClick={async () => {
+                        await copyToClipboard(t.id);
+                        notifications.show({
+                          color: 'teal',
+                          message: 'ID скопирован',
+                          autoClose: 1500,
+                        });
+                      }}
+                    >
+                      <IconCopy size={14} />
+                    </ActionIcon>
+                  </Tooltip>
+                  <Tooltip label="Удалить">
+                    <ActionIcon
+                      variant="subtle"
+                      color="red"
+                      size="sm"
+                      onClick={() => handleDelete(t)}
+                    >
+                      <IconTrash size={14} />
+                    </ActionIcon>
+                  </Tooltip>
+                </Group>
               </Group>
             </Paper>
           ))}
