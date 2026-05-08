@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   Alert,
   Badge,
+  Box,
   Button,
   Card,
   Checkbox,
@@ -357,12 +358,16 @@ function ProtocolGroup({
   const color = PROTOCOL_COLORS[protocol] ?? 'gray';
 
   return (
-    <Card
-      withBorder
-      padding="sm"
-      radius="md"
+    // Plain Box with border instead of Card — Card's internal grid + the
+    // borderLeft style override makes content overflow the bottom edge by
+    // ~3-4px in Mantine 7.x. Box gives full control over padding.
+    <Box
       style={{
+        border: '1px solid var(--mantine-color-dark-4)',
         borderLeft: `3px solid var(--mantine-color-${color}-6)`,
+        borderRadius: 'var(--mantine-radius-md)',
+        padding: 'var(--mantine-spacing-sm)',
+        background: 'var(--mantine-color-dark-7)',
       }}
     >
       <Group gap="sm" wrap="nowrap" mb="sm">
@@ -389,7 +394,7 @@ function ProtocolGroup({
         </Tooltip>
       </Group>
 
-      <Stack gap={6}>
+      <Stack gap={4}>
         {profiles.map((p) => (
           <ProfileRow
             key={p.id}
@@ -401,7 +406,7 @@ function ProtocolGroup({
           />
         ))}
       </Stack>
-    </Card>
+    </Box>
   );
 }
 
@@ -428,14 +433,17 @@ function ProfileRow({
       justify="space-between"
       wrap="nowrap"
       onClick={disabled ? undefined : onToggle}
-      px="xs"
-      py={6}
+      px="sm"
+      py={8}
       style={{
         cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.6 : 1,
         borderRadius: 6,
-        background: checked ? 'var(--mantine-color-dark-6)' : 'transparent',
+        background: checked
+          ? 'var(--mantine-color-dark-5)'
+          : 'var(--mantine-color-dark-6)',
         transition: 'background 0.1s',
+        minHeight: 38,
       }}
     >
       <Group gap="sm" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
