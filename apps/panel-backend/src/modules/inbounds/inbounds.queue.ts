@@ -26,7 +26,18 @@ export const inboundSyncQueue = new Queue<ApplyNodeInboundsJobData>(QUEUE_NAME, 
     attempts: 3,
     backoff: { type: 'exponential', delay: 1000 },
     removeOnComplete: true,
-    removeOnFail: { age: 86400 },
+    // Coalescing uses `jobId: apply-<nodeId>` so duplicate enqueues collapse
+    // into one push. BUT BullMQ's deduplication treats a failed job in the
+    // failed-set as still "owning" the jobId — new enqueues become silent
+    // no-ops until the failed job is reaped. With `age: 86400` that's a
+    // 24-hour deadlock per node after a single transient failure (panel
+    // rebuilds, network blips, mTLS hiccups during cert rotation).
+    //
+    // Fix: drop failed jobs immediately. Operators see retries via the
+    // `[worker:inbound-sync] applyInbounds X FAILED: ...` console.log
+    // before the final retry; long-term failures will re-enqueue on the
+    // next event (binding/profile change), which is the right behaviour.
+    removeOnFail: true,
   },
 });
 
