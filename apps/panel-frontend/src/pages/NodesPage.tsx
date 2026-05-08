@@ -180,6 +180,26 @@ export function NodesPage() {
       }),
   });
 
+  function handleRefreshBootstrap(node: Node) {
+    modals.openConfirmModal({
+      title: `Перевыпустить bootstrap для «${node.name}»?`,
+      children: (
+        <Text size="sm">
+          Текущий bootstrap-токен и mTLS-сертификат ноды станут невалидными. Если
+          агент уже запущен с прежним сертом — он продолжит работать (мы не отзываем
+          ничего на действующих нодах), но свежий токен пригодится для переустановки
+          install-node.sh, или если ты сменил <code>address</code> и нужен новый
+          DNS-SAN. Действие безопасное на работающей ноде, но если ты переустановишь
+          агент со свежим payload'ом — потребуется retrigger applyInbounds через
+          toggle какого-нибудь профиля.
+        </Text>
+      ),
+      labels: { confirm: 'Перевыпустить', cancel: 'Отмена' },
+      confirmProps: { color: 'blue' },
+      onConfirm: () => refreshBootstrapMutation.mutate(node),
+    });
+  }
+
   function handleDelete(node: Node) {
     modals.openConfirmModal({
       title: `Delete node "${node.name}"?`,
@@ -277,7 +297,7 @@ export function NodesPage() {
                 node={{ ...dashNode, rawId: n.id }}
                 onEdit={() => setEditing(n)}
                 onDelete={() => handleDelete(n)}
-                onRefreshBootstrap={() => refreshBootstrapMutation.mutate(n)}
+                onRefreshBootstrap={() => handleRefreshBootstrap(n)}
                 refreshLoading={
                   refreshBootstrapMutation.isPending &&
                   refreshBootstrapMutation.variables?.id === n.id
@@ -340,7 +360,7 @@ export function NodesPage() {
                             refreshBootstrapMutation.isPending &&
                             refreshBootstrapMutation.variables?.id === n.id
                           }
-                          onClick={() => refreshBootstrapMutation.mutate(n)}
+                          onClick={() => handleRefreshBootstrap(n)}
                         >
                           <IconKey size={16} />
                         </ActionIcon>
@@ -426,7 +446,7 @@ export function NodesPage() {
         }}
         onRefreshBootstrap={() => {
           if (!editing) return;
-          refreshBootstrapMutation.mutate(editing);
+          handleRefreshBootstrap(editing);
         }}
       />
 
