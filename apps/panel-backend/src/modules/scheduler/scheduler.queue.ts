@@ -7,6 +7,7 @@ import {
   findExceededTrafficUsers,
 } from '../users/users.cron.js';
 import { pollNodeStatuses, pollNodeMetrics } from '../nodes/nodes.cron.js';
+import { pollNodeStats } from '../stats/stats.cron.js';
 
 // ───── Queue ─────
 
@@ -37,6 +38,7 @@ const CRON_JOBS: CronJobSpec[] = [
   { name: 'review-find-exceeded-traffic',   pattern: '*/45 * * * * *' }, // каждые 45 секунд
   { name: 'node-healthcheck-poll',          pattern: '*/30 * * * * *' }, // каждые 30 секунд
   { name: 'node-metrics-poll',              pattern: '*/15 * * * * *' }, // каждые 15 секунд
+  { name: 'node-stats-poll',                pattern: '*/30 * * * * *' }, // каждые 30 секунд — per-user/per-node traffic
 ];
 
 // ───── Регистрация (вызывается один раз при бутстрапе) ─────
@@ -106,6 +108,13 @@ export function startCronTasksWorker(): Worker {
           const { failed } = await pollNodeMetrics();
           if (failed > 0) {
             console.log(`[cron] node-metrics-poll — ${failed} nodes failed to report metrics`);
+          }
+          break;
+        }
+        case 'node-stats-poll': {
+          const { failed } = await pollNodeStats();
+          if (failed > 0) {
+            console.log(`[cron] node-stats-poll — ${failed} nodes failed`);
           }
           break;
         }
