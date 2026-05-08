@@ -388,6 +388,11 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
             />
             <Select
               label="Протокол"
+              description={
+                isEdit
+                  ? 'Immutable после создания — bindings на нодах привязаны к адаптеру. Создай новый профиль если нужен другой протокол.'
+                  : undefined
+              }
               data={[
                 { value: 'hysteria', label: 'Hysteria 2' },
                 { value: 'xray', label: 'Xray (VLESS / Trojan + REALITY)' },
