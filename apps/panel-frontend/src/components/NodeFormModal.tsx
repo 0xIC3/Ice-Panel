@@ -81,15 +81,22 @@ export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Prop
 
   const form = useForm<FormValues>({
     initialValues: defaults(node),
+    validateInputOnBlur: true,
     validate: {
-      name: (v) =>
-        v.length < 1 || !/^[a-zA-Z0-9._-]+$/.test(v)
-          ? 'Letters, digits, dot, underscore, hyphen only'
-          : null,
-      address: (v) =>
-        !/^[a-zA-Z0-9.-]+(:\d{1,5})?$/.test(v)
-          ? 'host or host:port (no scheme)'
-          : null,
+      name: (v) => {
+        const t = v.trim();
+        if (t.length === 0) return 'Имя обязательно';
+        if (!/^[a-zA-Z0-9._-]+$/.test(t))
+          return 'Только латиница, цифры, точка, _ и -';
+        return null;
+      },
+      address: (v) => {
+        const t = v.trim();
+        if (t.length === 0) return 'Адрес обязателен';
+        if (!/^[a-zA-Z0-9.-]+(:\d{1,5})?$/.test(t))
+          return 'host или host:port (без http://)';
+        return null;
+      },
     },
   });
 
@@ -153,8 +160,14 @@ export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Prop
 
   function nextStep() {
     if (step === 0) {
-      const v = form.validate();
-      if (v.hasErrors) return;
+      // Belt-and-braces: validate() in Mantine 7 runs validators AND sets
+      // form.errors so each input renders its own red message. We block
+      // advancement on any error AND highlight the fields visually so the
+      // user sees what's wrong.
+      const result = form.validate();
+      if (result.hasErrors) {
+        return;
+      }
       setStep(1);
     }
   }
