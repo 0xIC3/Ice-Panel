@@ -379,9 +379,10 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
     >
       <form onSubmit={form.onSubmit(handleSubmit)}>
         <Stack>
-          <Group grow>
+          <Group grow align="flex-start">
             <TextInput
               label="Имя"
+              description="уникальное в рамках панели"
               placeholder="vless-reality"
               required
               {...form.getInputProps('name')}
@@ -390,8 +391,8 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
               label="Протокол"
               description={
                 isEdit
-                  ? 'Immutable после создания — bindings на нодах привязаны к адаптеру. Создай новый профиль если нужен другой протокол.'
-                  : undefined
+                  ? '🔒 immutable после создания'
+                  : 'выбор замораживается после save'
               }
               data={[
                 { value: 'hysteria', label: 'Hysteria 2' },
