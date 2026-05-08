@@ -16,6 +16,7 @@ import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { IconEdit, IconKey, IconPlus, IconRefresh, IconTrash } from '@tabler/icons-react';
 import {
+  createBinding,
   createNode,
   deleteNode,
   listNodes,
@@ -237,8 +238,39 @@ export function NodesPage() {
         onClose={closeCreate}
         node={null}
         loading={createMutation.isPending}
-        onSubmit={async (input) => {
-          await createMutation.mutateAsync(input as CreateNodeInput);
+        onSubmit={async (input, profileIds) => {
+          // Step 1: register the node and get its ID. Bootstrap modal opens
+          // automatically via createMutation.onSuccess.
+          const created = await createMutation.mutateAsync(input as CreateNodeInput);
+          // Step 2: auto-create bindings for each picked profile. Done in
+          // sequence (low volume — admin won't pick 50 profiles at once)
+          // and tolerant — one binding failure doesn't block the rest.
+          if (profileIds.length > 0) {
+            const ok: string[] = [];
+            const fail: string[] = [];
+            for (const profileId of profileIds) {
+              try {
+                await createBinding({ profileId, nodeId: created.id, port: 443 });
+                ok.push(profileId);
+              } catch {
+                fail.push(profileId);
+              }
+            }
+            qc.invalidateQueries({ queryKey: ['bindings'] });
+            qc.invalidateQueries({ queryKey: ['profiles'] });
+            if (fail.length > 0) {
+              notifications.show({
+                color: 'yellow',
+                title: 'Часть bindings не создалась',
+                message: `Привязано: ${ok.length}, упало: ${fail.length}. Попробуй вручную через карточку Profile.`,
+              });
+            } else {
+              notifications.show({
+                color: 'green',
+                message: `Нода создана + ${ok.length} bindings`,
+              });
+            }
+          }
         }}
       />
 
@@ -248,6 +280,9 @@ export function NodesPage() {
         node={editing}
         loading={updateMutation.isPending}
         onSubmit={async (input) => {
+          // Edit mode: bindings are managed via DeployProfileModal on the
+          // profile card, not here. The wizard's step 2 still renders but
+          // selections are ignored on this branch.
           if (!editing) return;
           await updateMutation.mutateAsync({ id: editing.id, input: input as UpdateNodeInput });
         }}
