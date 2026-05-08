@@ -50,10 +50,15 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
       const input = UpsertInput.parse(req.body);
       const entries = Object.entries(input).filter(([, v]) => v !== undefined);
       for (const [key, value] of entries) {
+        // Prisma's `Json` column accepts any JSON-serialisable value at the
+        // SQL layer, but the TS surface insists on `Prisma.InputJsonValue`.
+        // Strings ARE valid JSON, so the cast is sound — TS just refuses
+        // string→object without the explicit `unknown` step.
+        const jsonValue = value as unknown as object;
         await prisma.appSetting.upsert({
           where: { key },
-          create: { key, value: value as object, isPublic: PUBLIC_KEYS.has(key) },
-          update: { value: value as object },
+          create: { key, value: jsonValue, isPublic: PUBLIC_KEYS.has(key) },
+          update: { value: jsonValue },
         });
       }
       return reply.send({ ok: true, updated: entries.map(([k]) => k) });
