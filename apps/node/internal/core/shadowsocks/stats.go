@@ -16,9 +16,12 @@ type xrayStatsResponse struct {
 	Stat []xrayStatEntry `json:"stat"`
 }
 
+// `value` arrives as a bare JSON number (or stringified number, depending
+// on xray-core fork). json.Number absorbs both — string-typed Value would
+// fail strict-mode unmarshal on int input, killing the whole batch.
 type xrayStatEntry struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
+	Name  string      `json:"name"`
+	Value json.Number `json:"value"`
 }
 
 type userByteCounters struct {
@@ -63,7 +66,7 @@ func queryUserStats(
 		if !ok {
 			continue
 		}
-		bytes, perr := parseInt64String(e.Value)
+		bytes, perr := e.Value.Int64()
 		if perr != nil {
 			continue
 		}

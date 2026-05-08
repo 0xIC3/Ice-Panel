@@ -30,9 +30,14 @@ type xrayStatsResponse struct {
 	Stat []xrayStatEntry `json:"stat"`
 }
 
+// `value` arrives as a bare JSON number from `xray api statsquery` (not a
+// string, despite older xray-core docs hinting otherwise). Go's strict
+// strconv-int Unmarshal would fail to decode int → string, killing the
+// whole batch. `json.Number` accepts both numbers and stringified numbers,
+// covering the few xray-core forks that quote their values.
 type xrayStatEntry struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
+	Name  string      `json:"name"`
+	Value json.Number `json:"value"`
 }
 
 // queryUserStats invokes `xray api statsquery` and returns per-user byte
@@ -75,7 +80,7 @@ func queryUserStats(
 		if !ok {
 			continue // unknown shape — skip rather than fail the whole batch
 		}
-		bytes, perr := parseInt64String(e.Value)
+		bytes, perr := e.Value.Int64()
 		if perr != nil {
 			continue
 		}
