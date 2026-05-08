@@ -486,7 +486,12 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
               <Group grow>
                 <Select
                   label="Flow"
-                  data={['xtls-rprx-vision', 'xtls-rprx-vision-udp443', '']}
+                  description="Vision работает только с raw (TCP). Для xhttp/ws/grpc/kcp/httpupgrade ставь «none»"
+                  data={[
+                    { value: 'xtls-rprx-vision', label: 'xtls-rprx-vision' },
+                    { value: 'xtls-rprx-vision-udp443', label: 'xtls-rprx-vision-udp443' },
+                    { value: '', label: '(none) — без flow' },
+                  ]}
                   {...form.getInputProps('xrayFlow')}
                 />
                 <Select
