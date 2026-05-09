@@ -6,10 +6,25 @@
 # actually rebuild), and prints status + a tail of the backend log so
 # you can spot a startup error before tabbing away.
 #
-# Usage:  ./scripts/deploy.sh
+# Usage:
+#   ./scripts/deploy.sh             # standard re-deploy
+#   ./scripts/deploy.sh --cleanup   # also prune old images/build cache
+#                                     after the rebuild lands
+#
 # Run from the panel project root (where docker-compose.prod.yml lives).
 
 set -euo pipefail
+
+CLEANUP_AFTER=0
+for arg in "$@"; do
+    case "$arg" in
+        --cleanup|--prune) CLEANUP_AFTER=1 ;;
+        *)
+            echo "[deploy] unknown arg: $arg" >&2
+            exit 2
+            ;;
+    esac
+done
 
 COMPOSE_FILE="docker-compose.prod.yml"
 ENV_FILE=".env.production"
@@ -35,3 +50,10 @@ echo "[deploy] status"
 
 echo "[deploy] panel-backend tail"
 "${DC[@]}" logs --tail=30 panel-backend || true
+
+if [[ $CLEANUP_AFTER -eq 1 ]]; then
+    echo
+    echo "[deploy] running cleanup …"
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    "$SCRIPT_DIR/cleanup.sh"
+fi
