@@ -638,6 +638,28 @@ export async function deleteBinding(id: string): Promise<void> {
   await api.delete(`/api/bindings/${id}`);
 }
 
+// ───── HWID devices (slice S2) ─────
+
+export interface HwidDevice {
+  id: string;
+  userId: string;
+  hwid: string;
+  label: string | null;
+  firstSeenAt: string;
+  lastSeenAt: string;
+}
+
+export async function listUserDevices(userId: string): Promise<{ devices: HwidDevice[] }> {
+  const { data } = await api.get<{ devices: HwidDevice[] }>(
+    `/api/users/${userId}/hwid-devices`,
+  );
+  return data;
+}
+
+export async function deleteHwidDevice(id: string): Promise<void> {
+  await api.delete(`/api/hwid-devices/${id}`);
+}
+
 // ───── Hosts (slice 30) ─────
 //
 // One Binding can fan out into N Hosts in subscriptions. Each Host is a

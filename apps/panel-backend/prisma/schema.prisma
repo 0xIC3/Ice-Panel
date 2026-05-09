@@ -344,6 +344,7 @@ model User {
   subscriptionRequests SubscriptionRequestHistory[]
   nodeUsageHistory     NodeUserUsageHistory[]
   amneziawgPeers       AmneziawgPeer[]
+  hwidDevices          HwidUserDevice[]
 
   @@index([username])
   @@index([status])
@@ -527,6 +528,38 @@ model NodeUsageHistory {
   // composite indexes above are leftmost on nodeId and useless for that.
   @@index([hour(sort: Desc)])
   @@map("node_usage_history")
+}
+
+// ───── Slice S2: HWID enforcement ────────────────────────────────────────
+//
+// Tracks which physical client devices have fetched a user's subscription.
+// Each row is a (userId, hwid) pair, populated lazily — on /sub/:token the
+// middleware reads the `x-hwid` header (set by Hiddify/Streisand/Happ),
+// upserts this row, then counts how many devices the user has and 403s
+// if `count > user.hwidDeviceLimit`.
+//
+// Trust model: client-supplied HWID — this is a "concerned parent" gate,
+// not anti-cheat. Spoofing the header on the client trivially bypasses
+// it. Acceptable: the goal is preventing casual subscription sharing, not
+// hardening against adversarial users.
+model HwidUserDevice {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  hwid         String   @db.VarChar(255)
+  // First time we saw this device — for audit / "device added" UI later.
+  firstSeenAt  DateTime @default(now()) @map("first_seen_at") @db.Timestamptz(6)
+  // Updated on every /sub/:token hit so admins can see stale devices.
+  lastSeenAt   DateTime @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  // Optional admin label ("Phone", "Laptop") — set via API later, NULL by default.
+  label        String?  @db.VarChar(64)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Same physical device hitting the same user's subscription is one row,
+  // not a fresh insert per request.
+  @@unique([userId, hwid])
+  @@index([userId])
+  @@map("hwid_user_devices")
 }
 
 /// Key-value store for panel-wide settings (brand name, logo, primary

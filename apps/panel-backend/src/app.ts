@@ -21,6 +21,7 @@ import { squadsRoutes } from './modules/squads/squads.routes.js';
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes.js';
 import { profilesRoutes } from './modules/profiles/profiles.routes.js';
 import { hostsRoutes } from './modules/hosts/hosts.routes.js';
+import { hwidRoutes } from './modules/hwid/hwid.routes.js';
 import { apiTokensRoutes } from './modules/api-tokens/api-tokens.routes.js';
 import { settingsRoutes } from './modules/settings/settings.routes.js';
 
@@ -124,6 +125,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(dashboardRoutes);
   await app.register(profilesRoutes);
   await app.register(hostsRoutes);
+  await app.register(hwidRoutes);
   await app.register(apiTokensRoutes);
   await app.register(settingsRoutes);
 

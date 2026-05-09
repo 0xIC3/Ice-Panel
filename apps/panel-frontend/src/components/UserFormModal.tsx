@@ -23,25 +23,30 @@ import {
   Tooltip,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
 import {
   IconCheck,
   IconChartBar,
   IconCopy,
+  IconDeviceDesktop,
   IconLink,
   IconLock,
   IconMail,
   IconShield,
   IconTag,
+  IconTrash,
   IconUser,
 } from '@tabler/icons-react';
 import { copyToClipboard } from '../lib/clipboard';
 import {
   ALL_SQUAD_ID,
+  deleteHwidDevice,
   listSquads,
+  listUserDevices,
   subscriptionUrl,
   type CreateUserInput,
+  type HwidDevice,
   type TrafficLimitStrategy,
   type UpdateUserInput,
   type User,
@@ -287,13 +292,14 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
                 <Stack gap="sm">
                   <NumberInput
                     label="Лимит HWID-устройств"
-                    description="Оставь пустым — без ограничения"
+                    description="Оставь пустым — без ограничения. Учитывается только для клиентов отправляющих x-hwid header (Hiddify, Streisand, Happ)."
                     placeholder="3"
                     min={1}
                     allowDecimal={false}
                     allowNegative={false}
                     {...form.getInputProps('hwidDeviceLimit')}
                   />
+                  {user && <UserDevicesPanel userId={user.id} />}
                   <TextInput
                     label="Tag"
                     placeholder="vip / trial / ..."
@@ -516,6 +522,118 @@ function SquadRow({
             </Badge>
           </Tooltip>
         </Group>
+      </Group>
+    </Paper>
+  );
+}
+
+// ───── Slice S2: HWID devices panel ─────
+
+/**
+ * Lists HWID-tracked devices currently registered for this user. Each
+ * row shows the hwid (truncated), first-seen / last-seen, and a delete
+ * button to revoke the slot — admins use this to clean up after the
+ * user replaced a phone or laptop.
+ *
+ * Devices are populated lazily on /sub/:token requests carrying an
+ * `x-hwid` header. Empty list = either the user never opened a
+ * HWID-aware client or no limit is set.
+ */
+function UserDevicesPanel({ userId }: { userId: string }) {
+  const qc = useQueryClient();
+  const devicesQuery = useQuery({
+    queryKey: ['hwid-devices', userId],
+    queryFn: () => listUserDevices(userId),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteHwidDevice(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['hwid-devices', userId] });
+      notifications.show({ color: 'green', message: 'Устройство удалено' });
+    },
+    onError: (err) =>
+      notifications.show({
+        color: 'red',
+        title: 'Не получилось удалить',
+        message: err instanceof Error ? err.message : String(err),
+      }),
+  });
+
+  const devices = devicesQuery.data?.devices ?? [];
+
+  return (
+    <Stack gap={4}>
+      <Group gap={6}>
+        <IconDeviceDesktop size={14} />
+        <Text size="sm" fw={500}>
+          Зарегистрированные устройства ({devices.length})
+        </Text>
+      </Group>
+      {devices.length === 0 ? (
+        <Text size="xs" c="dimmed">
+          Юзер ещё не подключался с HWID-aware клиента, либо лимит не задан.
+        </Text>
+      ) : (
+        <Stack gap={4}>
+          {devices.map((d) => (
+            <DeviceRow
+              key={d.id}
+              device={d}
+              onDelete={() => deleteMutation.mutate(d.id)}
+              deleting={
+                deleteMutation.isPending &&
+                deleteMutation.variables === d.id
+              }
+            />
+          ))}
+        </Stack>
+      )}
+    </Stack>
+  );
+}
+
+function DeviceRow({
+  device,
+  onDelete,
+  deleting,
+}: {
+  device: HwidDevice;
+  onDelete: () => void;
+  deleting: boolean;
+}) {
+  const truncated =
+    device.hwid.length > 24 ? `${device.hwid.slice(0, 21)}…` : device.hwid;
+  const lastSeen = new Date(device.lastSeenAt).toLocaleString();
+  return (
+    <Paper withBorder p="xs" radius="sm">
+      <Group justify="space-between" wrap="nowrap">
+        <Stack gap={0} style={{ minWidth: 0 }}>
+          <Group gap={6}>
+            <Text size="xs" ff="monospace" truncate>
+              {truncated}
+            </Text>
+            {device.label && (
+              <Badge size="xs" variant="light">
+                {device.label}
+              </Badge>
+            )}
+          </Group>
+          <Text size="xs" c="dimmed">
+            last seen: {lastSeen}
+          </Text>
+        </Stack>
+        <Tooltip label="Сбросить слот — юзер сможет залогиниться с другого устройства">
+          <ActionIcon
+            variant="subtle"
+            color="red"
+            size="sm"
+            loading={deleting}
+            onClick={onDelete}
+          >
+            <IconTrash size={14} />
+          </ActionIcon>
+        </Tooltip>
       </Group>
     </Paper>
   );

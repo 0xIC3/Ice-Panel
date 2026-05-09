@@ -11,6 +11,8 @@ import {
   getSubscriptionSettings,
   renderAnnounce,
 } from '../settings/settings.service.js';
+import { enforceHwid } from '../hwid/hwid.service.js';
+import { prisma } from '../../prisma.js';
 
 const TokenParamSchema = z.object({
   token: z.string().min(8).max(128),
@@ -148,6 +150,51 @@ export async function subscriptionRoutes(app: FastifyInstance): Promise<void> {
     );
 
     try {
+      // Slice S2 — HWID enforcement runs BEFORE generateSubscription so
+      // a denied client doesn't burn a subscription_request_history row
+      // or stress the binding query. Cost is one cheap user lookup.
+      const hwidHeader = request.headers['x-hwid'];
+      const hwid =
+        typeof hwidHeader === 'string' && hwidHeader.length > 0 && hwidHeader.length <= 255
+          ? hwidHeader
+          : null;
+      const userMin = await prisma.user.findFirst({
+        where: { subscriptionToken: params.token, deletedAt: null },
+        select: { id: true, hwidDeviceLimit: true },
+      });
+      if (userMin) {
+        const hwidResult = await enforceHwid(
+          userMin.id,
+          hwid,
+          userMin.hwidDeviceLimit,
+        );
+        // Always emit the gauge header so the client can render "2/3" in
+        // its profile detail UI — even on success, even when no limit set.
+        // HTTP headers are ISO-8859-1; use ASCII-only "unlimited" instead
+        // of '∞' which throws on the wire.
+        if (hwidResult.limit !== null) {
+          reply.header(
+            'X-Hwid-Active',
+            `${hwidResult.active}/${hwidResult.limit}`,
+          );
+        } else {
+          reply.header(
+            'X-Hwid-Active',
+            `${hwidResult.active}/unlimited`,
+          );
+        }
+        if (hwidResult.status === 'denied') {
+          // 403 with a structured body — clients that don't read headers
+          // still get a parseable reason.
+          return reply.code(403).send({
+            error: 'HWID_LIMIT',
+            message: `Device limit reached (${hwidResult.active}/${hwidResult.limit})`,
+            active: hwidResult.active,
+            limit: hwidResult.limit,
+          });
+        }
+      }
+
       const result = await service.generateSubscription(params.token, {
         ip: request.ip,
         userAgent,
