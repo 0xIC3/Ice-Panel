@@ -42,6 +42,48 @@ ICE_PANEL_REF=${ICE_PANEL_REF:-main}
 FRONTEND_PORT=${FRONTEND_PORT:-8080}
 PANEL_DOMAIN=${PANEL_DOMAIN:-}
 
+# ───── Interactive domain prompt ─────
+# If PANEL_DOMAIN wasn't passed via env AND we have a real TTY (admin is
+# running this hands-on, not from cron / cloud-init), ask. The
+# `bash <(curl ...)` flow eats stdin with the curl pipe, so we read from
+# /dev/tty directly — that's the actual terminal regardless of how stdin
+# is wired.
+if [[ -z "$PANEL_DOMAIN" && -r /dev/tty ]]; then
+  printf '\n'
+  printf '\033[1;36m═══════════════════════════════════════════════════════\033[0m\n'
+  printf '\033[1;36m  Ice-Panel installer\033[0m\n'
+  printf '\033[1;36m═══════════════════════════════════════════════════════\033[0m\n'
+  printf '\n'
+  printf 'На каком домене разместить панель?\n'
+  printf '  Пример:    panel.example.com\n'
+  printf '  Требование: A-запись домена ДОЛЖНА уже указывать на этот VPS\n'
+  printf '              (иначе Let'\''s Encrypt не выпустит TLS-сертификат)\n'
+  printf '\n'
+  printf 'Оставь пустым и нажми Enter — установим без TLS, доступ по IP:%s\n' "$FRONTEND_PORT"
+  printf '\n'
+  printf '\033[1;33mДомен:\033[0m '
+  read -r PANEL_DOMAIN </dev/tty || PANEL_DOMAIN=""
+
+  if [[ -n "$PANEL_DOMAIN" ]]; then
+    # Strip protocol if admin pasted full URL by accident.
+    PANEL_DOMAIN="${PANEL_DOMAIN#http://}"
+    PANEL_DOMAIN="${PANEL_DOMAIN#https://}"
+    PANEL_DOMAIN="${PANEL_DOMAIN%/}"
+
+    # Quick sanity-check on the value before we commit to it. Catches
+    # the typo case where the admin types a single word without a dot.
+    if [[ ! "$PANEL_DOMAIN" =~ \. ]]; then
+      printf '\033[1;31m"%s" не похож на домен (нет точки). Установка прервана.\033[0m\n' "$PANEL_DOMAIN" >&2
+      exit 1
+    fi
+
+    log "Будет установлено на https://${PANEL_DOMAIN} (Caddy + auto-TLS)"
+  else
+    log "Домен не указан — установка в bare-IP режиме (доступ по http://<ip>:${FRONTEND_PORT})"
+  fi
+  printf '\n'
+fi
+
 # ───── 1. Distro check ─────
 if [[ ! -r /etc/os-release ]]; then
   fail "Cannot read /etc/os-release; only Ubuntu/Debian supported here"
