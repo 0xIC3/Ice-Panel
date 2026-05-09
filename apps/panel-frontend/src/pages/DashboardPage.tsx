@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Badge,
   Card,
@@ -141,6 +142,7 @@ function Sparkline({ data, height = 110 }: { data: { hour: string; bytes: number
 }
 
 export function DashboardPage() {
+  const { t } = useTranslation();
   const { data, isLoading, isError } = useQuery({
     queryKey: ['dashboard', 'overview'],
     queryFn: getDashboardOverview,
@@ -150,16 +152,16 @@ export function DashboardPage() {
   if (isLoading) {
     return (
       <Stack>
-        <Title order={2}>Главная</Title>
-        <Text c="dimmed">Загрузка…</Text>
+        <Title order={2}>{t('dashboard.title')}</Title>
+        <Text c="dimmed">{t('common.loading')}</Text>
       </Stack>
     );
   }
   if (isError || !data) {
     return (
       <Stack>
-        <Title order={2}>Главная</Title>
-        <Text c="red">Не удалось загрузить overview. Проверь backend.</Text>
+        <Title order={2}>{t('dashboard.title')}</Title>
+        <Text c="red">{t('dashboard.health.noData')}</Text>
       </Stack>
     );
   }
@@ -168,6 +170,7 @@ export function DashboardPage() {
 }
 
 function DashboardContent({ data }: { data: DashboardOverview }) {
+  const { t } = useTranslation();
   const { users, traffic, system, nodes, byProtocol, topUsersToday, recentEvents } = data;
   const todayDelta = formatDelta(traffic.todayBytes, traffic.yesterdayBytes);
 
@@ -175,9 +178,9 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
     <Stack gap="lg">
       <Group justify="space-between" align="flex-end">
         <Stack gap={2}>
-          <Title order={2}>Главная</Title>
+          <Title order={2}>{t('dashboard.title')}</Title>
           <Text c="dimmed" size="sm">
-            Сводка по панели — обновляется каждые 10 секунд
+            {t('dashboard.subtitle')}
           </Text>
         </Stack>
       </Group>

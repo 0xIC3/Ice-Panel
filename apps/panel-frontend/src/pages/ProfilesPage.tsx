@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ActionIcon,
   Badge,
@@ -64,6 +65,7 @@ const PROTOCOL_LABELS: Record<string, string> = {
 };
 
 export function ProfilesPage() {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const [createOpen, { open: openCreate, close: closeCreate }] = useDisclosure(false);
   const [editing, setEditing] = useState<Profile | null>(null);
@@ -89,12 +91,12 @@ export function ProfilesPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['profiles'] });
       qc.invalidateQueries({ queryKey: ['bindings'] });
-      notifications.show({ color: 'green', message: 'Профиль создан' });
+      notifications.show({ color: 'green', message: t('profiles.notify.created') });
     },
     onError: (err) =>
       notifications.show({
         color: 'red',
-        title: 'Не получилось создать',
+        title: t('common.createError'),
         message: err instanceof Error ? err.message : String(err),
       }),
   });
@@ -104,12 +106,12 @@ export function ProfilesPage() {
       updateProfile(id, input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['profiles'] });
-      notifications.show({ color: 'green', message: 'Профиль обновлён' });
+      notifications.show({ color: 'green', message: t('profiles.notify.updated') });
     },
     onError: (err) =>
       notifications.show({
         color: 'red',
-        title: 'Не получилось сохранить',
+        title: t('common.saveError'),
         message: err instanceof Error ? err.message : String(err),
       }),
   });
@@ -119,12 +121,12 @@ export function ProfilesPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['profiles'] });
       qc.invalidateQueries({ queryKey: ['bindings'] });
-      notifications.show({ color: 'green', message: 'Профиль удалён' });
+      notifications.show({ color: 'green', message: t('profiles.notify.deleted') });
     },
     onError: (err) =>
       notifications.show({
         color: 'red',
-        title: 'Не получилось удалить',
+        title: t('common.deleteError'),
         message: err instanceof Error ? err.message : String(err),
       }),
   });
@@ -132,15 +134,15 @@ export function ProfilesPage() {
   function handleDelete(profile: Profile) {
     const bindings = bindingsByProfile.get(profile.id) ?? 0;
     modals.openConfirmModal({
-      title: `Удалить профиль «${profile.name}»?`,
+      title: t('profiles.deleteTitle', { name: profile.name }),
       children: (
         <Text size="sm">
           {bindings > 0
-            ? `Профиль развёрнут на ${bindings} нодах. Удаление снимет его со всех нод (cascade) и аннулирует подписки на этот протокол у затронутых пользователей.`
-            : 'Профиль не привязан ни к одной ноде — действие безопасное.'}
+            ? t('profiles.deleteWithBindings', { count: bindings })
+            : t('profiles.deleteSafe')}
         </Text>
       ),
-      labels: { confirm: 'Удалить', cancel: 'Отмена' },
+      labels: { confirm: t('common.delete'), cancel: t('common.cancel') },
       confirmProps: { color: 'red' },
       onConfirm: () => deleteMutation.mutate(profile.id),
     });
@@ -164,13 +166,13 @@ export function ProfilesPage() {
     <Stack gap="lg">
       <Group justify="space-between" align="flex-end">
         <Stack gap={2}>
-          <Title order={2}>Профили</Title>
+          <Title order={2}>{t('profiles.title')}</Title>
           <Text c="dimmed" size="sm">
-            Шаблоны inbound'ов — один профиль может разворачиваться на нескольких нодах
+            {t('profiles.subtitle')}
           </Text>
         </Stack>
         <Group>
-          <Tooltip label="Обновить">
+          <Tooltip label={t('common.refresh')}>
             <ActionIcon
               variant="subtle"
               size="lg"
@@ -181,13 +183,13 @@ export function ProfilesPage() {
             </ActionIcon>
           </Tooltip>
           <Button leftSection={<IconPlus size={16} />} onClick={openCreate}>
-            Создать
+            {t('profiles.create')}
           </Button>
         </Group>
       </Group>
 
       <TextInput
-        placeholder="Поиск по имени или описанию…"
+        placeholder={t('profiles.searchPlaceholder')}
         leftSection={<IconSearch size={16} />}
         value={search}
         onChange={(e) => setSearch(e.currentTarget.value)}
@@ -195,7 +197,7 @@ export function ProfilesPage() {
 
       <Group gap="xs" wrap="wrap">
         <ProtocolFilterChip
-          label="Все"
+          label={t('common.all')}
           color="blue"
           active={protocolFilter === 'all'}
           onClick={() => setProtocolFilter('all')}
@@ -219,8 +221,8 @@ export function ProfilesPage() {
             </ThemeIcon>
             <Text c="dimmed" size="sm">
               {profiles.length === 0
-                ? 'Профилей нет — нажми «Создать».'
-                : 'Ничего не найдено по фильтру.'}
+                ? t('profiles.emptyAll')
+                : t('profiles.emptyFiltered')}
             </Text>
           </Stack>
         </Card>
@@ -307,6 +309,7 @@ function ProfileCard({
   onDelete: () => void;
   onDeploy: () => void;
 }) {
+  const { t } = useTranslation();
   const color = PROTOCOL_COLORS[profile.protocol] ?? 'gray';
   return (
     <Card
@@ -343,13 +346,13 @@ function ProfileCard({
           </Menu.Target>
           <Menu.Dropdown>
             <Menu.Item leftSection={<IconRocket size={14} />} onClick={onDeploy}>
-              Развернуть на нодах
+              {t('profiles.deployToNodes')}
             </Menu.Item>
             <Menu.Item leftSection={<IconEdit size={14} />} onClick={onEdit}>
-              Редактировать
+              {t('common.edit')}
             </Menu.Item>
             <Menu.Item color="red" leftSection={<IconTrash size={14} />} onClick={onDelete}>
-              Удалить
+              {t('common.delete')}
             </Menu.Item>
           </Menu.Dropdown>
         </Menu>
@@ -359,7 +362,7 @@ function ProfileCard({
         <Badge variant="light" color={color} size="sm" tt="uppercase">
           {profile.protocol}
         </Badge>
-        <Tooltip label={bindingCount === 0 ? 'Не развёрнут — клик чтобы задеплоить' : 'Развёрнут на нодах — клик для управления'}>
+        <Tooltip label={bindingCount === 0 ? t('profiles.bindingsTooltipNone') : t('profiles.bindingsTooltipDeployed')}>
           <Badge
             variant={bindingCount === 0 ? 'outline' : 'filled'}
             color={bindingCount === 0 ? 'gray' : 'teal'}
@@ -385,7 +388,7 @@ function ProfileCard({
         leftSection={<IconRocket size={14} />}
         onClick={onDeploy}
       >
-        Развернуть на нодах
+        {t('profiles.deployToNodes')}
       </Button>
     </Card>
   );

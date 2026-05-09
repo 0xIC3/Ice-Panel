@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ActionIcon,
   Badge,
@@ -73,6 +74,7 @@ interface HostsManagerProps {
  * deferred (slice 31), arrows are plenty for typical 2-4 host setups.
  */
 export function HostsManager({ bindingId, protocol }: HostsManagerProps) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
   const [editing, setEditing] = useState<Host | null>(null);
@@ -101,13 +103,13 @@ export function HostsManager({ bindingId, protocol }: HostsManagerProps) {
     mutationFn: (input: CreateHostInput) => createHost(input),
     onSuccess: () => {
       invalidate();
-      notifications.show({ color: 'green', message: 'Host добавлен' });
+      notifications.show({ color: 'green', message: t('hosts.notify.created') });
       setAddOpen(false);
     },
     onError: (err) =>
       notifications.show({
         color: 'red',
-        title: 'Не получилось создать',
+        title: t('common.createError'),
         message: err instanceof Error ? err.message : String(err),
       }),
   });
@@ -117,13 +119,13 @@ export function HostsManager({ bindingId, protocol }: HostsManagerProps) {
       updateHost(id, input),
     onSuccess: () => {
       invalidate();
-      notifications.show({ color: 'green', message: 'Host обновлён' });
+      notifications.show({ color: 'green', message: t('hosts.notify.updated') });
       setEditing(null);
     },
     onError: (err) =>
       notifications.show({
         color: 'red',
-        title: 'Не получилось сохранить',
+        title: t('common.saveError'),
         message: err instanceof Error ? err.message : String(err),
       }),
   });
@@ -132,12 +134,12 @@ export function HostsManager({ bindingId, protocol }: HostsManagerProps) {
     mutationFn: (id: string) => deleteHost(id),
     onSuccess: () => {
       invalidate();
-      notifications.show({ color: 'green', message: 'Host удалён' });
+      notifications.show({ color: 'green', message: t('hosts.notify.deleted') });
     },
     onError: (err) =>
       notifications.show({
         color: 'red',
-        title: 'Не получилось удалить',
+        title: t('common.deleteError'),
         message: err instanceof Error ? err.message : String(err),
       }),
   });
@@ -158,8 +160,7 @@ export function HostsManager({ bindingId, protocol }: HostsManagerProps) {
   if (!supportsHosts) {
     return (
       <Text size="xs" c="dimmed" py="xs">
-        AmneziaWG использует одну точку входа на binding — host-варианты
-        отсутствуют.
+        {t('hosts.awgUnsupported')}
       </Text>
     );
   }
@@ -170,7 +171,7 @@ export function HostsManager({ bindingId, protocol }: HostsManagerProps) {
         <Group gap={6}>
           <IconWorldShare size={14} />
           <Text size="sm" fw={500}>
-            Hosts ({hosts.length})
+            {t('hosts.sectionLabel', { count: hosts.length })}
           </Text>
         </Group>
         <Button
@@ -179,14 +180,13 @@ export function HostsManager({ bindingId, protocol }: HostsManagerProps) {
           leftSection={<IconPlus size={12} />}
           onClick={() => setAddOpen(true)}
         >
-          Добавить host
+          {t('hosts.addButton')}
         </Button>
       </Group>
 
       {hosts.length === 0 && hostsQuery.isFetched && (
         <Text size="xs" c="dimmed" py="xs">
-          У этого binding'а ноль host'ов — юзеры не получат URL. Добавь
-          хотя бы один.
+          {t('hosts.empty')}
         </Text>
       )}
 

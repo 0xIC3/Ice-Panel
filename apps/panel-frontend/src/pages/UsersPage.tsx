@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ActionIcon,
   Badge,
@@ -192,6 +193,7 @@ function StatChip({ icon, label, value, color, active, onClick }: StatChipProps)
 type StatusFilter = 'all' | 'active' | 'expired' | 'limited' | 'disabled';
 
 export function UsersPage() {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const [createOpen, { open: openCreate, close: closeCreate }] = useDisclosure(false);
   const [editing, setEditing] = useState<User | null>(null);
@@ -240,12 +242,12 @@ export function UsersPage() {
     mutationFn: createUser,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['users'] });
-      notifications.show({ color: 'green', message: 'User created' });
+      notifications.show({ color: 'green', message: t('users.notify.created') });
     },
     onError: (err) =>
       notifications.show({
         color: 'red',
-        title: 'Create failed',
+        title: t('common.createError'),
         message: err instanceof Error ? err.message : String(err),
       }),
   });
@@ -254,12 +256,12 @@ export function UsersPage() {
     mutationFn: ({ id, input }: { id: string; input: UpdateUserInput }) => updateUser(id, input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['users'] });
-      notifications.show({ color: 'green', message: 'User updated' });
+      notifications.show({ color: 'green', message: t('users.notify.updated') });
     },
     onError: (err) =>
       notifications.show({
         color: 'red',
-        title: 'Update failed',
+        title: t('common.saveError'),
         message: err instanceof Error ? err.message : String(err),
       }),
   });
@@ -268,25 +270,25 @@ export function UsersPage() {
     mutationFn: deleteUser,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['users'] });
-      notifications.show({ color: 'green', message: 'User deleted' });
+      notifications.show({ color: 'green', message: t('users.notify.deleted') });
     },
     onError: (err) =>
       notifications.show({
         color: 'red',
-        title: 'Delete failed',
+        title: t('common.deleteError'),
         message: err instanceof Error ? err.message : String(err),
       }),
   });
 
   function handleDelete(user: User) {
     modals.openConfirmModal({
-      title: `Delete user "${user.username}"?`,
+      title: t('users.deleteTitle', { name: user.username }),
       children: (
         <Text size="sm">
-          The user will be soft-deleted and removed from all nodes. This cannot be undone from the UI.
+          {t('users.deleteBody')}
         </Text>
       ),
-      labels: { confirm: 'Delete', cancel: 'Cancel' },
+      labels: { confirm: t('common.delete'), cancel: t('common.cancel') },
       confirmProps: { color: 'red' },
       onConfirm: () => deleteMutation.mutate(user.id),
     });
@@ -296,14 +298,14 @@ export function UsersPage() {
     <Stack gap="lg">
       <Group justify="space-between" align="flex-end">
         <Stack gap={2}>
-          <Title order={2}>Пользователи</Title>
+          <Title order={2}>{t('users.title')}</Title>
           <Text c="dimmed" size="sm">
-            {stats.total} всего
-            {filteredUsers.length !== stats.total && ` · ${filteredUsers.length} в выборке`}
+            {stats.total}
+            {filteredUsers.length !== stats.total && ` · ${filteredUsers.length}`}
           </Text>
         </Stack>
         <Group>
-          <Tooltip label="Обновить">
+          <Tooltip label={t('common.refresh')}>
             <ActionIcon
               variant="subtle"
               size="lg"
@@ -314,7 +316,7 @@ export function UsersPage() {
             </ActionIcon>
           </Tooltip>
           <Button leftSection={<IconPlus size={16} />} onClick={openCreate}>
-            Создать
+            {t('users.create')}
           </Button>
         </Group>
       </Group>
@@ -366,7 +368,7 @@ export function UsersPage() {
       {/* Search + filters */}
       <Group gap="sm" wrap="nowrap">
         <TextInput
-          placeholder="Поиск по username / shortId / tag / email…"
+          placeholder={t('users.searchPlaceholder')}
           leftSection={<IconSearch size={16} />}
           value={search}
           onChange={(e) => setSearch(e.currentTarget.value)}
@@ -393,14 +395,14 @@ export function UsersPage() {
           <Table verticalSpacing="sm" highlightOnHover>
             <Table.Thead>
               <Table.Tr>
-                <Table.Th>Пользователь</Table.Th>
-                <Table.Th>Статус</Table.Th>
-                <Table.Th>Последнее подключение</Table.Th>
-                <Table.Th>Истекает</Table.Th>
-                <Table.Th>Расход трафика</Table.Th>
-                <Table.Th>Сквады</Table.Th>
+                <Table.Th>{t('users.table.username')}</Table.Th>
+                <Table.Th>{t('users.table.status')}</Table.Th>
+                <Table.Th>{t('users.table.subscription')}</Table.Th>
+                <Table.Th>{t('users.table.expires')}</Table.Th>
+                <Table.Th>{t('users.table.traffic')}</Table.Th>
+                <Table.Th>{t('users.table.squads')}</Table.Th>
                 <Table.Th>Tag</Table.Th>
-                <Table.Th style={{ width: 1 }}>Действия</Table.Th>
+                <Table.Th style={{ width: 1 }}>{t('common.actions')}</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -413,8 +415,8 @@ export function UsersPage() {
                       </ThemeIcon>
                       <Text c="dimmed" size="sm">
                         {allUsers.length === 0
-                          ? 'Пользователей пока нет — нажми «Создать».'
-                          : 'Ничего не найдено по текущему фильтру.'}
+                          ? t('users.empty')
+                          : t('common.nothingFound')}
                       </Text>
                     </Stack>
                   </Table.Td>
@@ -556,12 +558,12 @@ export function UsersPage() {
                     <Table.Td>
                       <Group gap={2} wrap="nowrap">
                         <SubscriptionCell url={subscriptionUrl(u.subscriptionToken)} />
-                        <Tooltip label="Редактировать">
+                        <Tooltip label={t('common.edit')}>
                           <ActionIcon variant="subtle" onClick={() => setEditing(u)} size="sm">
                             <IconEdit size={14} />
                           </ActionIcon>
                         </Tooltip>
-                        <Tooltip label="Удалить">
+                        <Tooltip label={t('common.delete')}>
                           <ActionIcon
                             variant="subtle"
                             color="red"

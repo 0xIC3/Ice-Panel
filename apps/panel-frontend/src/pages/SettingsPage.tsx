@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ActionIcon,
   Alert,
@@ -50,12 +51,13 @@ import {
 } from '../lib/api';
 
 export function SettingsPage() {
+  const { t } = useTranslation();
   return (
     <Stack gap="lg">
       <Stack gap={2}>
-        <Title order={2}>Настройки</Title>
+        <Title order={2}>{t('settings.title')}</Title>
         <Text c="dimmed" size="sm">
-          Аутентификация, API-токены, кастомизация
+          {t('settings.subtitle')}
         </Text>
       </Stack>
 
@@ -454,6 +456,7 @@ function RevealTokenModal({
 // ───── Customization ─────
 
 function CustomizationCard() {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const settingsQuery = useQuery({
     queryKey: ['settings', 'all'],
@@ -498,17 +501,17 @@ function CustomizationCard() {
           <IconPalette size={18} />
         </ThemeIcon>
         <Stack gap={0}>
-          <Text fw={600}>Кастомизация</Text>
+          <Text fw={600}>{t('settings.customization.title')}</Text>
           <Text size="xs" c="dimmed">
-            Бренд и оформление панели — хранится централизованно в БД
+            {t('settings.customization.description')}
           </Text>
         </Stack>
       </Group>
 
       <Stack gap="sm" maw={500}>
         <TextInput
-          label="Название бренда"
-          description="Заголовок страницы входа"
+          label={t('settings.customization.brandName')}
+          description={t('settings.customization.brandNameDesc')}
           value={brandName}
           onChange={(e) => setBrandName(e.currentTarget.value)}
           placeholder="Ice-Panel"
@@ -520,7 +523,7 @@ function CustomizationCard() {
             disabled={settingsQuery.isLoading}
             leftSection={<IconCheck size={14} />}
           >
-            Сохранить
+            {t('common.save')}
           </Button>
         </Group>
       </Stack>
@@ -540,6 +543,7 @@ function CustomizationCard() {
  * not configurable here.
  */
 function SubscriptionMetadataCard() {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const settingsQuery = useQuery({
     queryKey: ['settings', 'all'],
@@ -568,13 +572,13 @@ function SubscriptionMetadataCard() {
       qc.invalidateQueries({ queryKey: ['settings'] });
       notifications.show({
         color: 'green',
-        message: 'Метаданные подписки обновлены',
+        message: t('settings.subscription.saved'),
       });
     },
     onError: (err) =>
       notifications.show({
         color: 'red',
-        title: 'Не получилось сохранить',
+        title: t('common.saveError'),
         message: err instanceof Error ? err.message : String(err),
       }),
   });
@@ -597,48 +601,44 @@ function SubscriptionMetadataCard() {
           <IconRss size={18} />
         </ThemeIcon>
         <Stack gap={0}>
-          <Text fw={600}>Метаданные подписки</Text>
+          <Text fw={600}>{t('settings.subscription.title')}</Text>
           <Text size="xs" c="dimmed">
-            HTTP-заголовки которые клиенты (Hiddify / Streisand / Happ /
-            V2RayNG) читают вместе с подпиской — название, частота обновления,
-            квота, объявление
+            {t('settings.subscription.description')}
           </Text>
         </Stack>
       </Group>
 
       <Stack gap="sm" maw={620}>
         <TextInput
-          label="Profile Title"
-          description="Название подписки в клиенте. Пусто → используется brand name."
+          label={t('settings.subscription.profileTitle')}
+          description={t('settings.subscription.profileTitleDesc')}
           value={profileTitle}
           onChange={(e) => setProfileTitle(e.currentTarget.value)}
           placeholder="Ice-Panel"
         />
         <Group grow align="flex-start">
           <NumberInput
-            label="Update interval (hours)"
-            description="Как часто клиент сам перетягивает подписку"
+            label={t('settings.subscription.updateInterval')}
+            description={t('settings.subscription.updateIntervalDesc')}
             min={1}
             max={168}
             value={intervalHours}
             onChange={(v) => setIntervalHours(typeof v === 'number' ? v : '')}
           />
           <TextInput
-            label="Support URL"
-            description="Кликабельная ссылка в profile detail"
+            label={t('settings.subscription.supportUrl')}
+            description={t('settings.subscription.supportUrlDesc')}
             value={supportUrl}
             onChange={(e) => setSupportUrl(e.currentTarget.value)}
             placeholder="https://t.me/your_support"
           />
         </Group>
         <Textarea
-          label="Announce template"
-          description={
-            'Banner показанный юзеру в клиенте. Поддерживает {{TRAFFIC_LEFT}}, {{DAYS_LEFT}}, {{SUPPORT_URL}}. Пусто → header не выдаётся.'
-          }
+          label={t('settings.subscription.announce')}
+          description={t('settings.subscription.announceDesc')}
           value={announceTemplate}
           onChange={(e) => setAnnounceTemplate(e.currentTarget.value)}
-          placeholder="Осталось трафика: {{TRAFFIC_LEFT}} · до конца {{DAYS_LEFT}} дней · поддержка {{SUPPORT_URL}}"
+          placeholder="Traffic left: {{TRAFFIC_LEFT}} · {{DAYS_LEFT}} days remaining · support {{SUPPORT_URL}}"
           autosize
           minRows={2}
           maxRows={5}
@@ -650,7 +650,7 @@ function SubscriptionMetadataCard() {
             disabled={settingsQuery.isLoading}
             leftSection={<IconCheck size={14} />}
           >
-            Сохранить
+            {t('common.save')}
           </Button>
         </Group>
       </Stack>
