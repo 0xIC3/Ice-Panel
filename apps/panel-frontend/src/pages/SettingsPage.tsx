@@ -8,11 +8,13 @@ import {
   Code,
   Group,
   Modal,
+  NumberInput,
   Paper,
   SimpleGrid,
   Stack,
   Switch,
   Text,
+  Textarea,
   TextInput,
   ThemeIcon,
   Title,
@@ -32,6 +34,7 @@ import {
   IconPalette,
   IconPlus,
   IconRefresh,
+  IconRss,
   IconShield,
   IconTrash,
   IconUserCircle,
@@ -62,6 +65,7 @@ export function SettingsPage() {
       </SimpleGrid>
 
       <CustomizationCard />
+      <SubscriptionMetadataCard />
     </Stack>
   );
 }
@@ -508,6 +512,136 @@ function CustomizationCard() {
           value={brandName}
           onChange={(e) => setBrandName(e.currentTarget.value)}
           placeholder="Ice-Panel"
+        />
+        <Group justify="flex-end">
+          <Button
+            onClick={save}
+            loading={saveMutation.isPending}
+            disabled={settingsQuery.isLoading}
+            leftSection={<IconCheck size={14} />}
+          >
+            Сохранить
+          </Button>
+        </Group>
+      </Stack>
+    </Card>
+  );
+}
+
+// ───── Subscription metadata (slice S1) ─────
+
+/**
+ * Admin-facing editor for the headers `/sub/:token` emits to client apps —
+ * Profile-Title (display name), Profile-Update-Interval (refresh cadence),
+ * Support-URL, and an Announce template with `{{TRAFFIC_LEFT}}`,
+ * `{{DAYS_LEFT}}`, `{{SUPPORT_URL}}` placeholders rendered per request.
+ *
+ * Subscription-Userinfo (quota gauge) is auto-emitted from user state —
+ * not configurable here.
+ */
+function SubscriptionMetadataCard() {
+  const qc = useQueryClient();
+  const settingsQuery = useQuery({
+    queryKey: ['settings', 'all'],
+    queryFn: getSettings,
+  });
+
+  const [profileTitle, setProfileTitle] = useState('');
+  const [intervalHours, setIntervalHours] = useState<number | ''>(24);
+  const [supportUrl, setSupportUrl] = useState('');
+  const [announceTemplate, setAnnounceTemplate] = useState('');
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    if (!hydrated && settingsQuery.data) {
+      setProfileTitle(settingsQuery.data.subscriptionProfileTitle ?? '');
+      setIntervalHours(settingsQuery.data.subscriptionUpdateIntervalHours ?? 24);
+      setSupportUrl(settingsQuery.data.subscriptionSupportUrl ?? '');
+      setAnnounceTemplate(settingsQuery.data.subscriptionAnnounceTemplate ?? '');
+      setHydrated(true);
+    }
+  }, [settingsQuery.data, hydrated]);
+
+  const saveMutation = useMutation({
+    mutationFn: updateSettings,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings'] });
+      notifications.show({
+        color: 'green',
+        message: 'Метаданные подписки обновлены',
+      });
+    },
+    onError: (err) =>
+      notifications.show({
+        color: 'red',
+        title: 'Не получилось сохранить',
+        message: err instanceof Error ? err.message : String(err),
+      }),
+  });
+
+  function save() {
+    saveMutation.mutate({
+      // Empty strings clear the override (NULL in DB → header omitted).
+      subscriptionProfileTitle: profileTitle.trim() || null,
+      subscriptionUpdateIntervalHours:
+        typeof intervalHours === 'number' ? intervalHours : 24,
+      subscriptionSupportUrl: supportUrl.trim() || null,
+      subscriptionAnnounceTemplate: announceTemplate.trim() || null,
+    });
+  }
+
+  return (
+    <Card withBorder padding="lg" radius="md">
+      <Group gap="sm" mb="md">
+        <ThemeIcon size={32} radius="md" variant="light" color="blue">
+          <IconRss size={18} />
+        </ThemeIcon>
+        <Stack gap={0}>
+          <Text fw={600}>Метаданные подписки</Text>
+          <Text size="xs" c="dimmed">
+            HTTP-заголовки которые клиенты (Hiddify / Streisand / Happ /
+            V2RayNG) читают вместе с подпиской — название, частота обновления,
+            квота, объявление
+          </Text>
+        </Stack>
+      </Group>
+
+      <Stack gap="sm" maw={620}>
+        <TextInput
+          label="Profile Title"
+          description="Название подписки в клиенте. Пусто → используется brand name."
+          value={profileTitle}
+          onChange={(e) => setProfileTitle(e.currentTarget.value)}
+          placeholder="Ice-Panel"
+        />
+        <Group grow align="flex-start">
+          <NumberInput
+            label="Update interval (hours)"
+            description="Как часто клиент сам перетягивает подписку"
+            min={1}
+            max={168}
+            value={intervalHours}
+            onChange={(v) => setIntervalHours(typeof v === 'number' ? v : '')}
+          />
+          <TextInput
+            label="Support URL"
+            description="Кликабельная ссылка в profile detail"
+            value={supportUrl}
+            onChange={(e) => setSupportUrl(e.currentTarget.value)}
+            placeholder="https://t.me/your_support"
+          />
+        </Group>
+        <Textarea
+          label="Announce template"
+          description={
+            'Banner показанный юзеру в клиенте. Поддерживает {{TRAFFIC_LEFT}}, {{DAYS_LEFT}}, {{SUPPORT_URL}}. Пусто → header не выдаётся.'
+          }
+          value={announceTemplate}
+          onChange={(e) => setAnnounceTemplate(e.currentTarget.value)}
+          placeholder="Осталось трафика: {{TRAFFIC_LEFT}} · до конца {{DAYS_LEFT}} дней · поддержка {{SUPPORT_URL}}"
+          autosize
+          minRows={2}
+          maxRows={5}
         />
         <Group justify="flex-end">
           <Button

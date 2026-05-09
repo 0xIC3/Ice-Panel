@@ -15,7 +15,16 @@ import { prisma } from '../../prisma.js';
  *   PUT /api/settings          — requireAuth, upsert keys
  *
  * Keys we use today:
- *   - `brandName` (string, public)   — title shown on LoginPage + sidebar
+ *   - `brandName` (string, public)                — title shown on LoginPage + sidebar
+ *   - `subscriptionProfileTitle` (string)         — Profile-Title header on /sub
+ *                                                   (NULL → fall back to brandName)
+ *   - `subscriptionUpdateIntervalHours` (number)  — Profile-Update-Interval header,
+ *                                                   default 24
+ *   - `subscriptionSupportUrl` (string)           — Support-URL header + announce
+ *                                                   {{SUPPORT_URL}} placeholder
+ *   - `subscriptionAnnounceTemplate` (string)     — Announce header template,
+ *                                                   placeholders: {{TRAFFIC_LEFT}},
+ *                                                   {{DAYS_LEFT}}, {{SUPPORT_URL}}
  *
  * Future keys land in the same table; flip `isPublic` per key.
  */
@@ -24,6 +33,10 @@ const PUBLIC_KEYS = new Set(['brandName']);
 
 const UpsertInput = z.object({
   brandName: z.string().min(1).max(64).optional(),
+  subscriptionProfileTitle: z.string().min(1).max(128).nullable().optional(),
+  subscriptionUpdateIntervalHours: z.number().int().min(1).max(168).optional(),
+  subscriptionSupportUrl: z.string().url().max(255).nullable().optional(),
+  subscriptionAnnounceTemplate: z.string().max(512).nullable().optional(),
 });
 
 export async function settingsRoutes(app: FastifyInstance): Promise<void> {

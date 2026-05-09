@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import * as service from './subscription.service.js';
 import { buildClashYaml } from './formats/clash.js';
@@ -6,6 +6,11 @@ import { buildSingboxJson } from './formats/singbox.js';
 import { buildWgQuickConf } from './formats/wgconf.js';
 import { buildXrayJson } from './formats/xrayjson.js';
 import { matchFormatForUserAgent } from '../srr/srr.service.js';
+import {
+  formatBytes,
+  getSubscriptionSettings,
+  renderAnnounce,
+} from '../settings/settings.service.js';
 
 const TokenParamSchema = z.object({
   token: z.string().min(8).max(128),
@@ -34,6 +39,88 @@ function isFormat(value: string): value is Format {
  *      IcePath-VPN bot integration that predates SRR.
  *   4. `plain` fallback (base64 URI list — universal).
  */
+/**
+ * Slice S1 — set the subscription-metadata HTTP headers most VPN clients
+ * read alongside the body. Conventions across Hiddify/V2RayNG/Streisand/
+ * Happ/Mihomo:
+ *
+ *   Profile-Title              — display name in the client's profile list
+ *   Profile-Update-Interval    — refresh cadence in HOURS (clients re-fetch
+ *                                without admin intervention)
+ *   Subscription-Userinfo      — `upload=N; download=N; total=N; expire=T`
+ *                                (RFC-3339-ish), drives the quota gauge
+ *   Support-URL                — clickable link in the profile detail page
+ *   Announce                   — short banner shown to the user (rendered
+ *                                template, supports {{TRAFFIC_LEFT}} etc.)
+ *
+ * Only well-formed values are emitted — admins can leave any setting NULL
+ * to omit the corresponding header.
+ */
+async function applySubscriptionHeaders(
+  reply: FastifyReply,
+  user: {
+    expireAt: string | null;
+    trafficLimitBytes: number | null;
+    trafficUsedBytes: number;
+  },
+): Promise<void> {
+  const settings = await getSubscriptionSettings();
+
+  const title = settings.profileTitle ?? settings.brandName;
+  if (title) reply.header('Profile-Title', `base64:${Buffer.from(title, 'utf8').toString('base64')}`);
+  reply.header('Profile-Update-Interval', String(settings.updateIntervalHours));
+  if (settings.supportUrl) reply.header('Support-URL', settings.supportUrl);
+
+  // Subscription-Userinfo. `upload+download === used`. We don't track
+  // upload separately yet (per-user xray stats sum both directions),
+  // so attribute everything to `download` and report `upload=0` — clients
+  // sum them to derive used quota and the gauge stays correct.
+  const used = Math.max(0, user.trafficUsedBytes);
+  const total = user.trafficLimitBytes ?? 0;
+  // expire is unix seconds; 0 = no expiry per de-facto convention.
+  const expireUnix = user.expireAt
+    ? Math.floor(new Date(user.expireAt).getTime() / 1000)
+    : 0;
+  reply.header(
+    'Subscription-Userinfo',
+    `upload=0; download=${used}; total=${total}; expire=${expireUnix}`,
+  );
+
+  // Announce — rendered template. Skip emission if template empty.
+  if (settings.announceTemplate) {
+    const trafficLeft =
+      user.trafficLimitBytes === null
+        ? '∞'
+        : formatBytes(BigInt(Math.max(0, user.trafficLimitBytes - used)));
+    const daysLeft =
+      user.expireAt === null
+        ? '∞'
+        : String(
+            Math.max(
+              0,
+              Math.ceil(
+                (new Date(user.expireAt).getTime() - Date.now()) /
+                  86400_000,
+              ),
+            ),
+          );
+    const announce = renderAnnounce(settings.announceTemplate, {
+      trafficLeft,
+      daysLeft,
+      supportUrl: settings.supportUrl ?? '',
+    });
+    if (announce.length > 0) {
+      // Some clients require base64 encoding for non-ASCII announce. We
+      // emit both forms — Happ reads `Announce-URL`-style raw, Hiddify
+      // base64. Stick with `Announce: base64:<...>` which both accept.
+      reply.header(
+        'Announce',
+        `base64:${Buffer.from(announce, 'utf8').toString('base64')}`,
+      );
+    }
+  }
+}
+
 async function resolveFormat(
   query: z.infer<typeof QuerySchema>,
   acceptHeader: string,
@@ -76,6 +163,12 @@ export async function subscriptionRoutes(app: FastifyInstance): Promise<void> {
       const filteredPlain = result.endpoints
         .filter((e) => !(e.disableForFormats ?? []).includes('plain'))
         .map((e) => e.uri);
+
+      // Slice S1 — emit subscription-metadata HTTP headers every client
+      // app reads to set its profile name, refresh interval, quota gauge,
+      // support link, and announce banner. Done after generateSubscription
+      // so we have the user's traffic/expire snapshot.
+      await applySubscriptionHeaders(reply, result.json.user);
 
       switch (format) {
         case 'json':
