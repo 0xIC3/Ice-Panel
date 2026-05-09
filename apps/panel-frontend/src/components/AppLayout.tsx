@@ -10,6 +10,7 @@ import {
   IconBolt,
   IconShield,
   IconLayoutDashboard,
+  IconListCheck,
   IconSettings,
 } from '@tabler/icons-react';
 import { useAuth } from '../stores/auth';
@@ -92,6 +93,14 @@ export function AppLayout() {
               to="/srr"
               label={t('sidebar.srr')}
               leftSection={<IconRoute size={18} />}
+            />
+            <NavLink
+              href="/admin/queues"
+              target="_blank"
+              rel="noreferrer"
+              label={t('sidebar.queues')}
+              description={t('sidebar.queuesDesc')}
+              leftSection={<IconListCheck size={18} />}
             />
             <NavLink
               component={RouterNavLink}

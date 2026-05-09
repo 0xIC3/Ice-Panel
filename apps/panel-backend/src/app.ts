@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import fastifyCompress from '@fastify/compress';
+import fastifyCookie from '@fastify/cookie';
 import fastifyCors from '@fastify/cors';
 import fastifyJwt from '@fastify/jwt';
 import fastifyRateLimit from '@fastify/rate-limit';
@@ -24,6 +25,7 @@ import { hostsRoutes } from './modules/hosts/hosts.routes.js';
 import { hwidRoutes } from './modules/hwid/hwid.routes.js';
 import { apiTokensRoutes } from './modules/api-tokens/api-tokens.routes.js';
 import { settingsRoutes } from './modules/settings/settings.routes.js';
+import { bullBoardRoutes } from './modules/admin/bull-board.routes.js';
 
 /**
  * Build the Fastify instance with all plugins and routes registered.
@@ -111,9 +113,18 @@ export async function buildApp(): Promise<FastifyInstance> {
     cache: 10000,
   });
 
+  await app.register(fastifyCookie);
   await app.register(fastifyJwt, {
     secret: config.JWT_SECRET,
     sign: { expiresIn: config.JWT_EXPIRES_IN },
+    // Slice 37 — also accept the JWT via cookie so server-rendered tools
+    // mounted on the panel origin (Bull-board UI at /admin/queues) can be
+    // gated behind requireAuth without copy-pasting tokens. The SPA sets
+    // this cookie on login alongside its localStorage copy.
+    cookie: {
+      cookieName: 'ice_panel_auth',
+      signed: false,
+    },
   });
 
   await app.register(authRoutes);
@@ -128,6 +139,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(hwidRoutes);
   await app.register(apiTokensRoutes);
   await app.register(settingsRoutes);
+  await app.register(bullBoardRoutes);
 
   return app;
 }

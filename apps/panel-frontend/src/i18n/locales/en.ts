@@ -45,6 +45,8 @@ export default {
     squads: 'Squads',
     nodes: 'Nodes',
     srr: 'SRR',
+    queues: 'Queues',
+    queuesDesc: 'BullMQ overview',
     settings: 'Settings',
     logout: 'Log out',
   },

@@ -972,7 +972,7 @@ Wire `inboundCfgWire` зеркалит `NaiveConfigSchema` (hostname / tlsEmail 
 | 34 | **Backup / restore CLI** | ⏭️ | `ice-panel-backup` dump БД + Redis AOF + .env шифр., S3-compatible cron |
 | 35 | **Security hardening** | ⏭️ | npm audit в CI, per-route rate-limits, CSP refinement, fuzzing |
 | 36 | **CI/CD via GitHub Actions** | ⏭️ | Auto Docker build на push, ghcr.io publish, deploy docs |
-| 37 | **Bull-board + observability admin** | ⏭️ | `/admin/queues` UI |
+| 37 | **Bull-board + observability admin** | ✅ done (2026-05-10) | `@bull-board/fastify` + `@bull-board/api` mounted at `/admin/queues` показывают live-state трёх очередей: `inbound-sync`, `cron-tasks`, `node-users` (waiting/active/failed counts + per-job args/error-stack drill-down). Защищено `requireAuth` + новая cookie-сессия: после `POST /api/auth/login` бэк ставит HttpOnly+SameSite=Strict cookie `ice_panel_auth` (24h), `fastifyJwt` зарегистрирован с `cookie: { cookieName: 'ice_panel_auth', signed: false }` — server-rendered HTML тулзы на той же origin наследуют сессию без копирования токена из localStorage. Sidebar получил «Очереди» NavLink → открывает `/admin/queues` в новой вкладке. Bearer-token путь для requireAuth (через apiToken `icp_*`) и SPA-Bearer-JWT не тронуты — cookie это additive, не replace. 22/22 auth+tokens tests green. |
 | 38 | (опц.) AmneziaWG cascade via iptables | deferred | Multi-hop WG через MASQUERADE rules |
 | 39 | (опц.) External squads — presentation overrides | deferred | Per-user-bucket branding |
 

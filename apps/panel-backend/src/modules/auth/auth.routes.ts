@@ -40,6 +40,19 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
           sub: admin.id,
           role: admin.role,
         });
+        // Slice 37 — also drop a same-origin cookie so server-rendered admin
+        // tooling (Bull-board at /admin/queues) inherits the session without
+        // requiring the SPA to manually copy localStorage to a header.
+        // HttpOnly + SameSite=Strict — cookie is unreadable to JS and only
+        // travels with first-party requests, so XSS can't exfil it and
+        // CSRF can't ride it cross-site.
+        reply.setCookie('ice_panel_auth', token, {
+          httpOnly: true,
+          sameSite: 'strict',
+          path: '/',
+          maxAge: 60 * 60 * 24, // 24h — matches default JWT_EXPIRES_IN.
+          secure: process.env.NODE_ENV === 'production',
+        });
         return reply.send({
           admin: mapAdminToPublic(admin),
           token,

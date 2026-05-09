@@ -47,6 +47,8 @@ export default {
     squads: 'Сквады',
     nodes: 'Ноды',
     srr: 'SRR',
+    queues: 'Очереди',
+    queuesDesc: 'BullMQ обзор',
     settings: 'Настройки',
     logout: 'Выйти',
   },
