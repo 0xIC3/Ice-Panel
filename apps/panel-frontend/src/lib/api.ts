@@ -679,6 +679,32 @@ export async function deleteBinding(id: string): Promise<void> {
   await api.delete(`/api/bindings/${id}`);
 }
 
+// ───── Test-Connect (slice 31) ─────
+
+export interface TestConnectResult {
+  bindingId: string;
+  hostId: string | null;
+  hostRemark: string;
+  protocol: string;
+  nodeName: string;
+  endpoint: string;
+  port: number;
+  probe: 'tcp' | 'tls' | 'skip';
+  sni?: string;
+  ok: boolean;
+  latencyMs?: number;
+  certCn?: string;
+  error?: string;
+  notes?: string;
+}
+
+export async function testConnectProfile(profileId: string): Promise<{ results: TestConnectResult[] }> {
+  const { data } = await api.post<{ results: TestConnectResult[] }>(
+    `/api/profiles/${profileId}/test-connect`,
+  );
+  return data;
+}
+
 // ───── HWID devices (slice S2) ─────
 
 export interface HwidDevice {

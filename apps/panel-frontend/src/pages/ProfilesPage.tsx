@@ -43,6 +43,7 @@ import {
 } from '../lib/api';
 import { ProfileFormModal } from '../components/ProfileFormModal';
 import { DeployProfileModal } from '../components/DeployProfileModal';
+import { TestConnectModal } from '../components/TestConnectModal';
 
 const PROTOCOL_COLORS: Record<string, string> = {
   hysteria: 'blue',
@@ -70,6 +71,7 @@ export function ProfilesPage() {
   const [createOpen, { open: openCreate, close: closeCreate }] = useDisclosure(false);
   const [editing, setEditing] = useState<Profile | null>(null);
   const [deploying, setDeploying] = useState<Profile | null>(null);
+  const [testing, setTesting] = useState<Profile | null>(null);
   const [search, setSearch] = useState('');
   const [protocolFilter, setProtocolFilter] = useState<ProtocolName | 'all'>('all');
 
@@ -236,6 +238,7 @@ export function ProfilesPage() {
               onEdit={() => setEditing(p)}
               onDelete={() => handleDelete(p)}
               onDeploy={() => setDeploying(p)}
+              onTest={() => setTesting(p)}
             />
           ))}
         </SimpleGrid>
@@ -267,6 +270,10 @@ export function ProfilesPage() {
       <DeployProfileModal
         profile={deploying}
         onClose={() => setDeploying(null)}
+      />
+      <TestConnectModal
+        profile={testing}
+        onClose={() => setTesting(null)}
       />
     </Stack>
   );
@@ -302,12 +309,14 @@ function ProfileCard({
   onEdit,
   onDelete,
   onDeploy,
+  onTest,
 }: {
   profile: Profile;
   bindingCount: number;
   onEdit: () => void;
   onDelete: () => void;
   onDeploy: () => void;
+  onTest: () => void;
 }) {
   const { t } = useTranslation();
   const color = PROTOCOL_COLORS[profile.protocol] ?? 'gray';
@@ -347,6 +356,9 @@ function ProfileCard({
           <Menu.Dropdown>
             <Menu.Item leftSection={<IconRocket size={14} />} onClick={onDeploy}>
               {t('profiles.deployToNodes')}
+            </Menu.Item>
+            <Menu.Item leftSection={<IconBolt size={14} />} onClick={onTest}>
+              Test connect
             </Menu.Item>
             <Menu.Item leftSection={<IconEdit size={14} />} onClick={onEdit}>
               {t('common.edit')}
