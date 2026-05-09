@@ -47,6 +47,7 @@ import {
   type UpdateNodeInput,
 } from '../lib/api';
 import { COUNTRY_OPTIONS, countryFlag } from '../lib/countries';
+import { HostsManager } from './HostsManager';
 
 const PROTOCOL_OPTIONS: { value: NodeProtocol; label: string }[] = [
   { value: 'xray', label: 'Xray (VLESS / Trojan + REALITY)' },
@@ -491,6 +492,14 @@ export function NodeEditModal({
                       </ActionIcon>
                     </Tooltip>
                   </Group>
+                  {profile && (
+                    <Box mt="xs" pl="xl">
+                      <HostsManager
+                        bindingId={binding.id}
+                        protocol={profile.protocol}
+                      />
+                    </Box>
+                  )}
                 </Paper>
               ))}
             </Stack>

@@ -638,6 +638,89 @@ export async function deleteBinding(id: string): Promise<void> {
   await api.delete(`/api/bindings/${id}`);
 }
 
+// ───── Hosts (slice 30) ─────
+//
+// One Binding can fan out into N Hosts in subscriptions. Each Host is a
+// distinct URL with overrides for SNI / fingerprint / path / host-header /
+// ALPN / etc. on top of the binding's base config.
+
+export type Fingerprint =
+  | 'chrome'
+  | 'firefox'
+  | 'safari'
+  | 'ios'
+  | 'android'
+  | 'edge'
+  | 'random';
+
+export interface Host {
+  id: string;
+  bindingId: string;
+  remark: string;
+  priority: number;
+  enabled: boolean;
+  addressOverride: string | null;
+  portOverride: number | null;
+  sniOverride: string | null;
+  hostHeaderOverride: string | null;
+  pathOverride: string | null;
+  fingerprintOverride: Fingerprint | null;
+  alpn: string[];
+  allowInsecure: boolean;
+  securityLayer: 'default' | 'tls' | 'none';
+  disableForFormats: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateHostInput {
+  bindingId: string;
+  remark?: string;
+  priority?: number;
+  enabled?: boolean;
+  addressOverride?: string | null;
+  portOverride?: number | null;
+  sniOverride?: string | null;
+  hostHeaderOverride?: string | null;
+  pathOverride?: string | null;
+  fingerprintOverride?: Fingerprint | null;
+  alpn?: string[];
+  allowInsecure?: boolean;
+  securityLayer?: 'default' | 'tls' | 'none';
+  disableForFormats?: string[];
+}
+
+export type UpdateHostInput = Partial<Omit<CreateHostInput, 'bindingId'>>;
+
+export async function listHosts(params?: {
+  bindingId?: string;
+  profileId?: string;
+}): Promise<{ hosts: Host[] }> {
+  const { data } = await api.get<{ hosts: Host[] }>('/api/hosts', { params });
+  return data;
+}
+
+export async function createHost(input: CreateHostInput): Promise<Host> {
+  const { data } = await api.post<Host>('/api/hosts', input);
+  return data;
+}
+
+export async function updateHost(id: string, input: UpdateHostInput): Promise<Host> {
+  const { data } = await api.put<Host>(`/api/hosts/${id}`, input);
+  return data;
+}
+
+export async function deleteHost(id: string): Promise<void> {
+  await api.delete(`/api/hosts/${id}`);
+}
+
+export async function reorderHosts(hostIds: string[]): Promise<{ hosts: Host[] }> {
+  const { data } = await api.put<{ hosts: Host[] }>('/api/hosts/reorder', {
+    hostIds,
+  });
+  return data;
+}
+
 // ───── API tokens ─────
 
 export interface ApiToken {

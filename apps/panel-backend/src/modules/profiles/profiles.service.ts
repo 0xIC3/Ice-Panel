@@ -5,6 +5,7 @@ import { ALL_SQUAD_ID } from '../squads/squads.constants.js';
 import {
   PROTOCOL_CONFIG_SCHEMAS,
 } from '../inbounds/inbounds.schemas.js';
+import { ensureDefaultHost } from '../hosts/hosts.service.js';
 import {
   generateSsServerPsk,
 } from './ss-helpers.js';
@@ -199,6 +200,10 @@ export async function createBinding(input: CreateBindingInput): Promise<PublicBi
       enabled: input.enabled,
     },
   });
+  // Slice 30 — every new binding ships with one Default host so the
+  // subscription generator (which iterates bindings × hosts) has something
+  // to emit. Admin can later add extras with different SNI / fingerprint.
+  await ensureDefaultHost(created.id);
   eventBus.emit('binding.created', {
     bindingId: created.id,
     profileId: created.profileId,

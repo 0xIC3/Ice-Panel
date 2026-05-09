@@ -152,6 +152,12 @@ export async function generateSubscription(
     include: {
       profile: { select: { id: true, protocol: true, config: true } },
       node: { select: { name: true, address: true, createdAt: true } },
+      // Slice 30 — one binding fans out into N enabled hosts. Order them
+      // by `priority` so subscription URL ordering is admin-controlled.
+      hosts: {
+        where: { enabled: true },
+        orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+      },
     },
     orderBy: [{ port: 'asc' }],
   });
@@ -177,10 +183,42 @@ export async function generateSubscription(
       config: cfgMerged,
     };
 
-    // Public host/port logic: binding overrides → fall back to node.address.
-    const host = b.publicHost ?? hostFromAddress(b.node.address);
-    const port = b.publicPort ?? b.port;
-    const nodeName = b.node.name;
+    // Slice 30 — fan-out per host. Backfill migration guarantees ≥1 host
+    // per binding; ensureDefaultHost() does the same for new bindings.
+    // The fallback below covers a migration-skipped binding so the
+    // subscription never silently drops to zero URLs.
+    const hostRows = b.hosts.length > 0 ? b.hosts : [null];
+    for (const hostRow of hostRows) {
+      const baseHost = b.publicHost ?? hostFromAddress(b.node.address);
+      const basePort = b.publicPort ?? b.port;
+
+      // Per-host overrides win over binding/profile values. NULL fields on
+      // the host row preserve the underlying value.
+      const host = hostRow?.addressOverride ?? baseHost;
+      const port = hostRow?.portOverride ?? basePort;
+      const hostRemark = hostRow?.remark ?? '';
+      const nodeName = hostRemark && hostRemark !== 'Default'
+        ? `${b.node.name} · ${hostRemark}`
+        : b.node.name;
+      const hostOverrides = hostRow ?? null;
+
+    // Slice 30 — common per-host metadata threaded onto each endpoint so
+    // formatters can filter (`disableForFormats`) and richer URI builders
+    // (slice 30.1) can emit alpn / allowInsecure / securityLayer without
+    // re-fetching the host row.
+    const securityLayerRaw = hostOverrides?.securityLayer ?? 'default';
+    const securityLayer: 'default' | 'tls' | 'none' =
+      securityLayerRaw === 'tls' || securityLayerRaw === 'none'
+        ? securityLayerRaw
+        : 'default';
+    const hostMeta = {
+      hostId: hostOverrides?.id,
+      hostRemark: hostOverrides?.remark,
+      alpn: hostOverrides?.alpn,
+      allowInsecure: hostOverrides?.allowInsecure ?? false,
+      securityLayer,
+      disableForFormats: hostOverrides?.disableForFormats ?? [],
+    };
 
     if (ib.protocol === 'hysteria') {
       const hyCfg = ib.config as { obfsPassword?: string } | null;
@@ -189,6 +227,7 @@ export async function generateSubscription(
         nodeName,
         host,
         port,
+        ...hostMeta,
         password: user.hysteriaPassword,
         obfsPassword: hyCfg?.obfsPassword,
         uri: buildHysteriaUri({
@@ -203,10 +242,17 @@ export async function generateSubscription(
       const cfg = ib.config as unknown as XrayInboundConfig & {
         subprotocol?: 'vless' | 'trojan';
       };
-      const sni = cfg.realityServerNames[0] ?? '';
+      // Slice 30 — per-host overrides on the most-used REALITY knobs. Each
+      // null falls through to the profile-level config, so back-compat with
+      // bindings that have only the auto-generated Default host stays exact.
+      const sni = hostOverrides?.sniOverride ?? cfg.realityServerNames[0] ?? '';
       const shortId = cfg.realityShortIds[0] ?? '';
       const network = cfg.network ?? 'raw';
       const subprotocol = cfg.subprotocol ?? 'vless';
+      const fingerprint =
+        hostOverrides?.fingerprintOverride ?? cfg.fingerprint;
+      const xrayPath = hostOverrides?.pathOverride ?? cfg.path;
+      const xrayHostHeader = hostOverrides?.hostHeaderOverride ?? cfg.host;
       // Slice 24c part 3 — branch URI scheme on subprotocol. We reuse
       // user.xrayUuid as the Trojan password (UUIDs have plenty of entropy
       // and admins are already managing them; a separate trojanPassword
@@ -220,10 +266,10 @@ export async function generateSubscription(
               publicKey: cfg.realityPublicKey,
               shortId,
               sni,
-              fingerprint: cfg.fingerprint,
+              fingerprint,
               network,
-              path: cfg.path,
-              hostHeader: cfg.host,
+              path: xrayPath,
+              hostHeader: xrayHostHeader,
               serviceName: cfg.serviceName,
               name: nodeName,
             })
@@ -235,10 +281,10 @@ export async function generateSubscription(
               shortId,
               sni,
               flow: cfg.flow,
-              fingerprint: cfg.fingerprint,
+              fingerprint,
               network,
-              path: cfg.path,
-              hostHeader: cfg.host,
+              path: xrayPath,
+              hostHeader: xrayHostHeader,
               serviceName: cfg.serviceName,
               name: nodeName,
             });
@@ -247,15 +293,16 @@ export async function generateSubscription(
         nodeName,
         host,
         port,
+        ...hostMeta,
         uuid: user.xrayUuid,
         publicKey: cfg.realityPublicKey,
         shortId,
         sni,
         flow: cfg.flow,
-        fingerprint: cfg.fingerprint,
+        fingerprint,
         network,
-        path: cfg.path,
-        hostHeader: cfg.host,
+        path: xrayPath,
+        hostHeader: xrayHostHeader,
         serviceName: cfg.serviceName,
         subprotocol,
         uri,
@@ -270,6 +317,7 @@ export async function generateSubscription(
         nodeName,
         host,
         port,
+        ...hostMeta,
         privateKey: user.amneziawgPrivateKey,
         allowedIp: `${peer.ip}/32`,
         serverPublicKey: cfg.serverPublicKey,
@@ -300,6 +348,7 @@ export async function generateSubscription(
         nodeName,
         host,
         port,
+        ...hostMeta,
         secret,
         domain: cfg.domain,
         uri: buildMtprotoUri({ secret, host, port, name: nodeName }),
@@ -314,6 +363,7 @@ export async function generateSubscription(
         nodeName,
         host,
         port,
+        ...hostMeta,
         username: user.username,
         password: user.xrayUuid,
         mtu: cfg.mtu,
@@ -341,6 +391,7 @@ export async function generateSubscription(
         nodeName,
         host,
         port,
+        ...hostMeta,
         method: ssCfg.method,
         password: user.xrayUuid,
         uri: buildShadowsocksUri({
@@ -362,6 +413,7 @@ export async function generateSubscription(
         nodeName,
         host: naiveHost,
         port,
+        ...hostMeta,
         username: user.username,
         password: user.naivePassword,
         uri: buildNaiveUri({
@@ -373,6 +425,7 @@ export async function generateSubscription(
         }),
       });
     }
+    } // host-row loop
   }
 
   try {

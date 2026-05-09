@@ -111,6 +111,7 @@ model ProfileNodeBinding {
 
   profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
   node    Node    @relation(fields: [nodeId], references: [id], onDelete: Restrict)
+  hosts   Host[]
 
   // Same port can't be reused on the same node (different protocols would
   // collide on the underlying socket).
@@ -119,6 +120,73 @@ model ProfileNodeBinding {
   @@index([profileId])
   @@index([nodeId])
   @@map("profile_node_bindings")
+}
+
+// ───── Slice 30: Hosts abstraction ───────────────────────────────────────
+//
+// One Binding can fan out into N Hosts in the subscription. Each Host is a
+// distinct URL the client sees with its own SNI/path/fingerprint/host-header
+// override on top of the binding+profile config. Use cases:
+//
+//   - REALITY direct + REALITY behind CDN as two URLs of one inbound
+//   - Multi-SNI fronting (apple.com / microsoft.com / cloudflare.com)
+//   - uTLS fingerprint A/B (chrome / firefox / random) of the same binding
+//   - Per-format URL gating (some host shapes only emit in singbox, not clash)
+//
+// At binding creation a single Host with `priority: 0` is auto-inserted so
+// the subscription stays back-compat (one binding still emits one URL until
+// the admin actually adds extra hosts).
+//
+// Inspired by Remnawave's hosts table; field set tightened to the overrides
+// our URI builders / format formatters actually consume.
+model Host {
+  id                String   @id @default(uuid()) @db.Uuid
+  bindingId         String   @map("binding_id") @db.Uuid
+
+  // Human label shown next to the URL in the admin UI ("Direct", "EU-CDN",
+  // "Mobile-tuned"). Not surfaced in the subscription — purely admin-side.
+  remark            String   @default("Default") @db.VarChar(64)
+  // Subscription emission order. Lowest first. Drag-and-drop UI mutates this.
+  priority          Int      @default(0)
+  enabled           Boolean  @default(true)
+
+  // Public address the client connects to. NULL → fall back to
+  // binding.publicHost → node.address. Use this when the host is fronted
+  // by a CDN whose endpoint differs from the origin.
+  addressOverride   String?  @map("address_override") @db.VarChar(253)
+  portOverride      Int?     @map("port_override")
+
+  // TLS / transport overrides. Each NULL → keep the value derived from
+  // profile.config + binding.overrides. Setting one only on a host lets the
+  // same inbound be reached with multiple SNI / fingerprint / path tuples.
+  sniOverride       String?  @map("sni_override") @db.VarChar(253)
+  hostHeaderOverride String? @map("host_header_override") @db.VarChar(253)
+  pathOverride      String?  @map("path_override") @db.VarChar(253)
+  fingerprintOverride String? @map("fingerprint_override") @db.VarChar(32)
+
+  // ALPN list emitted into client URI / config. Empty = adapter default.
+  alpn              String[] @default([])
+  // Skip cert verification on the client side (?allowInsecure=1). Useful for
+  // self-signed CDN front. Default off — admin opts in per host.
+  allowInsecure     Boolean  @default(false) @map("allow_insecure")
+  // Forces client-side security layer. `default` = use protocol default
+  // (REALITY for xray, TLS for naive, etc). `tls` / `none` are explicit
+  // overrides — only used when fronting REALITY through a CDN that
+  // terminates TLS itself.
+  securityLayer     String   @default("default") @map("security_layer") @db.VarChar(16)
+
+  // Subscription formats this host should be excluded from. e.g. some
+  // CDN-fronted shapes only work in singbox, not in clash. Stored as a
+  // canonical lowercase format name array: ["plain","clash","singbox","xrayjson","wgconf"].
+  disableForFormats String[] @default([]) @map("disable_for_formats")
+
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  binding ProfileNodeBinding @relation(fields: [bindingId], references: [id], onDelete: Cascade)
+
+  @@index([bindingId, priority])
+  @@map("hosts")
 }
 
 model GroupProfile {

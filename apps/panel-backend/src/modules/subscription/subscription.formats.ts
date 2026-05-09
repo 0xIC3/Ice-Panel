@@ -61,6 +61,29 @@ interface SubscriptionEndpointBase {
   /** Pre-built URI for plain-list/JSON formats. Format-specific builders
    *  (Clash, Sing-box, ...) consume the structured fields below instead. */
   uri: string;
+
+  // ───── Slice 30: per-host metadata ──────────────────────────────────
+  // Each binding can fan out into N hosts. The fields below identify
+  // which host produced this endpoint and carry overrides that aren't
+  // baked into `uri` yet (slice 30.1 will light up emission).
+
+  /** Host row id this endpoint was emitted from. Undefined for legacy
+   *  bindings that have zero hosts (back-compat fallback). */
+  hostId?: string;
+  /** Admin-facing label of the originating host. Useful for debugging
+   *  why a particular URL appears in the subscription. */
+  hostRemark?: string;
+  /** ALPN list — emitted by clash/singbox formatters when non-empty. */
+  alpn?: string[];
+  /** `?allowInsecure=1` flag for self-signed CDN front. */
+  allowInsecure?: boolean;
+  /** Forces client-side TLS layer when the host fronts the inbound through
+   *  a CDN that terminates TLS. `default` keeps adapter behaviour. */
+  securityLayer?: 'default' | 'tls' | 'none';
+  /** Subscription formats this endpoint must NOT be emitted in. The route
+   *  handler filters by this before invoking the format-specific formatter,
+   *  so each formatter can stay format-agnostic. */
+  disableForFormats?: string[];
 }
 
 export interface HysteriaSubscriptionEndpoint extends SubscriptionEndpointBase {

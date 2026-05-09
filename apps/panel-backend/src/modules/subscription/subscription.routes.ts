@@ -66,30 +66,43 @@ export async function subscriptionRoutes(app: FastifyInstance): Promise<void> {
         userAgent,
       });
 
+      // Slice 30 — host-level format gating. Each endpoint carries an
+      // optional `disableForFormats[]` from its originating host row; we
+      // filter before invoking the format-specific formatter so each
+      // formatter can stay agnostic of host presence.
+      const filtered = result.endpoints.filter(
+        (e) => !(e.disableForFormats ?? []).includes(format),
+      );
+      const filteredPlain = result.endpoints
+        .filter((e) => !(e.disableForFormats ?? []).includes('plain'))
+        .map((e) => e.uri);
+
       switch (format) {
         case 'json':
-          return reply.type('application/json').send(result.json);
+          return reply
+            .type('application/json')
+            .send({ ...result.json, endpoints: filtered });
         case 'clash':
           return reply
             .type('text/yaml; charset=utf-8')
-            .send(buildClashYaml(result.endpoints));
+            .send(buildClashYaml(filtered));
         case 'singbox':
           return reply
             .type('application/json')
-            .send(buildSingboxJson(result.endpoints));
+            .send(buildSingboxJson(filtered));
         case 'wgconf':
           return reply
             .type('text/plain; charset=utf-8')
-            .send(buildWgQuickConf(result.endpoints));
+            .send(buildWgQuickConf(filtered));
         case 'xrayjson':
           return reply
             .type('application/json')
-            .send(buildXrayJson(result.endpoints));
+            .send(buildXrayJson(filtered));
         case 'plain':
         default:
           return reply
             .type('text/plain; charset=utf-8')
-            .send(result.textPlain);
+            .send(Buffer.from(filteredPlain.filter((u) => u.length > 0).join('\n'), 'utf8').toString('base64'));
       }
     } catch (err) {
       if (err instanceof service.SubscriptionNotFoundError) {
