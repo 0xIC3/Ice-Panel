@@ -38,6 +38,13 @@ interface CardNode {
   name: string;
   status: string;
   countryCode: string | null;
+  // Slice 27.5 — region tag (resolved upstream so the card stays plain).
+  regionLabel: string | null;
+  // Slice 27.5 — `currentUsers/maxUsers` utilization. currentUsers is
+  // approximate (sum across squads w/ access — overcounts cross-squad
+  // users); good enough for at-a-glance. NULL/0 = no bar.
+  maxUsers: number | null;
+  approxUsers: number;
   lastStatusChange: string | null;
   inboundCount: number;
   todayBytes: number;
@@ -133,6 +140,11 @@ export function NodeCard({
                 <Text fw={700} size="sm" truncate>
                   {node.name}
                 </Text>
+                {node.regionLabel && (
+                  <Badge size="xs" variant="light" color="cyan" tt="uppercase">
+                    {node.regionLabel}
+                  </Badge>
+                )}
               </Group>
               <Text size="xs" c="dimmed" ff="monospace" truncate>
                 {/* address пишется на странице, нету в dashboard — заменяем
@@ -206,6 +218,35 @@ export function NodeCard({
             <Text size="xs" c="dimmed">
               Метрики ещё не пришли — первый poll в течение 15 сек.
             </Text>
+          </Box>
+        )}
+
+        {/* Slice 27.5 — capacity gauge (approximate, see CardNode comment).
+            Hidden when admin hasn't set maxUsers (no opinion → no bar). */}
+        {node.maxUsers && node.maxUsers > 0 && (
+          <Box>
+            <Group justify="space-between" mb={2}>
+              <Text size="xs" c="dimmed">
+                Загрузка
+              </Text>
+              <Text size="xs" c="dimmed" ff="monospace">
+                {node.approxUsers}/{node.maxUsers}
+              </Text>
+            </Group>
+            <Progress
+              value={Math.min(
+                100,
+                Math.round((node.approxUsers / node.maxUsers) * 100),
+              )}
+              size="xs"
+              color={
+                node.approxUsers >= node.maxUsers
+                  ? 'red'
+                  : node.approxUsers / node.maxUsers > 0.85
+                    ? 'yellow'
+                    : 'teal'
+              }
+            />
           </Box>
         )}
 

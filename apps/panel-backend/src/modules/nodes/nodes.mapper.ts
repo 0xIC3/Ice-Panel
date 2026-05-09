@@ -10,6 +10,9 @@ export interface PublicNodeDto {
   lastStatusChange: string | null;
   lastStatusMessage: string | null;
   consumptionMultiplier: string;
+  // Slice 27.5 — region grouping + capacity hint.
+  regionId: string | null;
+  maxUsers: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -29,6 +32,8 @@ export function mapNodeToPublic(node: Node): PublicNodeDto {
     lastStatusChange: node.lastStatusChange?.toISOString() ?? null,
     lastStatusMessage: node.lastStatusMessage,
     consumptionMultiplier: node.consumptionMultiplier.toString(),
+    regionId: node.regionId,
+    maxUsers: node.maxUsers,
     createdAt: node.createdAt.toISOString(),
     updatedAt: node.updatedAt.toISOString(),
   };

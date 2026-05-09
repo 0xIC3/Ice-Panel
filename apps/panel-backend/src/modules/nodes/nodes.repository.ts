@@ -5,6 +5,7 @@ export interface ListParams {
   page: number;
   limit: number;
   status?: string;
+  regionId?: string;
 }
 
 export async function findActiveById(id: string): Promise<Node | null> {
@@ -24,13 +25,16 @@ export async function findActiveByAddress(address: string): Promise<Node | null>
   return prisma.node.findFirst({ where: { address, deletedAt: null } });
 }
 
-export async function create(data: Prisma.NodeCreateInput): Promise<Node> {
+export async function create(data: Prisma.NodeUncheckedCreateInput): Promise<Node> {
+  // Unchecked variant lets us set FKs by id (`regionId`) directly without
+  // the nested `region: { connect: ... }` ceremony — for service-layer
+  // usage that's owning the FK assignment we prefer the flat shape.
   return prisma.node.create({ data });
 }
 
 export async function updateById(
   id: string,
-  data: Prisma.NodeUpdateInput,
+  data: Prisma.NodeUncheckedUpdateInput,
 ): Promise<Node> {
   return prisma.node.update({ where: { id }, data });
 }
@@ -49,6 +53,7 @@ export async function list(params: ListParams): Promise<{
   const where: Prisma.NodeWhereInput = {
     deletedAt: null,
     ...(params.status ? { status: params.status } : {}),
+    ...(params.regionId ? { regionId: params.regionId } : {}),
   };
   const [nodes, total] = await Promise.all([
     prisma.node.findMany({

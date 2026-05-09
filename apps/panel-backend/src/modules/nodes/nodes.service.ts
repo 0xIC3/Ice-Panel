@@ -63,6 +63,8 @@ export async function createNode(
       protocol: input.protocol,
       countryCode: input.countryCode ?? null,
       consumptionMultiplier: BigInt(input.consumptionMultiplier),
+      regionId: input.regionId ?? null,
+      maxUsers: input.maxUsers ?? null,
     });
   } catch (err) {
     // Catch DB-level UNIQUE violation. Soft-deleted rows still hold the
@@ -164,6 +166,8 @@ export async function updateNode(id: string, input: UpdateNodeInput): Promise<Pu
   if (input.consumptionMultiplier !== undefined) {
     data.consumptionMultiplier = BigInt(input.consumptionMultiplier);
   }
+  if (input.regionId !== undefined) data.regionId = input.regionId;
+  if (input.maxUsers !== undefined) data.maxUsers = input.maxUsers;
 
   const updated = await repo.updateById(id, data);
   return mapNodeToPublic(updated);

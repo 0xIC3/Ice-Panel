@@ -211,6 +211,18 @@ export interface Node {
   lastStatusChange: string | null;
   lastStatusMessage: string | null;
   consumptionMultiplier: string;
+  // Slice 27.5
+  regionId: string | null;
+  maxUsers: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Region {
+  id: string;
+  name: string;
+  code: string;
+  nodeCount?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -248,6 +260,8 @@ export interface CreateNodeInput {
   protocol: NodeProtocol;
   countryCode?: string | null;
   consumptionMultiplier?: number;
+  regionId?: string | null;
+  maxUsers?: number | null;
 }
 
 export interface UpdateNodeInput {
@@ -256,15 +270,42 @@ export interface UpdateNodeInput {
   protocol?: NodeProtocol;
   countryCode?: string | null;
   consumptionMultiplier?: number;
+  regionId?: string | null;
+  maxUsers?: number | null;
 }
 
 export async function listNodes(params?: {
   page?: number;
   limit?: number;
   status?: string;
+  regionId?: string;
 }): Promise<NodesListResponse> {
   const { data } = await api.get<NodesListResponse>('/api/nodes', { params });
   return data;
+}
+
+// ───── Regions (slice 27.5) ─────
+
+export async function listRegions(): Promise<{ regions: Region[] }> {
+  const { data } = await api.get<{ regions: Region[] }>('/api/regions');
+  return data;
+}
+
+export async function createRegion(input: { name: string; code: string }): Promise<Region> {
+  const { data } = await api.post<Region>('/api/regions', input);
+  return data;
+}
+
+export async function updateRegion(
+  id: string,
+  input: { name?: string; code?: string },
+): Promise<Region> {
+  const { data } = await api.put<Region>(`/api/regions/${id}`, input);
+  return data;
+}
+
+export async function deleteRegion(id: string): Promise<void> {
+  await api.delete(`/api/regions/${id}`);
 }
 
 export async function createNode(input: CreateNodeInput): Promise<NodeWithPayload> {

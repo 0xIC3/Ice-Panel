@@ -35,6 +35,7 @@ import {
   IconPalette,
   IconPlus,
   IconRefresh,
+  IconWorld,
   IconRss,
   IconShield,
   IconTrash,
@@ -43,11 +44,16 @@ import {
 import { copyToClipboard } from '../lib/clipboard';
 import {
   createApiToken,
+  createRegion,
   deleteApiToken,
+  deleteRegion,
   listApiTokens,
+  listRegions,
   getSettings,
+  updateRegion,
   updateSettings,
   type ApiToken,
+  type Region,
 } from '../lib/api';
 
 export function SettingsPage() {
@@ -68,6 +74,7 @@ export function SettingsPage() {
 
       <CustomizationCard />
       <SubscriptionMetadataCard />
+      <RegionsCard />
     </Stack>
   );
 }
@@ -657,3 +664,233 @@ function SubscriptionMetadataCard() {
     </Card>
   );
 }
+
+// ───── Regions (slice 27.5) ─────
+
+/**
+ * Plain CRUD for `regions` — admins create/rename/delete logical groups
+ * ("EU", "RU", "Asia") and then attach nodes to them via NodeFormModal.
+ * Slice 28 will read region.code against GeoIP at /sub/:token; here we
+ * just give admins the chair to maintain the table.
+ */
+function RegionsCard() {
+  const qc = useQueryClient();
+  const regionsQuery = useQuery({ queryKey: ['regions'], queryFn: listRegions });
+  const [name, setName] = useState('');
+  const [code, setCode] = useState('');
+  const [editing, setEditing] = useState<Region | null>(null);
+
+  const createMutation = useMutation({
+    mutationFn: createRegion,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['regions'] });
+      setName('');
+      setCode('');
+      notifications.show({ color: 'green', message: 'Регион создан' });
+    },
+    onError: (err) =>
+      notifications.show({
+        color: 'red',
+        title: 'Не получилось создать',
+        message: err instanceof Error ? err.message : String(err),
+      }),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, input }: { id: string; input: { name?: string; code?: string } }) =>
+      updateRegion(id, input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['regions'] });
+      setEditing(null);
+      notifications.show({ color: 'green', message: 'Регион обновлён' });
+    },
+    onError: (err) =>
+      notifications.show({
+        color: 'red',
+        title: 'Не получилось сохранить',
+        message: err instanceof Error ? err.message : String(err),
+      }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteRegion,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['regions'] });
+      qc.invalidateQueries({ queryKey: ['nodes'] });
+      notifications.show({ color: 'green', message: 'Регион удалён' });
+    },
+    onError: (err) =>
+      notifications.show({
+        color: 'red',
+        title: 'Не получилось удалить',
+        message: err instanceof Error ? err.message : String(err),
+      }),
+  });
+
+  function handleDelete(r: Region) {
+    modals.openConfirmModal({
+      title: `Удалить регион «${r.name}»?`,
+      children: (
+        <Text size="sm">
+          {r.nodeCount && r.nodeCount > 0
+            ? `${r.nodeCount} нод останутся, но потеряют привязку к региону (поле обнулится).`
+            : 'Ни одна нода не привязана — действие безопасное.'}
+        </Text>
+      ),
+      labels: { confirm: 'Удалить', cancel: 'Отмена' },
+      confirmProps: { color: 'red' },
+      onConfirm: () => deleteMutation.mutate(r.id),
+    });
+  }
+
+  const regions = regionsQuery.data?.regions ?? [];
+
+  return (
+    <Card withBorder padding="lg" radius="md">
+      <Group gap="sm" mb="md">
+        <ThemeIcon size={32} radius="md" variant="light" color="cyan">
+          <IconWorld size={18} />
+        </ThemeIcon>
+        <Stack gap={0}>
+          <Text fw={600}>Регионы</Text>
+          <Text size="xs" c="dimmed">
+            Логическая группировка нод (EU / RU / Asia / …) — используется
+            для фильтрации в /nodes и для smart server-side selection (slice 28).
+          </Text>
+        </Stack>
+      </Group>
+
+      <Stack gap="sm" maw={620}>
+        {regions.length === 0 ? (
+          <Text size="xs" c="dimmed">
+            Регионов нет. Создай первый — например, «Europe» с кодом «EU».
+          </Text>
+        ) : (
+          <Stack gap={4}>
+            {regions.map((r) =>
+              editing?.id === r.id ? (
+                <RegionEditRow
+                  key={r.id}
+                  region={r}
+                  loading={updateMutation.isPending}
+                  onCancel={() => setEditing(null)}
+                  onSave={(input) =>
+                    updateMutation.mutate({ id: r.id, input })
+                  }
+                />
+              ) : (
+                <Paper key={r.id} withBorder p="xs" radius="sm">
+                  <Group justify="space-between" wrap="nowrap">
+                    <Group gap="sm" wrap="nowrap">
+                      <Badge variant="light" color="cyan" size="lg">
+                        {r.code}
+                      </Badge>
+                      <Stack gap={0}>
+                        <Text size="sm" fw={500}>
+                          {r.name}
+                        </Text>
+                        <Text size="xs" c="dimmed">
+                          {r.nodeCount ?? 0} нод
+                        </Text>
+                      </Stack>
+                    </Group>
+                    <Group gap={4}>
+                      <ActionIcon
+                        variant="subtle"
+                        size="sm"
+                        onClick={() => setEditing(r)}
+                      >
+                        <IconRefresh size={14} />
+                      </ActionIcon>
+                      <ActionIcon
+                        variant="subtle"
+                        color="red"
+                        size="sm"
+                        onClick={() => handleDelete(r)}
+                      >
+                        <IconTrash size={14} />
+                      </ActionIcon>
+                    </Group>
+                  </Group>
+                </Paper>
+              ),
+            )}
+          </Stack>
+        )}
+
+        <Group gap="sm" align="flex-end">
+          <TextInput
+            label="Имя"
+            placeholder="Europe"
+            value={name}
+            onChange={(e) => setName(e.currentTarget.value)}
+            style={{ flex: 2 }}
+          />
+          <TextInput
+            label="Код"
+            placeholder="EU"
+            value={code}
+            onChange={(e) => setCode(e.currentTarget.value.toUpperCase())}
+            style={{ flex: 1 }}
+            maxLength={16}
+          />
+          <Button
+            leftSection={<IconPlus size={14} />}
+            disabled={!name.trim() || !code.trim()}
+            loading={createMutation.isPending}
+            onClick={() =>
+              createMutation.mutate({ name: name.trim(), code: code.trim() })
+            }
+          >
+            Добавить
+          </Button>
+        </Group>
+      </Stack>
+    </Card>
+  );
+}
+
+function RegionEditRow({
+  region,
+  loading,
+  onSave,
+  onCancel,
+}: {
+  region: Region;
+  loading: boolean;
+  onSave: (input: { name: string; code: string }) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState(region.name);
+  const [code, setCode] = useState(region.code);
+  return (
+    <Paper withBorder p="xs" radius="sm">
+      <Group gap="xs" align="flex-end">
+        <TextInput
+          label="Имя"
+          value={name}
+          onChange={(e) => setName(e.currentTarget.value)}
+          style={{ flex: 2 }}
+        />
+        <TextInput
+          label="Код"
+          value={code}
+          onChange={(e) => setCode(e.currentTarget.value.toUpperCase())}
+          style={{ flex: 1 }}
+          maxLength={16}
+        />
+        <Button
+          size="sm"
+          loading={loading}
+          onClick={() => onSave({ name: name.trim(), code: code.trim() })}
+        >
+          OK
+        </Button>
+        <Button size="sm" variant="subtle" onClick={onCancel}>
+          Отмена
+        </Button>
+      </Group>
+    </Paper>
+  );
+}
+

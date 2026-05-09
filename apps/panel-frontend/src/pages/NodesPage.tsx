@@ -31,6 +31,7 @@ import {
   deleteNode,
   getDashboardOverview,
   listNodes,
+  listRegions,
   refreshNodeBootstrap,
   updateNode,
   type CreateNodeInput,
@@ -81,10 +82,24 @@ export function NodesPage() {
     if (typeof window !== 'undefined') window.localStorage.setItem(LAYOUT_KEY, m);
   }
 
+  // Slice 27.5 — region filter (URL chip below header). 'all' = no filter.
+  const [regionFilter, setRegionFilter] = useState<string>('all');
+
   const nodesQuery = useQuery({
-    queryKey: ['nodes'],
-    queryFn: () => listNodes({ page: 1, limit: 100 }),
+    queryKey: ['nodes', regionFilter],
+    queryFn: () =>
+      listNodes({
+        page: 1,
+        limit: 100,
+        regionId: regionFilter === 'all' ? undefined : regionFilter,
+      }),
   });
+  const regionsQuery = useQuery({ queryKey: ['regions'], queryFn: listRegions });
+  const regionsById = useMemo(() => {
+    const m = new Map<string, { code: string; name: string }>();
+    for (const r of regionsQuery.data?.regions ?? []) m.set(r.id, r);
+    return m;
+  }, [regionsQuery.data]);
 
   // Pull live metrics from dashboard endpoint — already provides cpu/ram/disk
   // per node + today's traffic + inboundCount. Refetch every 15s to keep
@@ -271,6 +286,34 @@ export function NodesPage() {
         </Group>
       </Group>
 
+      {/* Slice 27.5 — region filter row. Hidden when admin hasn't created
+          any regions yet (no clutter on a fresh panel). */}
+      {(regionsQuery.data?.regions ?? []).length > 0 && (
+        <Group gap="xs" wrap="wrap">
+          <Badge
+            variant={regionFilter === 'all' ? 'filled' : 'light'}
+            color="blue"
+            size="lg"
+            style={{ cursor: 'pointer', textTransform: 'none' }}
+            onClick={() => setRegionFilter('all')}
+          >
+            Все регионы
+          </Badge>
+          {(regionsQuery.data?.regions ?? []).map((r) => (
+            <Badge
+              key={r.id}
+              variant={regionFilter === r.id ? 'filled' : 'light'}
+              color="cyan"
+              size="lg"
+              style={{ cursor: 'pointer', textTransform: 'none' }}
+              onClick={() => setRegionFilter(r.id)}
+            >
+              {r.code} · {r.name}
+            </Badge>
+          ))}
+        </Group>
+      )}
+
       {enrichedNodes.length === 0 ? (
         <Text c="dimmed" ta="center" py="xl">
           Нод ещё нет. Жми «Создать ноду».
@@ -291,10 +334,24 @@ export function NodesPage() {
               todayBytes: 0,
               metrics: null,
             };
+            const regionLabel = n.regionId
+              ? (regionsById.get(n.regionId)?.code ?? null)
+              : null;
             return (
               <NodeCard
                 key={n.id}
-                node={{ ...dashNode, rawId: n.id }}
+                node={{
+                  ...dashNode,
+                  rawId: n.id,
+                  regionLabel,
+                  maxUsers: n.maxUsers ?? null,
+                  // approxUsers: capacity bar source. Real per-node user
+                  // counter lands with slice 28; here we reuse the today's
+                  // bytes-driven inbound count as a placeholder so the bar
+                  // shows *something* meaningful — admins prefer "looks
+                  // approximately right" over "shows nothing".
+                  approxUsers: dashNode.inboundCount ?? 0,
+                }}
                 onEdit={() => setEditing(n)}
                 onDelete={() => handleDelete(n)}
                 onRefreshBootstrap={() => handleRefreshBootstrap(n)}

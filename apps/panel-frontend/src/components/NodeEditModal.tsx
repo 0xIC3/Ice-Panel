@@ -41,6 +41,7 @@ import {
   getDashboardOverview,
   listBindings,
   listProfiles,
+  listRegions,
   listSquads,
   type Node as PanelNode,
   type NodeProtocol,
@@ -65,6 +66,9 @@ interface FormValues {
   protocol: NodeProtocol;
   countryCode: string;
   consumptionMultiplier: number | '';
+  // Slice 27.5 — region grouping + capacity hint.
+  regionId: string;
+  maxUsers: number | '';
 }
 
 interface Props {
@@ -96,6 +100,8 @@ export function NodeEditModal({
       protocol: node?.protocol ?? 'xray',
       countryCode: node?.countryCode ?? '',
       consumptionMultiplier: node ? Number(node.consumptionMultiplier) : 1,
+      regionId: node?.regionId ?? '',
+      maxUsers: node?.maxUsers ?? '',
     },
   });
 
@@ -107,10 +113,19 @@ export function NodeEditModal({
         protocol: node.protocol,
         countryCode: node.countryCode ?? '',
         consumptionMultiplier: Number(node.consumptionMultiplier),
+        regionId: node.regionId ?? '',
+        maxUsers: node.maxUsers ?? '',
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opened, node]);
+
+  // Regions list for the Select. Cached across modal opens; cheap query.
+  const regionsQuery = useQuery({
+    queryKey: ['regions'],
+    queryFn: listRegions,
+    enabled: opened,
+  });
 
   // Live host-metrics + traffic — same source the cards on /nodes use.
   // Auto-refetch every 10s while modal is open so admin sees fresh data
@@ -216,6 +231,9 @@ export function NodeEditModal({
         form.values.consumptionMultiplier === ''
           ? 1
           : Number(form.values.consumptionMultiplier),
+      regionId: form.values.regionId || null,
+      maxUsers:
+        form.values.maxUsers === '' ? null : Number(form.values.maxUsers),
     });
   }
 
@@ -351,6 +369,30 @@ export function NodeEditModal({
                   max={10}
                   step={0.1}
                   {...form.getInputProps('consumptionMultiplier')}
+                />
+              </Group>
+
+              <Group grow>
+                <Select
+                  label="Регион"
+                  description="группировка для фильтра + smart selection"
+                  placeholder="без региона"
+                  clearable
+                  data={(regionsQuery.data?.regions ?? []).map((r) => ({
+                    value: r.id,
+                    label: `${r.code} · ${r.name}`,
+                  }))}
+                  {...form.getInputProps('regionId')}
+                />
+                <NumberInput
+                  label="Max users"
+                  description="hint для capacity bar"
+                  placeholder="без лимита"
+                  min={1}
+                  max={100000}
+                  allowDecimal={false}
+                  allowNegative={false}
+                  {...form.getInputProps('maxUsers')}
                 />
               </Group>
             </Stack>

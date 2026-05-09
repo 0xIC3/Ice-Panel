@@ -37,6 +37,9 @@ export const CreateNodeSchema = z.object({
   protocol: ProtocolSchema.default('xray'),
   countryCode: CountryCodeSchema.nullish(),
   consumptionMultiplier: z.number().int().positive().default(1),
+  // Slice 27.5
+  regionId: z.uuid().nullable().optional(),
+  maxUsers: z.number().int().positive().max(100000).nullable().optional(),
 });
 export type CreateNodeInput = z.infer<typeof CreateNodeSchema>;
 
@@ -46,6 +49,8 @@ export const UpdateNodeSchema = z.object({
   protocol: ProtocolSchema.optional(),
   countryCode: CountryCodeSchema.nullish(),
   consumptionMultiplier: z.number().int().positive().optional(),
+  regionId: z.uuid().nullable().optional(),
+  maxUsers: z.number().int().positive().max(100000).nullable().optional(),
 });
 export type UpdateNodeInput = z.infer<typeof UpdateNodeSchema>;
 
@@ -53,6 +58,7 @@ export const ListNodesQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(50),
   status: z.string().max(16).optional(),
+  regionId: z.uuid().optional(),
 });
 export type ListNodesQuery = z.infer<typeof ListNodesQuerySchema>;
 

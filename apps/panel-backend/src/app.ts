@@ -23,6 +23,7 @@ import { dashboardRoutes } from './modules/dashboard/dashboard.routes.js';
 import { profilesRoutes } from './modules/profiles/profiles.routes.js';
 import { hostsRoutes } from './modules/hosts/hosts.routes.js';
 import { hwidRoutes } from './modules/hwid/hwid.routes.js';
+import { regionsRoutes } from './modules/regions/regions.routes.js';
 import { apiTokensRoutes } from './modules/api-tokens/api-tokens.routes.js';
 import { settingsRoutes } from './modules/settings/settings.routes.js';
 import { bullBoardRoutes } from './modules/admin/bull-board.routes.js';
@@ -137,6 +138,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(profilesRoutes);
   await app.register(hostsRoutes);
   await app.register(hwidRoutes);
+  await app.register(regionsRoutes);
   await app.register(apiTokensRoutes);
   await app.register(settingsRoutes);
   await app.register(bullBoardRoutes);
