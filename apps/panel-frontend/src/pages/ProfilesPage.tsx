@@ -359,8 +359,15 @@ function ProfileCard({
         <Badge variant="light" color={color} size="sm" tt="uppercase">
           {profile.protocol}
         </Badge>
-        <Tooltip label="Развёрнут на нодах">
-          <Badge variant="outline" color="gray" size="sm" leftSection={<IconServer2 size={11} />}>
+        <Tooltip label={bindingCount === 0 ? 'Не развёрнут — клик чтобы задеплоить' : 'Развёрнут на нодах — клик для управления'}>
+          <Badge
+            variant={bindingCount === 0 ? 'outline' : 'filled'}
+            color={bindingCount === 0 ? 'gray' : 'teal'}
+            size="sm"
+            leftSection={<IconServer2 size={11} />}
+            style={{ cursor: 'pointer' }}
+            onClick={onDeploy}
+          >
             {bindingCount}
           </Badge>
         </Tooltip>
