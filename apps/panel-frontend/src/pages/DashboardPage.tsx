@@ -190,31 +190,38 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
         <StatCard
           icon={<IconWifi size={22} />}
           iconColor="teal"
-          label="В сети сейчас"
+          label={t('dashboard.hero.onlineNow')}
           value={`${users.onlineNow}`}
-          hint={`${users.onlineToday} за сегодня · ${users.onlineThisWeek} за неделю`}
+          hint={t('dashboard.hero.onlineHint', {
+            today: users.onlineToday,
+            week: users.onlineThisWeek,
+          })}
         />
         <StatCard
           icon={<IconChartArea size={22} />}
           iconColor="cyan"
-          label="Трафик сегодня"
+          label={t('dashboard.hero.trafficToday')}
           value={formatBytes(traffic.todayBytes)}
-          hint={`${todayDelta.text} ко вчерашнему`}
+          hint={t('dashboard.hero.trafficVsYesterday', { delta: todayDelta.text })}
           hintColor={todayDelta.positive ? 'teal' : 'red'}
         />
         <StatCard
           icon={<IconUserCheck size={22} />}
           iconColor="violet"
-          label="Активных пользователей"
+          label={t('dashboard.hero.activeUsers')}
           value={`${users.byStatus.active ?? 0}`}
-          hint={`из ${users.total} всего`}
+          hint={t('dashboard.hero.ofTotal', { total: users.total })}
         />
         <StatCard
           icon={<IconServer2 size={22} />}
           iconColor="indigo"
-          label="Ноды онлайн"
+          label={t('dashboard.hero.nodesOnline')}
           value={`${system.onlineNodeCount} / ${system.totalNodeCount}`}
-          hint={system.onlineNodeCount === system.totalNodeCount ? 'Все ноды отвечают' : 'Часть нод недоступна'}
+          hint={
+            system.onlineNodeCount === system.totalNodeCount
+              ? t('dashboard.hero.allNodesUp')
+              : t('dashboard.hero.someNodesDown')
+          }
           hintColor={system.onlineNodeCount === system.totalNodeCount ? 'teal' : 'red'}
         />
       </SimpleGrid>
@@ -227,18 +234,18 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
               <IconTrendingUp size={16} />
             </ThemeIcon>
             <Stack gap={0}>
-              <Text fw={600}>Трафик за 24 часа</Text>
+              <Text fw={600}>{t('dashboard.traffic.title')}</Text>
               <Text size="xs" c="dimmed">
-                Сумма по всем нодам, по часам
+                {t('dashboard.traffic.subtitle')}
               </Text>
             </Stack>
           </Group>
           <Group gap="lg">
-            <TrafficStat label="Сегодня" value={formatBytes(traffic.todayBytes)} />
-            <TrafficStat label="Неделя" value={formatBytes(traffic.last7dBytes)} />
-            <TrafficStat label="30 дней" value={formatBytes(traffic.last30dBytes)} />
-            <TrafficStat label="Месяц" value={formatBytes(traffic.calendarMonthBytes)} />
-            <TrafficStat label="Год" value={formatBytes(traffic.currentYearBytes)} />
+            <TrafficStat label={t('dashboard.traffic.labels.today')} value={formatBytes(traffic.todayBytes)} />
+            <TrafficStat label={t('dashboard.traffic.labels.week')} value={formatBytes(traffic.last7dBytes)} />
+            <TrafficStat label={t('dashboard.traffic.labels.d30')} value={formatBytes(traffic.last30dBytes)} />
+            <TrafficStat label={t('dashboard.traffic.labels.month')} value={formatBytes(traffic.calendarMonthBytes)} />
+            <TrafficStat label={t('dashboard.traffic.labels.year')} value={formatBytes(traffic.currentYearBytes)} />
           </Group>
         </Group>
         <Sparkline data={traffic.last24hHourly} />
@@ -250,14 +257,14 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
           <ThemeIcon size={28} radius="md" variant="light" color="violet">
             <IconUsers size={16} />
           </ThemeIcon>
-          <Text fw={600}>Пользователи по статусу</Text>
+          <Text fw={600}>{t('dashboard.userStatus.title')}</Text>
         </Group>
         <SimpleGrid cols={{ base: 2, sm: 3, lg: 5 }} spacing="sm">
-          <StatusChip label="Всего" value={users.total} color="blue" />
-          <StatusChip label="Active" value={users.byStatus.active ?? 0} color="teal" />
-          <StatusChip label="Expired" value={users.byStatus.expired ?? 0} color="red" />
-          <StatusChip label="Limited" value={users.byStatus.limited ?? 0} color="yellow" />
-          <StatusChip label="Disabled" value={users.byStatus.disabled ?? 0} color="gray" />
+          <StatusChip label={t('dashboard.userStatus.total')} value={users.total} color="blue" />
+          <StatusChip label={t('dashboard.userStatus.active')} value={users.byStatus.active ?? 0} color="teal" />
+          <StatusChip label={t('dashboard.userStatus.expired')} value={users.byStatus.expired ?? 0} color="red" />
+          <StatusChip label={t('dashboard.userStatus.limited')} value={users.byStatus.limited ?? 0} color="yellow" />
+          <StatusChip label={t('dashboard.userStatus.disabled')} value={users.byStatus.disabled ?? 0} color="gray" />
         </SimpleGrid>
       </Card>
 
@@ -271,27 +278,27 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
             <ThemeIcon size={28} radius="md" variant="light" color="indigo">
               <IconServer2 size={16} />
             </ThemeIcon>
-            <Text fw={600}>Ноды</Text>
+            <Text fw={600}>{t('dashboard.nodes.title')}</Text>
             <Badge variant="light" color="gray">
               {nodes.length}
             </Badge>
           </Group>
           {nodes.length === 0 ? (
             <Text c="dimmed" size="sm">
-              Нод ещё нет — добавь первую в разделе Nodes.
+              {t('dashboard.nodes.empty')}
             </Text>
           ) : (
             <ScrollArea.Autosize mah={320}>
               <Table verticalSpacing="xs" highlightOnHover>
                 <Table.Thead>
                   <Table.Tr>
-                    <Table.Th>Имя</Table.Th>
-                    <Table.Th>Статус</Table.Th>
-                    <Table.Th>CPU</Table.Th>
-                    <Table.Th>RAM</Table.Th>
-                    <Table.Th>Диск</Table.Th>
-                    <Table.Th ta="right">Профили</Table.Th>
-                    <Table.Th ta="right">Сегодня</Table.Th>
+                    <Table.Th>{t('dashboard.nodes.cols.name')}</Table.Th>
+                    <Table.Th>{t('dashboard.nodes.cols.status')}</Table.Th>
+                    <Table.Th>{t('dashboard.health.cpu')}</Table.Th>
+                    <Table.Th>{t('dashboard.health.ram')}</Table.Th>
+                    <Table.Th>{t('dashboard.health.disk')}</Table.Th>
+                    <Table.Th ta="right">{t('dashboard.nodes.cols.profiles')}</Table.Th>
+                    <Table.Th ta="right">{t('dashboard.nodes.cols.today')}</Table.Th>
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
@@ -312,8 +319,8 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
                         <Tooltip
                           label={
                             n.lastStatusChange
-                              ? `Сменился ${relativeTime(n.lastStatusChange)}`
-                              : 'Нет данных о статусе'
+                              ? t('dashboard.nodes.statusChanged', { when: relativeTime(n.lastStatusChange) })
+                              : t('dashboard.nodes.statusUnknown')
                           }
                         >
                           <Badge color={NODE_STATUS_COLOR[n.status] ?? 'gray'} variant="light">
@@ -327,7 +334,7 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
                           tooltip={
                             n.metrics
                               ? `${n.metrics.cpu.cores} ядер · LA ${n.metrics.cpu.loadAvg1.toFixed(2)}/${n.metrics.cpu.loadAvg5.toFixed(2)}/${n.metrics.cpu.loadAvg15.toFixed(2)}`
-                              : 'Метрики не доступны'
+                              : t('dashboard.nodes.metricsMissing')
                           }
                         />
                       </Table.Td>
@@ -337,7 +344,7 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
                           tooltip={
                             n.metrics
                               ? `${formatBytes(n.metrics.memory.usedBytes)} / ${formatBytes(n.metrics.memory.totalBytes)}`
-                              : 'Метрики не доступны'
+                              : t('dashboard.nodes.metricsMissing')
                           }
                         />
                       </Table.Td>
@@ -347,7 +354,7 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
                           tooltip={
                             n.metrics
                               ? `${formatBytes(n.metrics.disk.usedBytes)} / ${formatBytes(n.metrics.disk.totalBytes)}`
-                              : 'Метрики не доступны'
+                              : t('dashboard.nodes.metricsMissing')
                           }
                         />
                       </Table.Td>
@@ -366,14 +373,14 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
             <ThemeIcon size={28} radius="md" variant="light" color="cyan">
               <IconNetwork size={16} />
             </ThemeIcon>
-            <Text fw={600}>Протоколы</Text>
+            <Text fw={600}>{t('dashboard.protocols.title')}</Text>
             <Badge variant="light" color="gray">
               {byProtocol.length}
             </Badge>
           </Group>
           {byProtocol.length === 0 ? (
             <Text c="dimmed" size="sm">
-              Профилей пока нет.
+              {t('dashboard.protocols.empty')}
             </Text>
           ) : (
             <Stack gap="xs">
@@ -385,7 +392,7 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
                         {p.protocol}
                       </Badge>
                       <Text size="sm" c="dimmed">
-                        {p.inboundCount} {p.inboundCount === 1 ? 'профиль' : 'профилей'}
+                        {t('dashboard.protocols.profilesCount', { count: p.inboundCount })}
                       </Text>
                     </Group>
                     <Group gap={4}>
@@ -393,7 +400,7 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
                         {p.enabledUserCount}
                       </Text>
                       <Text size="xs" c="dimmed">
-                        пользователей
+                        {t('dashboard.protocols.users')}
                       </Text>
                     </Group>
                   </Group>
@@ -411,11 +418,11 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
             <ThemeIcon size={28} radius="md" variant="light" color="orange">
               <IconActivity size={16} />
             </ThemeIcon>
-            <Text fw={600}>Топ-5 пользователей сегодня</Text>
+            <Text fw={600}>{t('dashboard.topUsers.title')}</Text>
           </Group>
           {topUsersToday.length === 0 ? (
             <Text c="dimmed" size="sm">
-              Сегодня ещё никто не накачал трафика.
+              {t('dashboard.topUsers.empty')}
             </Text>
           ) : (
             <Stack gap="xs">
@@ -443,11 +450,11 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
             <ThemeIcon size={28} radius="md" variant="light" color="grape">
               <IconClock size={16} />
             </ThemeIcon>
-            <Text fw={600}>Последние события</Text>
+            <Text fw={600}>{t('dashboard.events.title')}</Text>
           </Group>
           {recentEvents.length === 0 ? (
             <Text c="dimmed" size="sm">
-              Журнал событий пуст.
+              {t('dashboard.events.empty')}
             </Text>
           ) : (
             <Stack gap="xs">
@@ -490,7 +497,7 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
         <Group gap="xs">
           <IconCalendar size={14} stroke={1.5} color="var(--mantine-color-dimmed)" />
           <Text size="xs" c="dimmed">
-            Никогда не подключался: {users.neverOnline}
+            {t('dashboard.footer.neverOnline', { count: users.neverOnline })}
           </Text>
         </Group>
         <Text size="xs" c="dimmed">
@@ -502,6 +509,7 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
 }
 
 function SystemHealth({ host }: { host: DashboardOverview['host'] }) {
+  const { t } = useTranslation();
   const cpuPct = host.cpu.samplePercent;
   const cpuColor = cpuPct > 85 ? 'red' : cpuPct > 60 ? 'yellow' : 'teal';
   const memColor =
@@ -521,9 +529,9 @@ function SystemHealth({ host }: { host: DashboardOverview['host'] }) {
           <IconDeviceDesktopAnalytics size={16} />
         </ThemeIcon>
         <Stack gap={0}>
-          <Text fw={600}>Состояние панели</Text>
+          <Text fw={600}>{t('dashboard.health.title')}</Text>
           <Text size="xs" c="dimmed">
-            Хост, на котором работает API · uptime {formatUptime(host.process.uptimeSeconds)}
+            {t('dashboard.health.subtitle', { uptime: formatUptime(host.process.uptimeSeconds) })}
           </Text>
         </Stack>
       </Group>
@@ -532,23 +540,28 @@ function SystemHealth({ host }: { host: DashboardOverview['host'] }) {
         <UsageBar
           icon={<IconCpu size={18} />}
           color={cpuColor}
-          label="CPU"
+          label={t('dashboard.health.cpu')}
           percent={cpuPct}
           primary={`${cpuPct.toFixed(1)}%`}
-          secondary={`${host.cpu.cores} ядер · LA ${host.cpu.loadavg[0].toFixed(2)} / ${host.cpu.loadavg[1].toFixed(2)} / ${host.cpu.loadavg[2].toFixed(2)}`}
+          secondary={t('dashboard.health.cpuHint', {
+            cores: host.cpu.cores,
+            la1: host.cpu.loadavg[0].toFixed(2),
+            la5: host.cpu.loadavg[1].toFixed(2),
+            la15: host.cpu.loadavg[2].toFixed(2),
+          })}
         />
         <UsageBar
           icon={<IconDatabase size={18} />}
           color={memColor}
-          label="RAM"
+          label={t('dashboard.health.ram')}
           percent={host.memory.usedPercent}
           primary={`${formatBytes(host.memory.usedBytes)} / ${formatBytes(host.memory.totalBytes)}`}
-          secondary={`${host.memory.usedPercent.toFixed(1)}% занято`}
+          secondary={t('dashboard.health.memHint', { percent: host.memory.usedPercent.toFixed(1) })}
         />
         <UsageBar
           icon={<IconServer2 size={18} />}
           color={diskColor}
-          label="Диск"
+          label={t('dashboard.health.disk')}
           percent={host.disk?.usedPercent ?? 0}
           primary={
             host.disk
@@ -557,17 +570,20 @@ function SystemHealth({ host }: { host: DashboardOverview['host'] }) {
           }
           secondary={
             host.disk
-              ? `${host.disk.usedPercent.toFixed(1)}% занято`
-              : 'statfs недоступен'
+              ? t('dashboard.health.memHint', { percent: host.disk.usedPercent.toFixed(1) })
+              : t('dashboard.health.diskUnavailable')
           }
         />
         <UsageBar
           icon={<IconActivity size={18} />}
           color="violet"
-          label="Процесс панели"
+          label={t('dashboard.health.processMem')}
           percent={(host.process.heapUsedBytes / Math.max(1, host.process.heapTotalBytes)) * 100}
           primary={`RSS ${formatBytes(host.process.rssBytes)}`}
-          secondary={`Heap ${formatBytes(host.process.heapUsedBytes)} / ${formatBytes(host.process.heapTotalBytes)}`}
+          secondary={t('dashboard.health.processSecondary', {
+            used: formatBytes(host.process.heapUsedBytes),
+            total: formatBytes(host.process.heapTotalBytes),
+          })}
         />
       </SimpleGrid>
     </Card>

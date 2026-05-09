@@ -25,6 +25,7 @@ import {
   IconRefresh,
   IconTrash,
 } from '@tabler/icons-react';
+import { useTranslation } from 'react-i18next';
 import {
   createBinding,
   createNode,
@@ -64,6 +65,7 @@ type LayoutMode = 'cards' | 'compact';
 const LAYOUT_KEY = 'ice-panel:nodes-layout';
 
 export function NodesPage() {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const [createOpen, { open: openCreate, close: closeCreate }] = useDisclosure(false);
   const [editing, setEditing] = useState<Node | null>(null);
@@ -234,11 +236,12 @@ export function NodesPage() {
     <Stack>
       <Group justify="space-between" align="flex-end">
         <Stack gap={2}>
-          <Title order={2}>Ноды</Title>
+          <Title order={2}>{t('nodes.title')}</Title>
           <Text c="dimmed" size="sm">
-            {enrichedNodes.length} {enrichedNodes.length === 1 ? 'нода' : 'нод'} ·
-            {' '}
-            {enrichedNodes.filter((n) => n.status === 'online').length} онлайн
+            {t('nodes.countSummary', {
+              count: enrichedNodes.length,
+              online: enrichedNodes.filter((n) => n.status === 'online').length,
+            })}
           </Text>
         </Stack>
         <Group>
@@ -252,7 +255,7 @@ export function NodesPage() {
                 label: (
                   <Group gap={4} wrap="nowrap">
                     <IconLayoutGrid size={12} />
-                    <Text size="xs">Карточки</Text>
+                    <Text size="xs">{t('nodes.layoutCards')}</Text>
                   </Group>
                 ),
               },
@@ -261,13 +264,13 @@ export function NodesPage() {
                 label: (
                   <Group gap={4} wrap="nowrap">
                     <IconLayoutList size={12} />
-                    <Text size="xs">Список</Text>
+                    <Text size="xs">{t('nodes.layoutCompact')}</Text>
                   </Group>
                 ),
               },
             ]}
           />
-          <Tooltip label="Обновить">
+          <Tooltip label={t('common.refresh')}>
             <ActionIcon
               variant="subtle"
               size="lg"
@@ -281,7 +284,7 @@ export function NodesPage() {
             </ActionIcon>
           </Tooltip>
           <Button leftSection={<IconPlus size={16} />} onClick={openCreate}>
-            Создать ноду
+            {t('nodes.create')}
           </Button>
         </Group>
       </Group>
@@ -297,7 +300,7 @@ export function NodesPage() {
             style={{ cursor: 'pointer', textTransform: 'none' }}
             onClick={() => setRegionFilter('all')}
           >
-            Все регионы
+            {t('nodes.regionFilterAll')}
           </Badge>
           {(regionsQuery.data?.regions ?? []).map((r) => (
             <Badge
@@ -316,7 +319,7 @@ export function NodesPage() {
 
       {enrichedNodes.length === 0 ? (
         <Text c="dimmed" ta="center" py="xl">
-          Нод ещё нет. Жми «Создать ноду».
+          {t('nodes.empty')}
         </Text>
       ) : layout === 'cards' ? (
         <SimpleGrid cols={{ base: 1, sm: 2, lg: 3, xl: 4 }} spacing="md">
@@ -368,13 +371,13 @@ export function NodesPage() {
           <Table verticalSpacing="sm" highlightOnHover withTableBorder>
             <Table.Thead>
               <Table.Tr>
-                <Table.Th>Name</Table.Th>
-                <Table.Th>Address</Table.Th>
-                <Table.Th>Country</Table.Th>
-                <Table.Th>Status</Table.Th>
-                <Table.Th>Bindings</Table.Th>
-                <Table.Th>Сегодня</Table.Th>
-                <Table.Th style={{ width: 1 }}>Actions</Table.Th>
+                <Table.Th>{t('nodes.table.name')}</Table.Th>
+                <Table.Th>{t('nodes.table.address')}</Table.Th>
+                <Table.Th>{t('nodes.table.country')}</Table.Th>
+                <Table.Th>{t('nodes.table.status')}</Table.Th>
+                <Table.Th>{t('nodes.table.bindings')}</Table.Th>
+                <Table.Th>{t('nodes.table.today')}</Table.Th>
+                <Table.Th style={{ width: 1 }}>{t('common.actions')}</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -409,7 +412,7 @@ export function NodesPage() {
                   </Table.Td>
                   <Table.Td>
                     <Group gap={4} wrap="nowrap">
-                      <Tooltip label="Перевыпустить bootstrap">
+                      <Tooltip label={t('nodes.refreshBootstrap')}>
                         <ActionIcon
                           variant="subtle"
                           color="blue"
@@ -422,12 +425,12 @@ export function NodesPage() {
                           <IconKey size={16} />
                         </ActionIcon>
                       </Tooltip>
-                      <Tooltip label="Редактировать">
+                      <Tooltip label={t('common.edit')}>
                         <ActionIcon variant="subtle" onClick={() => setEditing(n)}>
                           <IconEdit size={16} />
                         </ActionIcon>
                       </Tooltip>
-                      <Tooltip label="Удалить">
+                      <Tooltip label={t('common.delete')}>
                         <ActionIcon variant="subtle" color="red" onClick={() => handleDelete(n)}>
                           <IconTrash size={16} />
                         </ActionIcon>
