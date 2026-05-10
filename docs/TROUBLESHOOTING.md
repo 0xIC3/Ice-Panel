@@ -133,6 +133,77 @@ yellow ⚠ note `UDP-based protocol — tested TCP port reachability only`.
 
 Real validation = client connects through the actual protocol.
 
+### Hysteria 2: handshake works but tx=0 / iOS clients see Timeout
+
+**Symptom:** server logs `auth accepted` + `client connected`, but
+no actual traffic — iOS Hiddify / Happ / Streisand show "Timeout" or
+0-byte transfer. CLI clients on desktop/Linux work fine to the same server.
+
+**Three root causes seen, in order of frequency:**
+
+1. **iOS users on RU ISPs.** TSPU / Russian ISPs aggressively throttle
+   bare QUIC on UDP/443. Server-side everything looks healthy. We've hit
+   this in cycle #2 and again in cycle #5. Workarounds, in priority order:
+   - **Port-hopping** (slice 31.5, planned) — `listen: :20000-30000` on
+     server, `mport=20000-30000` in URI; TSPU can't keep up with rotation.
+   - **Non-443 UDP port** — switching to e.g. 12443/udp often pushes the
+     traffic past portspec-based filters.
+   - **Different hosting / route** — Hetzner DE / OVH FR routes from RU
+     are usually cleaner than Beget SE. Last-resort.
+
+2. **Salamander obfs mismatch between sing-box client and hysteria server.**
+   sing-box (which iOS Hiddify / Streisand / Happ all use under the hood)
+   may negotiate Salamander differently from upstream `hysteria` CLI. If
+   panel CLI works but iOS clients don't, try removing obfs from the
+   profile temporarily to confirm.
+
+3. **`ignoreClientBandwidth` missing on server.** Brutal CC requires the
+   client to declare its own bandwidth. Some clients send 0 → tunnel
+   establishes but `tx=0`. Fix shipped: agent renders
+   `ignoreClientBandwidth: true` by default; URI builder also emits
+   `upmbps`/`downmbps` so Brutal CC stays usable when the server respects
+   client bandwidth.
+
+**Diagnostic sequence:**
+```bash
+# On node — is hysteria getting our packets at all
+tcpdump -i any -n udp port 443 -c 20
+
+# On panel — try a CLI client to isolate "server vs client" axis
+hysteria client -c /tmp/hy2-client.yaml &
+curl -x socks5h://127.0.0.1:1080 https://ifconfig.me
+# expected: returns the node's IP. If it does, server is fine and the
+# remaining problem is client-side / network-side from the user.
+```
+
+### iOS Hysteria client connected but lost users on agent restart
+
+**Symptom:** server log shows `hysteria auth rejected` for what should
+be a known user. iOS client gets HTTP 404 on auth.
+
+**Why:** the agent keeps the user→password map in-memory only. After
+agent restart, nothing repushes existing users — `applyInbounds` is
+event-driven (binding.created, profile.updated), not "agent came back up."
+
+**Recovery:** trigger any profile event in the panel UI:
+- Profiles → toggle `enabled` off → Save → on → Save  
+- Or DeployProfileModal: uncheck node → Save → re-check → Save
+
+Either fires `profile.updated` / `binding.updated` → applyInbounds
+fan-out → addUser pushes the active users back to the agent.
+
+**Architectural fix planned:** agent emits its `agentStartTime` in the
+heartbeat payload; panel re-issues applyInbounds when start-time
+changes (so restarts auto-resync without admin action). Tracked in
+roadmap.
+
+### Profile-edit Save doesn't seem to fire applyInbounds
+
+If you toggle a value, save, and the node config doesn't change — check
+that the toggle actually changed something. Many UIs no-op save when
+the diff is zero. Forcing a real diff: change `enabled` then change
+back.
+
 ### Subscription Test from inside the panel container
 
 ```bash
@@ -162,6 +233,27 @@ ufw allow from <PANEL_IP> to any port 8443 proto tcp
 ```
 
 Or re-run install with `--reset --panel-ip <IP>`.
+
+### Hot-rebuild node agent after pulling new code
+
+When you ship a fix in `apps/node/...` and need to land it on a running
+node without re-bootstrapping the whole cert/env state, just rebuild
+the binary and restart the systemd unit:
+
+```bash
+ssh root@<NODE>
+cd /opt/ice-panel-node && git pull && \
+  cd apps/node && \
+  CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /usr/local/bin/ice-panel-node . && \
+  systemctl restart ice-panel-node
+journalctl -u ice-panel-node -n 5 --no-pager
+```
+
+Service name is `ice-panel-node` (not `ice-panel-nod`, common typo).
+This preserves /etc/ice-panel-node/env, mTLS payload, and any per-protocol
+configs already on disk — only the agent binary is replaced. After
+restart, panel should resume normal applyInbounds / heartbeat without
+any further intervention.
 
 ## Reset / nuke from orbit
 

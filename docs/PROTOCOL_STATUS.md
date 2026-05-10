@@ -41,11 +41,15 @@ The only one. Anything else listed below is some shade of "tested locally / loop
 ### Hysteria 2 + Salamander obfuscation
 
 - **Slice:** 11 (core), 24b2 (ApplyInbound)
-- **Verified:** **VPS cycle #5 (2026-05-10)** via Hiddify on `ice-hys2-test.icepath.tech`
-- **Setup:** ACME http-01 cert from Let's Encrypt, Salamander obfs (random pwd), Brutal CC 100/100 Mbps, masquerade `bing.com`, UDP/443
+- **Pipeline verified:** **VPS cycle #5 (2026-05-10)** — server up, ACME cert, agent ApplyInbound + addUser, panel→node→panel CLI client got `ifconfig.me = 147.45.76.143` end-to-end through tunnel
+- **Real RU iOS client:** ❌ NOT working (cycle #2 also failed, same symptom). iOS Hiddify / Happ / Streisand all fail to establish meaningful traffic — handshake either doesn't happen or `tx=0` after auth. Same RU-DPI-throttle-UDP/443 pattern that hit cycle #2.
+- **What we proved:** entire panel↔node pipeline correct (config render, ApplyInbound, addUser, auth callback), `ignoreClientBandwidth: true` shipped as default, IPv4-prefer for outbound resolver, separate `panelClient` cert for mTLS, port:8443 UFW lockdown.
+- **What blocks `safe to ship to RU users on iOS`:** UDP/443 from RU-mobile/home ISPs to Beget SE (147.45.76.143) is selectively dropped. Server side is healthy; client→server packets either don't arrive or are rate-throttled at TSPU level.
 - **Lifecycle model:** systemd-managed `hysteria.service` (install-node.sh wrote the unit). Agent's adapter respects `HYSTERIA_SERVICE_UNIT=hysteria` and only writes config + reloads via `systemctl restart` on ApplyInbound — NEVER spawns its own subprocess (would compete for :443/udp).
-- **Test-Connect caveat:** Probe is TCP-only — for UDP protocols Test-Connect always shows ⚠ "TCP timeout / UDP-based protocol — tested TCP port reachability only". This is **expected**, not a bug. Real validation = client connect.
-- **Status when shipping a paying user today:** safe
+- **Test-Connect caveat:** Probe is TCP-only — for UDP protocols Test-Connect always shows ⚠ "TCP timeout / UDP-based protocol — tested TCP port reachability only". This is **expected**, not a bug.
+- **Status when shipping a paying user today:**
+  - **Desktop / non-RU clients**: safe (ground truth: panel CLI client tunneling works perfectly)
+  - **RU iOS clients**: not safe yet — needs port-hopping (slice 31.5, see roadmap) or non-RU hosting
 
 ### Multi-protocol multi-node fan-out
 

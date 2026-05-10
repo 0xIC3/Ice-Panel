@@ -1421,6 +1421,15 @@ Per-user-bucket branding (custom Profile-Title, host-overrides for VIPs, sub-pag
 | 31 | --reset не чистил /etc/hysteria/config.yaml | do_uninstall удалял только agent-стуфф | Расширил do_uninstall: hysteria/xray config + systemd units |
 | 32 | install-node.sh не писал HYSTERIA_HOSTNAME/EMAIL/SERVICE_UNIT | Флаги парсились но не сохранялись | env-write block расширен |
 | 33 | UI install command не подставлял ACME flags для Hysteria/Naive | Без --hysteria-domain агент install'ится но cert не получит | renderBootstrapCommand auto-injects из node.address + ACME_DEFAULT_EMAIL env |
+| 34 | Hysteria тоннель встаёт но `tx=0` (iOS Hiddify, Happ, Streisand) | Несколько накладывающихся проблем: (a) IPv6 outbound на VPS сломан, hysteria шла v6 → timeout — фикс sysctl + gai.conf; (b) Brutal CC требует upmbps/downmbps от клиента, sing-box send 0 → handshake ОК но send window 0 — фикс `ignoreClientBandwidth: true` server-side + `upmbps/downmbps` в URI/singbox + alpn h3; (c) при agent restart in-memory user list стирается — backfill только event-driven; (d) sing-box ↔ hysteria salamander obfs **возможно** mismatch | Server-side всё пофикшено end-to-end через panel CLI работает (`ifconfig.me = node_IP`). Real RU iOS cycle: **не работает**, расследовалось — это TSPU/RU-ISP UDP/443 throttling (cycle #2 had same), не код. Решение: **slice 31.5 port-hopping** (см. ниже). |
+
+### Pending Phase 3 (post-cycle-#5)
+
+Раздел closed-в-коде но требующих ещё одной валидации в проде или дофикса:
+
+- **31.5 Hysteria 2 port-hopping** (НОВЫЙ, ~1-2 дня) — server: `listen: :20000-30000`; iptables redirect диапазона на :443; URI builder emits `mport=20000-30000`; UI: новое поле "Port range" в Hysteria профиле. Закроет RU/iOS кейс с минимальной конфигурацией для админа.
+- **38 Heartbeat agent-resync** (~1 день) — агент эмитит `agentStartTime` в heartbeat-payload, панель при смене start-time re-issues applyInbounds. Закрывает "agent restarted, users gone, no auto-resync" из cycle #5.
+- **AmneziaWG / NaiveProxy / SS2022 / MTProto / Mieru** — code-готовы, real-traffic не валидированы. Требуют отдельных VPS под каждый core (rule: 1 нода = 1 core).
 
 ---
 
