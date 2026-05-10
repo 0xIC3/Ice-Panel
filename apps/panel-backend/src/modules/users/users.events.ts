@@ -1,5 +1,6 @@
 import { eventBus } from '../../lib/event-bus.js';
 import { nodeUsersQueue } from './users.queue.js';
+import { notifyTelegramAsync } from '../../lib/telegram-notify.js';
 
 /**
  * Register all user-related event handlers.
@@ -30,6 +31,16 @@ export function registerUserEventHandlers(): void {
     // Going back to active → re-add to nodes
     if (to === 'active' && from !== 'active') {
       await nodeUsersQueue.add('addUser', { userId });
+    }
+    // Slice 32 — admin alert on the two operator-visible transitions:
+    // expired (subscription lapse) and limited (quota burn). Skip the
+    // routine `active ↔ disabled` toggles — admins are the ones flipping
+    // those and don't need to be told what they just did.
+    if (to === 'expired' || to === 'limited') {
+      const icon = to === 'expired' ? '⏳' : '📊';
+      notifyTelegramAsync(
+        `${icon} *User ${to}*\nuserId: \`${userId}\`\nprevious: ${from}`,
+      );
     }
   });
 

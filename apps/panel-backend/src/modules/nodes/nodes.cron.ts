@@ -3,6 +3,7 @@ import { prisma } from '../../prisma.js';
 import { redis } from '../../lib/redis.js';
 import { NodeTransport, NodeRequestError } from './nodes.transport.js';
 import { inboundSyncQueue } from '../inbounds/inbounds.queue.js';
+import { notifyTelegramAsync } from '../../lib/telegram-notify.js';
 
 const METRICS_KEY_PREFIX = 'node:metrics:';
 const METRICS_TTL_SECONDS = 60;
@@ -83,6 +84,18 @@ export async function pollNodeStatuses(): Promise<{ ok: number; down: number }> 
           .catch((err: unknown) => {
             console.error(`[cron] re-enqueue applyInbounds for ${node.name} failed:`, err);
           });
+      }
+      // Slice 32 — admin alerts on node status flips. Skip the initial
+      // `unknown → online` transition (new node coming up isn't an alert
+      // event) but alert on every later flip in either direction. The
+      // notifyTelegramAsync helper is a no-op when env isn't configured,
+      // so this stays free for operators who don't use Telegram.
+      if (statusChanged && node.status !== 'unknown') {
+        const icon = result.status === 'online' ? '✅' : '🔴';
+        notifyTelegramAsync(
+          `${icon} *Node ${result.status}*\nname: \`${node.name}\`\naddress: \`${node.address}\`` +
+            (result.message ? `\nlast: ${result.message}` : ''),
+        );
       }
     }),
   );
