@@ -83,47 +83,49 @@ export function SettingsPage() {
 
 interface AuthMethod {
   id: string;
-  label: string;
+  // Stable label-key — picks up settings.auth.<key> from i18n. The id
+  // and key are usually the same; only `oauth2` diverges (genericOauth).
+  labelKey: string;
   icon: React.ReactNode;
   enabled: boolean;
   comingSoon?: boolean;
-  hint?: string;
+  hintKey?: string;
 }
 
 const AUTH_METHODS: AuthMethod[] = [
   {
     id: 'password',
-    label: 'Пароль',
+    labelKey: 'password',
     icon: <IconLock size={16} />,
     enabled: true,
-    hint: 'Логин по username + password — основной метод',
+    hintKey: 'passwordHint',
   },
   {
     id: 'passkey',
-    label: 'Passkey',
+    labelKey: 'passkey',
     icon: <IconKey size={16} />,
     enabled: false,
     comingSoon: true,
-    hint: 'WebAuthn / FIDO2 — Phase 3',
+    hintKey: 'passkeyHint',
   },
   {
     id: 'telegram',
-    label: 'Telegram',
+    labelKey: 'telegram',
     icon: <IconBrandTelegram size={16} />,
     enabled: false,
     comingSoon: true,
-    hint: 'Telegram OAuth login widget',
+    hintKey: 'telegramHint',
   },
   {
     id: 'github',
-    label: 'GitHub',
+    labelKey: 'github',
     icon: <IconBrandGithub size={16} />,
     enabled: false,
     comingSoon: true,
   },
   {
     id: 'oauth2',
-    label: 'Generic OAuth2',
+    labelKey: 'genericOauth',
     icon: <IconShield size={16} />,
     enabled: false,
     comingSoon: true,
@@ -131,6 +133,7 @@ const AUTH_METHODS: AuthMethod[] = [
 ];
 
 function AuthMethodsCard() {
+  const { t } = useTranslation();
   return (
     <Card withBorder padding="lg" radius="md">
       <Group gap="sm" mb="md">
@@ -138,57 +141,63 @@ function AuthMethodsCard() {
           <IconUserCircle size={18} />
         </ThemeIcon>
         <Stack gap={0}>
-          <Text fw={600}>Способы аутентификации</Text>
+          <Text fw={600}>{t('settings.auth.title')}</Text>
           <Text size="xs" c="dimmed">
-            Управление способами входа в панель
+            {t('settings.auth.description')}
           </Text>
         </Stack>
       </Group>
 
       <Stack gap="xs">
-        {AUTH_METHODS.map((m) => (
-          <Paper key={m.id} withBorder p="sm" radius="sm">
-            <Group justify="space-between" wrap="nowrap">
-              <Group gap="sm" wrap="nowrap" style={{ minWidth: 0 }}>
-                <ThemeIcon
-                  size="sm"
-                  variant="light"
-                  color={m.enabled ? 'teal' : 'gray'}
-                >
-                  {m.icon}
-                </ThemeIcon>
-                <Stack gap={0} style={{ minWidth: 0 }}>
-                  <Group gap={6}>
-                    <Text size="sm" fw={500}>
-                      {m.label}
-                    </Text>
-                    {m.comingSoon && (
-                      <Badge size="xs" variant="light" color="gray">
-                        soon
-                      </Badge>
+        {AUTH_METHODS.map((m) => {
+          // GitHub doesn't get a translated label/hint — it's a brand
+          // name, same in both locales.
+          const label = m.id === 'github' ? 'GitHub' : t(`settings.auth.${m.labelKey}`);
+          const hint = m.hintKey ? t(`settings.auth.${m.hintKey}`) : undefined;
+          return (
+            <Paper key={m.id} withBorder p="sm" radius="sm">
+              <Group justify="space-between" wrap="nowrap">
+                <Group gap="sm" wrap="nowrap" style={{ minWidth: 0 }}>
+                  <ThemeIcon
+                    size="sm"
+                    variant="light"
+                    color={m.enabled ? 'teal' : 'gray'}
+                  >
+                    {m.icon}
+                  </ThemeIcon>
+                  <Stack gap={0} style={{ minWidth: 0 }}>
+                    <Group gap={6}>
+                      <Text size="sm" fw={500}>
+                        {label}
+                      </Text>
+                      {m.comingSoon && (
+                        <Badge size="xs" variant="light" color="gray">
+                          {t('settings.auth.soonBadge')}
+                        </Badge>
+                      )}
+                    </Group>
+                    {hint && (
+                      <Text size="xs" c="dimmed">
+                        {hint}
+                      </Text>
                     )}
-                  </Group>
-                  {m.hint && (
-                    <Text size="xs" c="dimmed">
-                      {m.hint}
-                    </Text>
-                  )}
-                </Stack>
+                  </Stack>
+                </Group>
+                <Tooltip
+                  label={
+                    m.id === 'password'
+                      ? t('settings.auth.passwordDisabledTooltip')
+                      : m.comingSoon
+                        ? t('settings.auth.comingSoonTooltip')
+                        : ''
+                  }
+                >
+                  <Switch checked={m.enabled} disabled readOnly />
+                </Tooltip>
               </Group>
-              <Tooltip
-                label={
-                  m.id === 'password'
-                    ? 'Базовый метод — отключить нельзя пока не настроен другой'
-                    : m.comingSoon
-                      ? 'Coming soon'
-                      : ''
-                }
-              >
-                <Switch checked={m.enabled} disabled readOnly />
-              </Tooltip>
-            </Group>
-          </Paper>
-        ))}
+            </Paper>
+          );
+        })}
       </Stack>
     </Card>
   );
@@ -197,6 +206,7 @@ function AuthMethodsCard() {
 // ───── API tokens ─────
 
 function ApiTokensCard() {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const [createOpen, { open: openCreate, close: closeCreate }] = useDisclosure(false);
   const [revealed, setRevealed] = useState<string | null>(null);
@@ -216,7 +226,7 @@ function ApiTokensCard() {
     onError: (err) =>
       notifications.show({
         color: 'red',
-        title: 'Не получилось создать',
+        title: t('common.createError'),
         message: err instanceof Error ? err.message : String(err),
       }),
   });
@@ -225,26 +235,25 @@ function ApiTokensCard() {
     mutationFn: deleteApiToken,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['api-tokens'] });
-      notifications.show({ color: 'green', message: 'Токен удалён' });
+      notifications.show({ color: 'green', message: t('settings.tokens.deleted') });
     },
     onError: (err) =>
       notifications.show({
         color: 'red',
-        title: 'Не получилось удалить',
+        title: t('common.deleteError'),
         message: err instanceof Error ? err.message : String(err),
       }),
   });
 
   function handleDelete(token: ApiToken) {
     modals.openConfirmModal({
-      title: `Удалить токен «${token.name}»?`,
+      title: t('settings.tokens.deleteTitle', { name: token.name }),
       children: (
         <Text size="sm">
-          Существующие интеграции, использующие этот токен, перестанут работать.
-          Действие необратимо.
+          {t('settings.tokens.deleteBody')}
         </Text>
       ),
-      labels: { confirm: 'Удалить', cancel: 'Отмена' },
+      labels: { confirm: t('settings.tokens.revoke'), cancel: t('common.cancel') },
       confirmProps: { color: 'red' },
       onConfirm: () => deleteMutation.mutate(token.id),
     });
@@ -260,13 +269,13 @@ function ApiTokensCard() {
             <IconKey size={18} />
           </ThemeIcon>
           <Stack gap={0}>
-            <Text fw={600}>API-токены</Text>
+            <Text fw={600}>{t('settings.tokens.title')}</Text>
             <Text size="xs" c="dimmed">
-              Bearer-токены для интеграций (бот, скрипты)
+              {t('settings.tokens.description')}
             </Text>
           </Stack>
         </Group>
-        <Tooltip label="Обновить">
+        <Tooltip label={t('common.refresh')}>
           <ActionIcon
             variant="subtle"
             size="sm"
@@ -280,34 +289,34 @@ function ApiTokensCard() {
 
       {tokens.length === 0 ? (
         <Text c="dimmed" size="sm" py="md" ta="center">
-          Токенов ещё нет. Нажми «Создать» — выпустится новый.
+          {t('settings.tokens.empty')}
         </Text>
       ) : (
         <Stack gap="xs">
-          {tokens.map((t) => (
-            <Paper key={t.id} withBorder p="sm" radius="sm">
+          {tokens.map((tok) => (
+            <Paper key={tok.id} withBorder p="sm" radius="sm">
               <Group justify="space-between" wrap="nowrap">
                 <Stack gap={0}>
                   <Text size="sm" fw={500}>
-                    {t.name}
+                    {tok.name}
                   </Text>
                   <Text size="xs" c="dimmed" ff="monospace">
-                    создан {new Date(t.createdAt).toLocaleString()}
-                    {t.lastUsedAt
-                      ? ` · использовался ${new Date(t.lastUsedAt).toLocaleString()}`
-                      : ' · ни разу не использовался'}
+                    {t('settings.tokens.tableCreated')} {new Date(tok.createdAt).toLocaleString()}
+                    {tok.lastUsedAt
+                      ? ` · ${t('settings.tokens.tableLastUsed')} ${new Date(tok.lastUsedAt).toLocaleString()}`
+                      : ''}
                   </Text>
                 </Stack>
                 <Group gap={4} wrap="nowrap">
-                  <Tooltip label="Скопировать ID">
+                  <Tooltip label={t('settings.tokens.copyId')}>
                     <ActionIcon
                       variant="subtle"
                       size="sm"
                       onClick={async () => {
-                        await copyToClipboard(t.id);
+                        await copyToClipboard(tok.id);
                         notifications.show({
                           color: 'teal',
-                          message: 'ID скопирован',
+                          message: t('settings.tokens.idCopied'),
                           autoClose: 1500,
                         });
                       }}
@@ -315,12 +324,12 @@ function ApiTokensCard() {
                       <IconCopy size={14} />
                     </ActionIcon>
                   </Tooltip>
-                  <Tooltip label="Удалить">
+                  <Tooltip label={t('settings.tokens.revoke')}>
                     <ActionIcon
                       variant="subtle"
                       color="red"
                       size="sm"
-                      onClick={() => handleDelete(t)}
+                      onClick={() => handleDelete(tok)}
                     >
                       <IconTrash size={14} />
                     </ActionIcon>
@@ -339,7 +348,7 @@ function ApiTokensCard() {
         onClick={openCreate}
         fullWidth
       >
-        Создать токен
+        {t('settings.tokens.createButton')}
       </Button>
 
       <CreateApiTokenModal
@@ -368,26 +377,25 @@ function CreateApiTokenModal({
   onSubmit: (name: string) => void;
   loading: boolean;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   return (
-    <Modal opened={opened} onClose={onClose} title="Новый API-токен" size="md">
+    <Modal opened={opened} onClose={onClose} title={t('settings.tokens.modalTitle')} size="md">
       <Stack>
         <TextInput
-          label="Имя"
-          placeholder="telegram-bot / ci-deploy / ..."
+          label={t('settings.tokens.modalName')}
+          placeholder={t('settings.tokens.modalNamePlaceholder')}
           value={name}
           onChange={(e) => setName(e.currentTarget.value)}
           required
           autoFocus
         />
         <Alert color="yellow" variant="light">
-          После создания плейнтекст-токен будет показан <b>один раз</b> — скопируй
-          его сразу. Панель хранит только SHA-256 hash и больше плейнтекст не
-          вернёт.
+          {t('settings.tokens.modalWarning')}
         </Alert>
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose} disabled={loading}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button
             onClick={() => {
@@ -398,7 +406,7 @@ function CreateApiTokenModal({
             loading={loading}
             disabled={name.trim().length === 0}
           >
-            Создать
+            {t('settings.tokens.modalSubmit')}
           </Button>
         </Group>
       </Stack>
@@ -413,6 +421,7 @@ function RevealTokenModal({
   token: string | null;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   async function copy() {
     if (!token) return;
@@ -424,14 +433,13 @@ function RevealTokenModal({
     <Modal
       opened={token !== null}
       onClose={onClose}
-      title="Токен создан"
+      title={t('settings.tokens.revealTitle')}
       size="md"
       withCloseButton
     >
       <Stack>
         <Alert color="yellow" variant="light">
-          Скопируй токен <b>сейчас</b> — после закрытия окна панель его больше не
-          покажет.
+          {t('settings.tokens.revealHint')}
         </Alert>
         <Code
           block
@@ -451,9 +459,9 @@ function RevealTokenModal({
             onClick={copy}
             color={copied ? 'teal' : undefined}
           >
-            {copied ? 'Скопировано' : 'Скопировать'}
+            {copied ? t('settings.tokens.revealCopied') : t('settings.tokens.revealCopy')}
           </Button>
-          <Button onClick={onClose}>Готово</Button>
+          <Button onClick={onClose}>{t('settings.tokens.revealDone')}</Button>
         </Group>
       </Stack>
     </Modal>

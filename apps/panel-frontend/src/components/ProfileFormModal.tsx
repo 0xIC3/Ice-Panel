@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import {
   Alert,
   Button,
-  Code,
   Divider,
   Group,
   Modal,
@@ -578,7 +577,7 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
             <Stack>
               <PasswordInput
                 label="Salamander obfs password"
-                description="Опционально. Пусто — без обфускации."
+                description={t('profiles.form.cfg.salamanderObfsDesc')}
                 {...form.getInputProps('hyObfsPassword')}
               />
               <TextInput
@@ -598,14 +597,14 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
               <Group grow align="flex-start">
                 <TextInput
                   label="REALITY dest (target site)"
-                  description="host:port — fronting decoy"
+                  description={t('profiles.form.cfg.realityDestDesc')}
                   placeholder="www.cloudflare.com:443"
                   required
                   {...form.getInputProps('xrayDest')}
                 />
                 <TextInput
                   label="REALITY serverNames"
-                  description="через запятую"
+                  description={t('profiles.form.cfg.realityServerNamesDesc')}
                   placeholder="www.cloudflare.com, cdn.cloudflare.com"
                   required
                   {...form.getInputProps('xrayServerNames')}
@@ -614,14 +613,14 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
               <Group grow align="flex-start">
                 <TextInput
                   label="REALITY shortIds"
-                  description="hex, через запятую"
+                  description={t('profiles.form.cfg.realityShortIdsDesc')}
                   placeholder="abc123, deadbeef"
                   required
                   {...form.getInputProps('xrayShortIds')}
                 />
                 <Select
                   label="Fingerprint"
-                  description="TLS fingerprint клиента"
+                  description={t('profiles.form.cfg.realityFingerprintDesc')}
                   data={['chrome', 'firefox', 'safari', 'ios', 'android', 'edge', 'random']}
                   {...form.getInputProps('xrayFingerprint')}
                 />
@@ -630,7 +629,7 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
                 <PasswordInput
                   flex={1}
                   label="REALITY private key"
-                  description="curve25519 base64. «Сгенерировать» или вставить из `xray x25519`."
+                  description={t('profiles.form.cfg.realityPrivateKeyDesc')}
                   required
                   {...form.getInputProps('xrayPrivateKey')}
                 />
@@ -641,22 +640,22 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
                   onClick={generateXrayKeys}
                   type="button"
                 >
-                  Сгенерировать
+                  {t('profiles.form.cfg.generate')}
                 </Button>
               </Group>
               <Group grow align="flex-start">
                 <TextInput
                   label="REALITY public key"
-                  description="auto-derived из private"
+                  description={t('profiles.form.cfg.realityPublicKeyDesc')}
                   required
                   {...form.getInputProps('xrayPublicKey')}
                 />
                 <Select
                   label="Subprotocol"
-                  description="VLESS — Vision-ready. Trojan — password auth."
+                  description={t('profiles.form.cfg.realitySubprotocolDesc')}
                   data={[
-                    { value: 'vless', label: 'VLESS (canonical)' },
-                    { value: 'trojan', label: 'Trojan (no Vision)' },
+                    { value: 'vless', label: t('profiles.form.cfg.realitySubprotocolVless') },
+                    { value: 'trojan', label: t('profiles.form.cfg.realitySubprotocolTrojan') },
                   ]}
                   allowDeselect={false}
                   {...form.getInputProps('xraySubprotocol')}
@@ -665,19 +664,19 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
               <Group grow align="flex-start">
                 <Select
                   label="Flow"
-                  description="Vision работает только с raw"
+                  description={t('profiles.form.cfg.realityFlowDesc')}
                   data={[
                     { value: 'xtls-rprx-vision', label: 'xtls-rprx-vision' },
                     { value: 'xtls-rprx-vision-udp443', label: 'xtls-rprx-vision-udp443' },
-                    { value: '', label: '(none) — без flow' },
+                    { value: '', label: t('profiles.form.cfg.realityFlowNone') },
                   ]}
                   {...form.getInputProps('xrayFlow')}
                 />
                 <Select
                   label="Network (transport)"
-                  description="REALITY: только raw / xhttp / grpc"
+                  description={t('profiles.form.cfg.realityNetworkDesc')}
                   data={[
-                    { value: 'raw', label: 'raw (TCP) — Vision-compatible' },
+                    { value: 'raw', label: t('profiles.form.cfg.realityNetworkRaw') },
                     { value: 'xhttp', label: 'xhttp (HTTP/2 chunked)' },
                     { value: 'grpc', label: 'gRPC' },
                   ]}
@@ -689,13 +688,13 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
                 <Group grow align="flex-start">
                   <TextInput
                     label="Path"
-                    description="HTTP path для xhttp transport"
+                    description={t('profiles.form.cfg.xhttpPathDesc')}
                     placeholder="/api/v1/stream"
                     {...form.getInputProps('xrayPath')}
                   />
                   <TextInput
                     label="Host header"
-                    description="опционально, по умолчанию = SNI"
+                    description={t('profiles.form.cfg.hostHeaderDesc')}
                     placeholder="cdn.example.com"
                     {...form.getInputProps('xrayHostHeader')}
                   />
@@ -704,7 +703,7 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
               {form.values.xrayNetwork === 'grpc' && (
                 <TextInput
                   label="gRPC serviceName"
-                  description="Имя gRPC сервиса"
+                  description={t('profiles.form.cfg.grpcServiceNameDesc')}
                   placeholder="GunService"
                   required
                   {...form.getInputProps('xrayServiceName')}
@@ -735,7 +734,7 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
                   onClick={generateAwgKeys}
                   type="button"
                 >
-                  Сгенерировать
+                  {t('profiles.form.cfg.generate')}
                 </Button>
               </Group>
               <TextInput label="Server public key" required {...form.getInputProps('awgServerPub')} />
@@ -776,7 +775,7 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
                 <NumberInput
                   flex={1}
                   label="H2"
-                  description="должен отличаться"
+                  description={t('profiles.form.cfg.awgS1Desc')}
                   min={5}
                   max={2147483647}
                   {...form.getInputProps('awgH2')}
@@ -784,7 +783,7 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
                 <NumberInput
                   flex={1}
                   label="H3"
-                  description="попарно уникален"
+                  description={t('profiles.form.cfg.awgJDesc')}
                   min={5}
                   max={2147483647}
                   {...form.getInputProps('awgH3')}
@@ -792,7 +791,7 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
                 <NumberInput
                   flex={1}
                   label="H4"
-                  description="> 4 и unique"
+                  description={t('profiles.form.cfg.awgHDesc')}
                   min={5}
                   max={2147483647}
                   {...form.getInputProps('awgH4')}
@@ -829,8 +828,7 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
                   return (
                     <Alert color="red" variant="light" p="xs">
                       <Text size="xs">
-                        H1-H4 должны быть попарно уникальны — сейчас есть
-                        дубликаты. Жми «Re-roll» чтобы сгенерировать заново.
+                        {t('profiles.form.cfg.awgHWarning')}
                       </Text>
                     </Alert>
                   );
@@ -865,7 +863,7 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
           {form.values.protocol === 'shadowsocks' && (
             <Stack>
               <Select
-                label="Cipher method"
+                label={t('profiles.form.cfg.ssCipherLabel')}
                 data={[
                   { value: '2022-blake3-aes-256-gcm', label: '2022-blake3-aes-256-gcm (recommended)' },
                   { value: '2022-blake3-aes-128-gcm', label: '2022-blake3-aes-128-gcm' },
@@ -879,8 +877,7 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
               />
               <Alert color="blue" variant="light">
                 <Text size="sm">
-                  Per-user пароль = <Code>xrayUuid</Code> пользователя. Включи у юзера
-                  протокол <Code>shadowsocks</Code> в списке протоколов.
+                  {t('profiles.form.cfg.ssNote')}
                 </Text>
               </Alert>
             </Stack>
@@ -889,15 +886,14 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
           {form.values.protocol === 'mtproto' && (
             <Stack>
               <TextInput
-                label="Masquerade domain"
+                label={t('profiles.form.cfg.mtprotoDomain')}
                 placeholder="www.cloudflare.com"
                 required
                 {...form.getInputProps('mtgDomain')}
               />
               <Alert color="yellow" variant="light">
                 <Text size="sm">
-                  Смена домена ротирует секреты ВСЕХ юзеров — старые подписки перестанут
-                  работать.
+                  {t('profiles.form.cfg.mtprotoDomainNote')}
                 </Text>
               </Alert>
             </Stack>

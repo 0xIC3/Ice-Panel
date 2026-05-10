@@ -215,7 +215,7 @@ export function SquadFormModal({
                     <Group gap={6}>
                       <Text fw={700}>{squad.name}</Text>
                       {isAllSquad && (
-                        <Tooltip label="Системный сквад">
+                        <Tooltip label={t('squads.form.systemSquadTooltip')}>
                           <IconShieldLock
                             size={13}
                             color="var(--mantine-color-yellow-6)"
@@ -231,12 +231,12 @@ export function SquadFormModal({
                   </Stack>
                 </Group>
                 <Group gap="xs">
-                  <Tooltip label="Профилей выбрано">
+                  <Tooltip label={t('squads.form.profilesSelectedBadge')}>
                     <Badge variant="light" color="indigo" leftSection={<IconBolt size={11} />}>
                       {selectedCount}
                     </Badge>
                   </Tooltip>
-                  <Tooltip label="Участников">
+                  <Tooltip label={t('squads.form.membersBadge')}>
                     <Badge variant="light" color="blue" leftSection={<IconUsers size={11} />}>
                       {squad.memberCount}
                     </Badge>
@@ -248,8 +248,7 @@ export function SquadFormModal({
 
           {isAllSquad && (
             <Alert color="yellow" icon={<IconShieldLock size={18} />}>
-              <b>All</b> — системный сквад. Авто-привязывается к каждому новому профилю
-              и каждому новому пользователю. Переименовать, изменить состав или удалить нельзя.
+              {t('squads.form.allAlert')}
             </Alert>
           )}
 
