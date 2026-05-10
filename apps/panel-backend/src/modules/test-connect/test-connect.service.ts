@@ -179,7 +179,7 @@ export async function testProfileConnect(profileId: string): Promise<ProbeResult
   }
 
   const bindings = await prisma.profileNodeBinding.findMany({
-    where: { profileId, enabled: true },
+    where: { profileId, enabled: true, node: { deletedAt: null } },
     include: {
       node: { select: { name: true, address: true } },
       hosts: { where: { enabled: true }, orderBy: [{ priority: 'asc' }] },

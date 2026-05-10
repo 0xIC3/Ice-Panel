@@ -1,5 +1,6 @@
 import { issueNodeCert, encodeNodePayload } from '../keygen/keygen.service.js';
 import { eventBus } from '../../lib/event-bus.js';
+import { prisma } from '../../prisma.js';
 import * as repo from './nodes.repository.js';
 import { issueBootstrapToken } from './bootstrap.service.js';
 import {
@@ -176,5 +177,11 @@ export async function updateNode(id: string, input: UpdateNodeInput): Promise<Pu
 export async function deleteNode(id: string): Promise<void> {
   const exists = await repo.existsActive(id);
   if (!exists) throw new NodeNotFoundError(id);
+  // Hard-cascade profile bindings (and their hosts via FK cascade) — leaving
+  // them around made re-installs look like the profile was bound twice (one
+  // to the soft-deleted node, one to the freshly-created replacement). The
+  // node row itself stays soft-deleted so audit-trail / lastStatusChange
+  // history isn't lost.
+  await prisma.profileNodeBinding.deleteMany({ where: { nodeId: id } });
   await repo.softDelete(id);
 }

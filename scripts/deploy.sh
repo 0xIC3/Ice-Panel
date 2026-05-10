@@ -40,7 +40,13 @@ echo "[deploy] git pull"
 git pull
 
 echo "[deploy] prisma migrate deploy"
-"${DC[@]}" run --rm migrate
+# Ensure postgres is up first (some compose backends — notably podman's docker
+# shim — don't attach `run --rm` containers to the project network reliably,
+# which makes `postgres:5432` unresolvable). Bringing up postgres first +
+# using `up --abort-on-container-exit` for the one-shot migrate sidesteps it.
+"${DC[@]}" up -d postgres
+"${DC[@]}" up --abort-on-container-exit --exit-code-from migrate migrate
+"${DC[@]}" rm -fsv migrate || true
 
 echo "[deploy] rebuild + restart all services"
 "${DC[@]}" up -d --build

@@ -213,7 +213,9 @@ export async function createBinding(input: CreateBindingInput): Promise<PublicBi
 }
 
 export async function listBindings(q: ListBindingsQuery): Promise<PublicBindingDto[]> {
-  const where: Prisma.ProfileNodeBindingWhereInput = {};
+  // Skip bindings whose node was soft-deleted — otherwise DeployProfileModal
+  // / profile cards would carry phantom rows from removed nodes.
+  const where: Prisma.ProfileNodeBindingWhereInput = { node: { deletedAt: null } };
   if (q.nodeId) where.nodeId = q.nodeId;
   if (q.profileId) where.profileId = q.profileId;
   const rows = await prisma.profileNodeBinding.findMany({
