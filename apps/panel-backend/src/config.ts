@@ -61,7 +61,12 @@ const ConfigSchema = z.object({
   // ONLY from this IP. CRITICAL: must be the panel's *origin* IP, not
   // a Cloudflare edge IP. Optional — without it the install command
   // shows a `--panel-ip <YOUR_IP>` placeholder and admin fills manually.
-  PANEL_PUBLIC_IP: z.string().ip().optional(),
+  // Loose validation: any non-empty token. Operator controls this, no
+  // injection vector — UFW will reject malformed IPs at allow-time.
+  PANEL_PUBLIC_IP: z
+    .string()
+    .optional()
+    .transform((v) => (v === '' ? undefined : v)),
 
   // Slice S7 — login bruteforce defence. After this many failed logins
   // for the same username (case-insensitive) within the window, lock the
