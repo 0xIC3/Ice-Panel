@@ -101,7 +101,7 @@ export default {
       address: 'Адрес',
       addressDesc: 'IP или DNS — panel-mTLS endpoint',
       port: 'Node Port',
-      portDesc: 'mTLS-порт (по умолчанию 8443)',
+      portDesc: 'mTLS, по умолчанию 8443',
       country: 'Страна',
       countryDesc: 'ISO 3166-1 для GeoIP',
       multiplier: 'Consumption multiplier',

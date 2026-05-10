@@ -99,7 +99,7 @@ export default {
       address: 'Address',
       addressDesc: 'IP or DNS — panel-mTLS endpoint',
       port: 'Node Port',
-      portDesc: 'mTLS port (default 8443)',
+      portDesc: 'mTLS, default 8443',
       country: 'Country',
       countryDesc: 'ISO 3166-1 for GeoIP',
       multiplier: 'Consumption multiplier',

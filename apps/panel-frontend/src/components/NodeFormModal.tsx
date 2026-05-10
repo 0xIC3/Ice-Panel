@@ -270,8 +270,10 @@ export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Prop
             </Group>
             {/* Address split into host + port so admins see exactly what
                 port will be hit (default 8443, install-node.sh hard-coded).
-                Backend recombines into host:port via handleFinalSubmit. */}
-            <Group align="flex-start" gap="sm">
+                Backend recombines into host:port via handleFinalSubmit.
+                align=flex-end keeps both inputs on the same baseline even
+                when description lines wrap differently between the two. */}
+            <Group align="flex-end" gap="sm" wrap="nowrap">
               <TextInput
                 style={{ flex: 1 }}
                 label={t('nodes.form.address')}
