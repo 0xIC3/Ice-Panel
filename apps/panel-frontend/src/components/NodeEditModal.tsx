@@ -60,15 +60,33 @@ const PROTOCOL_OPTIONS: { value: NodeProtocol; label: string }[] = [
   { value: 'mieru', label: 'Mieru (stealth proxy)' },
 ];
 
+// Hard-coded mTLS port from install-node.sh — also the default in the
+// create wizard. Edit modal lets admin tweak per-node.
+const DEFAULT_NODE_PORT = 8443;
+
 interface FormValues {
   name: string;
-  address: string;
+  // host + port — split for clearer UX (Remnawave-style). Recombined
+  // into `host:port` on submit.
+  host: string;
+  port: number | '';
   protocol: NodeProtocol;
   countryCode: string;
   consumptionMultiplier: number | '';
   // Slice 27.5 — region grouping + capacity hint.
   regionId: string;
   maxUsers: number | '';
+}
+
+function splitAddress(address: string): { host: string; port: number } {
+  const idx = address.indexOf(':');
+  if (idx === -1) return { host: address, port: DEFAULT_NODE_PORT };
+  const host = address.slice(0, idx);
+  const port = Number.parseInt(address.slice(idx + 1), 10);
+  return {
+    host,
+    port: Number.isFinite(port) && port > 0 ? port : DEFAULT_NODE_PORT,
+  };
 }
 
 interface Props {
@@ -93,10 +111,12 @@ export function NodeEditModal({
   refreshing,
 }: Props) {
   const qc = useQueryClient();
+  const initial = splitAddress(node?.address ?? '');
   const form = useForm<FormValues>({
     initialValues: {
       name: node?.name ?? '',
-      address: node?.address ?? '',
+      host: initial.host,
+      port: initial.port,
       protocol: node?.protocol ?? 'xray',
       countryCode: node?.countryCode ?? '',
       consumptionMultiplier: node ? Number(node.consumptionMultiplier) : 1,
@@ -107,9 +127,11 @@ export function NodeEditModal({
 
   useEffect(() => {
     if (opened && node) {
+      const { host, port } = splitAddress(node.address);
       form.setValues({
         name: node.name,
-        address: node.address,
+        host,
+        port,
         protocol: node.protocol,
         countryCode: node.countryCode ?? '',
         consumptionMultiplier: Number(node.consumptionMultiplier),
@@ -222,9 +244,12 @@ export function NodeEditModal({
   if (!node) return null;
 
   async function handleSave() {
+    const portNum =
+      form.values.port === '' ? DEFAULT_NODE_PORT : Number(form.values.port);
+    const address = `${form.values.host.trim()}:${portNum}`;
     await onSubmit({
       name: form.values.name,
-      address: form.values.address,
+      address,
       protocol: form.values.protocol,
       countryCode: form.values.countryCode || null,
       consumptionMultiplier:
@@ -346,12 +371,26 @@ export function NodeEditModal({
                   {...form.getInputProps('protocol')}
                 />
               </Group>
-              <TextInput
-                label="Адрес"
-                description="host:port для panel-mTLS"
-                required
-                {...form.getInputProps('address')}
-              />
+              <Group align="flex-start" gap="sm">
+                <TextInput
+                  style={{ flex: 1 }}
+                  label="Адрес"
+                  description="IP или DNS"
+                  required
+                  {...form.getInputProps('host')}
+                />
+                <NumberInput
+                  w={120}
+                  label="Node Port"
+                  description="mTLS"
+                  min={1}
+                  max={65535}
+                  allowDecimal={false}
+                  allowNegative={false}
+                  hideControls
+                  {...form.getInputProps('port')}
+                />
+              </Group>
               <Group grow align="flex-start">
                 <Select
                   label="Страна"

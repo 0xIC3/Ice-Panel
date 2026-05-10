@@ -41,18 +41,45 @@ const PROTOCOL_OPTIONS: { value: NodeProtocol; label: string }[] = [
   { value: 'mieru', label: 'Mieru (stealth proxy)' },
 ];
 
+// Default mTLS port the node-agent listens on. Hard-coded in
+// install-node.sh; admins can override per-node via the Port field.
+const DEFAULT_NODE_PORT = 8443;
+
 interface FormValues {
   name: string;
-  address: string;
+  // Address is split in the UI into a host field and a port field
+  // (Remnawave-style — admin sees the port that will actually be used,
+  // can edit if their install-node ran with a non-default port). At
+  // submit time we recombine into the `host:port` string the backend
+  // already accepts.
+  host: string;
+  port: number | '';
   protocol: NodeProtocol;
   countryCode: string;
   consumptionMultiplier: number | '';
 }
 
+/** Split a stored `address` into host + port. Empty port → defaults to 8443. */
+function splitAddress(address: string): { host: string; port: number } {
+  const idx = address.indexOf(':');
+  if (idx === -1) {
+    return { host: address, port: DEFAULT_NODE_PORT };
+  }
+  const host = address.slice(0, idx);
+  const portRaw = address.slice(idx + 1);
+  const port = Number.parseInt(portRaw, 10);
+  return {
+    host,
+    port: Number.isFinite(port) && port > 0 ? port : DEFAULT_NODE_PORT,
+  };
+}
+
 function defaults(node: Node | null): FormValues {
+  const { host, port } = splitAddress(node?.address ?? '');
   return {
     name: node?.name ?? '',
-    address: node?.address ?? '',
+    host,
+    port,
     protocol: node?.protocol ?? 'xray',
     countryCode: node?.countryCode ?? '',
     consumptionMultiplier: node ? Number(node.consumptionMultiplier) : 1,
@@ -92,11 +119,18 @@ export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Prop
           return 'Только латиница, цифры, точка, _ и -';
         return null;
       },
-      address: (v) => {
+      host: (v) => {
         const t = v.trim();
         if (t.length === 0) return 'Адрес обязателен';
-        if (!/^[a-zA-Z0-9.-]+(:\d{1,5})?$/.test(t))
-          return 'host или host:port (без http://)';
+        if (!/^[a-zA-Z0-9.-]+$/.test(t))
+          return 'IP или DNS-имя (без http:// и без порта)';
+        return null;
+      },
+      port: (v) => {
+        if (v === '') return 'Порт обязателен';
+        const n = Number(v);
+        if (!Number.isInteger(n) || n < 1 || n > 65535)
+          return 'Порт от 1 до 65535';
         return null;
       },
     },
@@ -144,9 +178,16 @@ export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Prop
 
   async function handleFinalSubmit() {
     const values = form.values;
+    // Recombine host + port into the address string the backend expects.
+    // Backend Zod accepts `host` or `host:port` — we always send the
+    // explicit port form so the cert SAN + cron URL match what the admin
+    // saw in the form.
+    const portNum =
+      values.port === '' ? DEFAULT_NODE_PORT : Number(values.port);
+    const address = `${values.host.trim()}:${portNum}`;
     const base = {
       name: values.name,
-      address: values.address,
+      address,
       protocol: values.protocol,
       countryCode: values.countryCode || null,
       consumptionMultiplier:
@@ -227,13 +268,30 @@ export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Prop
                 {...form.getInputProps('protocol')}
               />
             </Group>
-            <TextInput
-              label={t('nodes.form.address')}
-              description={t('nodes.form.addressDesc')}
-              placeholder="n1.example.com:8443"
-              required
-              {...form.getInputProps('address')}
-            />
+            {/* Address split into host + port so admins see exactly what
+                port will be hit (default 8443, install-node.sh hard-coded).
+                Backend recombines into host:port via handleFinalSubmit. */}
+            <Group align="flex-start" gap="sm">
+              <TextInput
+                style={{ flex: 1 }}
+                label={t('nodes.form.address')}
+                description={t('nodes.form.addressDesc')}
+                placeholder="n1.example.com"
+                required
+                {...form.getInputProps('host')}
+              />
+              <NumberInput
+                w={140}
+                label={t('nodes.form.port')}
+                description={t('nodes.form.portDesc')}
+                min={1}
+                max={65535}
+                allowDecimal={false}
+                allowNegative={false}
+                hideControls
+                {...form.getInputProps('port')}
+              />
+            </Group>
             <Group grow>
               <Select
                 label={t('nodes.form.country')}
