@@ -3,6 +3,7 @@ import { issueNodeCert, encodeNodePayload } from '../keygen/keygen.service.js';
 import { eventBus } from '../../lib/event-bus.js';
 import { prisma } from '../../prisma.js';
 import * as repo from './nodes.repository.js';
+import { getPanelPublicIp } from './panel-ip.js';
 import { issueBootstrapToken } from './bootstrap.service.js';
 import {
   mapNodeToPublic,
@@ -100,7 +101,7 @@ export async function createNode(
   const bootstrap: BootstrapInfo = {
     token: tokenInfo.token,
     expiresAt: tokenInfo.expiresAt.toISOString(),
-    command: renderBootstrapCommand(ctx.panelUrl, tokenInfo.token, node.protocol),
+    command: await renderBootstrapCommand(ctx.panelUrl, tokenInfo.token, node.protocol),
   };
 
   // Trigger backfill so existing active users land on this fresh node.
@@ -112,24 +113,27 @@ export async function createNode(
   return mapNodeWithPayload(node, payload, bootstrap);
 }
 
-function renderBootstrapCommand(panelUrl: string, token: string, protocol: string): string {
-  // Slice S7 — embed --panel-ip if PANEL_PUBLIC_IP is configured so the
-  // agent's UFW locks :8443/tcp to the panel's origin. When unset we
-  // emit a literal placeholder; the admin must fill it in by hand or
-  // accept world-open mTLS port (with a loud warn from install-node.sh).
-  const panelIp = (process.env.PANEL_PUBLIC_IP ?? '').trim();
+async function renderBootstrapCommand(
+  panelUrl: string,
+  token: string,
+  protocol: string,
+): Promise<string> {
+  // Slice S7 — auto-detect or accept env-override of the panel's egress
+  // IP so the install command can lock the agent's UFW to it. See
+  // panel-ip.ts for resolution order. When all probes fail (offline
+  // egress?) we still emit a non-shell-breaking placeholder; admin
+  // substitutes manually.
+  const panelIp = await getPanelPublicIp();
   const lines = [
     'bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \\',
     `  --panel-url ${panelUrl} \\`,
     `  --bootstrap ${token} \\`,
-    `  --protocol ${protocol}`,
+    `  --protocol ${protocol} \\`,
   ];
   if (panelIp) {
-    lines[lines.length - 1] += ' \\';
     lines.push(`  --panel-ip ${panelIp}`);
   } else {
-    lines[lines.length - 1] += ' \\';
-    lines.push('  --panel-ip <YOUR_PANEL_PUBLIC_IP>  # set PANEL_PUBLIC_IP env to inject this automatically');
+    lines.push('  --panel-ip YOUR_PANEL_PUBLIC_IP  # auto-detect failed, replace with panel IP');
   }
   return lines.join('\n');
 }

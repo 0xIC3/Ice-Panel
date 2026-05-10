@@ -76,6 +76,18 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN}
       PUBLIC_URL: ${PUBLIC_URL}
       HYSTERIA_PUBLIC_PORT: ${HYSTERIA_PUBLIC_PORT:-443}
+      # Slice S7 — security knobs. Without these the strict per-route
+      # rate limits, X-Forwarded-For trust hops, and node-install IP
+      # auto-injection don't reach the running container even when set
+      # in .env.production.
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-2}
+      PANEL_PUBLIC_IP: ${PANEL_PUBLIC_IP:-}
+      RATE_LIMIT_SUB_PER_MIN: ${RATE_LIMIT_SUB_PER_MIN:-30}
+      RATE_LIMIT_BOOTSTRAP_PER_MIN: ${RATE_LIMIT_BOOTSTRAP_PER_MIN:-10}
+      RATE_LIMIT_HEARTBEAT_PER_MIN: ${RATE_LIMIT_HEARTBEAT_PER_MIN:-120}
+      LOGIN_LOCKOUT_FAILURES: ${LOGIN_LOCKOUT_FAILURES:-5}
+      LOGIN_LOCKOUT_DURATION_MIN: ${LOGIN_LOCKOUT_DURATION_MIN:-15}
+      LOGIN_LOCKOUT_WINDOW_MIN: ${LOGIN_LOCKOUT_WINDOW_MIN:-15}
     depends_on:
       postgres:
         condition: service_healthy

@@ -10,6 +10,7 @@ import {
 } from './nodes.schemas.js';
 import * as nodesService from './nodes.service.js';
 import * as bootstrap from './bootstrap.service.js';
+import { getPanelPublicIp } from './panel-ip.js';
 
 /**
  * Derive the panel URL the admin is currently using to talk to the API.
@@ -33,20 +34,22 @@ const auth = { onRequest: [requireAuth] };
 // Mirror of nodes.service.ts:renderBootstrapCommand — kept here because the
 // /api/nodes/:id/bootstrap endpoint generates the command without going
 // through the service path. Should produce byte-identical output.
-function renderRefreshBootstrapCommand(panelUrl: string, token: string, protocol: string): string {
-  const panelIp = (process.env.PANEL_PUBLIC_IP ?? '').trim();
+async function renderRefreshBootstrapCommand(
+  panelUrl: string,
+  token: string,
+  protocol: string,
+): Promise<string> {
+  const panelIp = await getPanelPublicIp();
   const lines = [
     'bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \\',
     `  --panel-url ${panelUrl} \\`,
     `  --bootstrap ${token} \\`,
-    `  --protocol ${protocol}`,
+    `  --protocol ${protocol} \\`,
   ];
   if (panelIp) {
-    lines[lines.length - 1] += ' \\';
     lines.push(`  --panel-ip ${panelIp}`);
   } else {
-    lines[lines.length - 1] += ' \\';
-    lines.push('  --panel-ip <YOUR_PANEL_PUBLIC_IP>  # set PANEL_PUBLIC_IP env to inject this automatically');
+    lines.push('  --panel-ip YOUR_PANEL_PUBLIC_IP  # auto-detect failed, replace with panel IP');
   }
   return lines.join('\n');
 }
@@ -115,7 +118,7 @@ export async function nodesRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(201).send({
         token: tokenInfo.token,
         expiresAt: tokenInfo.expiresAt.toISOString(),
-        command: renderRefreshBootstrapCommand(
+        command: await renderRefreshBootstrapCommand(
           publicUrlFromRequest(request),
           tokenInfo.token,
           node.protocol,
