@@ -14,11 +14,13 @@ import {
   registerCronJobs,
 } from './modules/scheduler/scheduler.queue.js';
 import { buildApp } from './app.js';
+import { startMetricsRefreshLoop } from './lib/metrics-refresh.js';
 
 let app: FastifyInstance | null = null;
 let nodeUsersWorker: Worker | null = null;
 let inboundSyncWorker: Worker | null = null;
 let cronTasksWorker: Worker | null = null;
+let stopMetricsRefresh: (() => void) | null = null;
 
 async function start() {
   try {
@@ -50,6 +52,9 @@ async function start() {
     await registerCronJobs();
     app.log.info('Cron jobs registered');
 
+    stopMetricsRefresh = startMetricsRefreshLoop();
+    app.log.info('Metrics refresh loop started');
+
     await app.listen({ port: config.APP_PORT, host: config.APP_HOST });
   } catch (err) {
     console.error(err);
@@ -70,6 +75,9 @@ async function shutdown() {
   }
   if (cronTasksWorker) {
     await cronTasksWorker.close();
+  }
+  if (stopMetricsRefresh) {
+    stopMetricsRefresh();
   }
   await closeNodeTransport();
   await prisma.$disconnect();

@@ -14,6 +14,7 @@ import {
 import { enforceHwid } from '../hwid/hwid.service.js';
 import { prisma } from '../../prisma.js';
 import { config } from '../../config.js';
+import { subscriptionRequests } from '../../lib/metrics.js';
 
 const TokenParamSchema = z.object({
   token: z.string().min(8).max(128),
@@ -166,6 +167,7 @@ export async function subscriptionRoutes(app: FastifyInstance): Promise<void> {
       (request.headers.accept ?? '').toString(),
       userAgent,
     );
+    subscriptionRequests.inc({ format });
 
     try {
       // Slice S2 — HWID enforcement runs BEFORE generateSubscription so

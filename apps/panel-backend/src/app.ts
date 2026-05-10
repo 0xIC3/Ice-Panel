@@ -29,6 +29,8 @@ import { apiTokensRoutes } from './modules/api-tokens/api-tokens.routes.js';
 import { settingsRoutes } from './modules/settings/settings.routes.js';
 import { bullBoardRoutes } from './modules/admin/bull-board.routes.js';
 import { registerSecurityGate } from './lib/security-gate.js';
+import { registry as metricsRegistry, httpRequestDuration, routeLabel } from './lib/metrics.js';
+import { requireAuth } from './modules/auth/auth.hook.js';
 
 /**
  * Build the Fastify instance with all plugins and routes registered.
@@ -73,6 +75,33 @@ export async function buildApp(): Promise<FastifyInstance> {
       message: 'Internal server error',
     });
   });
+
+  // Slice 33 — HTTP request histogram. `onResponse` fires after the route
+  // matched, so request.routeOptions.url is the templated path (low
+  // cardinality), not the raw URL with embedded ids/tokens.
+  app.addHook('onResponse', async (request, reply) => {
+    const elapsedSec = reply.elapsedTime / 1000;
+    httpRequestDuration.observe(
+      {
+        method: request.method,
+        route: routeLabel(request),
+        status: String(reply.statusCode),
+      },
+      elapsedSec,
+    );
+  });
+
+  // /metrics — Prometheus scrape endpoint. Auth-gated so it isn't a free
+  // info disclosure; Prometheus jobs use an `icp_*` API token in
+  // Authorization: Bearer for scraping.
+  app.get(
+    '/metrics',
+    { onRequest: [requireAuth] },
+    async (_request, reply) => {
+      reply.header('content-type', metricsRegistry.contentType);
+      return reply.send(await metricsRegistry.metrics());
+    },
+  );
 
   app.get('/health', async () => {
     const [dbOk, redisOk] = await Promise.all([pingDatabase(), pingRedis()]);

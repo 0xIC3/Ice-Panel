@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { config } from '../config.js';
 import { redis } from './redis.js';
 import { notifyTelegramAsync } from './telegram-notify.js';
+import { honeypotHits, geoBlockDenials } from './metrics.js';
 
 /**
  * Tier-1 security gate. Two layers, both registered as a single
@@ -97,6 +98,7 @@ export async function registerSecurityGate(app: FastifyInstance): Promise<void> 
 
     // Layer 2 — honeypot.
     if (isHoneypotPath(url)) {
+      honeypotHits.inc();
       const firstHit = await blacklist(ip);
       if (firstHit) {
         notifyTelegramAsync(
@@ -123,6 +125,7 @@ export async function registerSecurityGate(app: FastifyInstance): Promise<void> 
       request.headers['x-country-code']) as string | string[] | undefined;
     const country = (Array.isArray(raw) ? raw[0] : raw)?.toUpperCase();
     if (!country || !config.ADMIN_ALLOWED_COUNTRIES.includes(country)) {
+      geoBlockDenials.inc();
       return reply.code(403).send({ error: 'GEO_BLOCKED' });
     }
   });

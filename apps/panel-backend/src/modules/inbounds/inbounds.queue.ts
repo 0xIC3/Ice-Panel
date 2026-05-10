@@ -4,6 +4,7 @@ import { redis } from '../../lib/redis.js';
 import { prisma } from '../../prisma.js';
 import { mtprotoSecret } from '../../core-adapters/mtproto/index.js';
 import { NodeTransport, NodeRequestError } from '../nodes/nodes.transport.js';
+import { inboundSyncJobs } from '../../lib/metrics.js';
 
 // ───── Job data shapes ─────
 
@@ -162,6 +163,7 @@ export async function applyInboundsForNode(nodeId: string): Promise<void> {
     console.log(
       `[worker:inbound-sync] applyInbounds ${node.name} ok — applied=${res.applied} skipped=${res.skipped}`,
     );
+    inboundSyncJobs.inc({ result: 'ok' });
   } catch (err) {
     const detail =
       err instanceof NodeRequestError
@@ -170,6 +172,7 @@ export async function applyInboundsForNode(nodeId: string): Promise<void> {
         ? err.message
         : String(err);
     console.log(`[worker:inbound-sync] applyInbounds ${node.name} FAILED: ${detail}`);
+    inboundSyncJobs.inc({ result: 'fail' });
     throw err;
   }
 

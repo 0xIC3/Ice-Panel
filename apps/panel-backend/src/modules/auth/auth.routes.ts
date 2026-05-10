@@ -6,6 +6,7 @@ import * as authService from './auth.service.js';
 import * as adminService from '../admin/admin.service.js';
 import { mapAdminToPublic } from '../admin/admin.mapper.js';
 import { notifyTelegramAsync } from '../../lib/telegram-notify.js';
+import { loginAttempts } from '../../lib/metrics.js';
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
   // GET /api/auth/status — public discovery: tells the frontend which auth
@@ -58,6 +59,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
         notifyTelegramAsync(
           `🔓 *Admin login*\nuser: \`${admin.username}\`\nip: \`${peerIp}\``,
         );
+        loginAttempts.inc({ result: 'ok' });
         return reply.send({
           admin: mapAdminToPublic(admin),
           token,
@@ -68,6 +70,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
           // discloses retryAfter so a friendly UI can countdown, but the
           // 401 vs 429 distinction also tells legit users they aren't
           // typing the wrong password — they're racing a stale lockout.
+          loginAttempts.inc({ result: 'locked' });
           notifyTelegramAsync(
             `🔒 *Login locked out*\nuser: \`${input.username}\`\nip: \`${peerIp}\`\nretry in: ${err.retryAfterSeconds}s`,
           );
@@ -79,6 +82,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
           });
         }
         if (err instanceof authService.InvalidCredentialsError) {
+          loginAttempts.inc({ result: 'invalid' });
           return reply.code(401).send({
             error: 'INVALID_CREDENTIALS',
             message: err.message,
