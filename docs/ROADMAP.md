@@ -1428,7 +1428,7 @@ Per-user-bucket branding (custom Profile-Title, host-overrides for VIPs, sub-pag
 Раздел closed-в-коде но требующих ещё одной валидации в проде или дофикса:
 
 - ~~**31.5 Hysteria 2 port-hopping**~~ ✅ **закрыто 2026-05-11** — hysteria остаётся на одном `listen: :443`, install-node.sh ставит iptables UDP REDIRECT `20000-50000 → :443` (managed systemd-юнитом `ice-panel-hyhop.service`, `--hysteria-port-range START-END` для оверрайда). URI builder emits `mport=START-END`, sing-box outbound — `server_ports`, Clash Meta — `ports`. UI: Port range start/end в Hysteria профиле (опционально). Профильный range ДОЛЖЕН быть subset'ом install-time iptables-range. RU/iOS валидация — следующая сессия.
-- **38 Heartbeat agent-resync** (~1 день) — агент эмитит `agentStartTime` в heartbeat-payload, панель при смене start-time re-issues applyInbounds. Закрывает "agent restarted, users gone, no auto-resync" из cycle #5.
+- ~~**38 Heartbeat agent-resync**~~ ✅ **закрыто 2026-05-11** — агент эмитит `X-Agent-Start-Time` header (unix-nano process-start) в heartbeat, панель хранит last-seen в Redis (`node:<id>:agentStartTime`, TTL 7d); при mismatch enqueue `applyNodeInbounds` job — re-push inbounds + addUser fan-out без admin toggle. First-seen (Redis miss) НЕ триггерит (защита от panel-cold-start false positive).
 - **AmneziaWG / NaiveProxy / SS2022 / MTProto / Mieru** — code-готовы, real-traffic не валидированы. Требуют отдельных VPS под каждый core (rule: 1 нода = 1 core).
 
 ---

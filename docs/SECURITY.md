@@ -89,7 +89,7 @@ Listed in priority/impact order. Effort is rough engineer-days at our scale.
 
 ### Tier 1 — fits in a single sprint, real defence
 
-1. **Telegram / email webhook on critical events** — `admin.created`, `node.deleted`, `auth.lockout_burst` (5+ accounts in 1 min), `keygen_ca.rotated`. *~1 day. `audit_log` already records these; we just need an emitter.*
+1. ~~**Telegram / email webhook on critical events**~~ ✅ **partially shipped 2026-05-11.** Telegram bot push for `auth.login_ok` and `auth.lockout` via `TELEGRAM_BOT_TOKEN`+`TELEGRAM_CHAT_ID` env vars (no-op when either is unset). Fire-and-forget — flaky Telegram API can't break login flow. Still TODO: `admin.created`, `node.deleted`, `keygen_ca.rotated` events. *Lib: `apps/panel-backend/src/lib/telegram-notify.ts`.*
 2. **Geo-block panel by country** — env `ADMIN_ALLOWED_COUNTRIES=RU,DE` checked against `CF-IPCountry` (or MaxMind GeoLite2 db). Skip when `request.path` starts with `/sub/` (subscribers worldwide). *~1 day.*
 3. **Honey users + honey routes** — auto-seeded fake user that should never be polled; hits to `/wp-admin`/`/.env` etc. → 200 fake response + IP-blacklist for 1h. *~1 day.*
 4. **fail2ban integration** — drop a jail config for `/api/auth/login` 401s + `/sub/:token` 404s. Optional `--harden` flag in `install-panel.sh`. *~half day.*

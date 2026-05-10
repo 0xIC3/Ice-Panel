@@ -200,10 +200,14 @@ event-driven (binding.created, profile.updated), not "agent came back up."
 Either fires `profile.updated` / `binding.updated` → applyInbounds
 fan-out → addUser pushes the active users back to the agent.
 
-**Architectural fix planned:** agent emits its `agentStartTime` in the
-heartbeat payload; panel re-issues applyInbounds when start-time
-changes (so restarts auto-resync without admin action). Tracked in
-roadmap.
+**Architectural fix shipped 2026-05-11 (slice 38 follow-up):** agent
+emits `X-Agent-Start-Time` (unix-nano of process start) in every
+heartbeat. Panel stores last-seen value in Redis at
+`node:<id>:agentStartTime` (TTL 7d). When incoming differs from
+stored, panel enqueues an `applyNodeInbounds` BullMQ job that re-pushes
+inbounds + all active users — no admin toggle needed. The manual
+profile-toggle workaround below is now only for nodes still running
+pre-cycle-6 agent binaries.
 
 ### Profile-edit Save doesn't seem to fire applyInbounds
 
