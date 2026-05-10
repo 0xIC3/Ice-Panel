@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Alert,
   Badge,
@@ -75,6 +76,7 @@ interface Props {
 }
 
 export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Props) {
+  const { t } = useTranslation();
   const isEdit = node !== null;
   const [step, setStep] = useState(0);
   const [selectedProfileIds, setSelectedProfileIds] = useState<string[]>([]);
@@ -176,7 +178,7 @@ export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Prop
     <Modal
       opened={opened}
       onClose={handleClose}
-      title={isEdit ? `Изменить ${node.name}` : 'Создать ноду'}
+      title={isEdit ? `${t('common.edit')} ${node.name}` : t('nodes.create')}
       size="lg"
     >
       <Stack>
@@ -197,10 +199,13 @@ export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Prop
           allowNextStepsSelect={false}
           size="sm"
         >
-          <Stepper.Step label="Параметры" description="Имя, адрес, протокол" />
           <Stepper.Step
-            label="Профили"
-            description={`Auto-deploy (${selectedProfileIds.length})`}
+            label={t('nodes.form.stepParams')}
+            description={t('nodes.form.stepParamsDesc')}
+          />
+          <Stepper.Step
+            label={t('nodes.form.stepProfiles')}
+            description={t('nodes.form.stepProfilesDesc', { count: selectedProfileIds.length })}
           />
         </Stepper>
 
@@ -208,41 +213,41 @@ export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Prop
           <Stack>
             <Group grow>
               <TextInput
-                label="Имя"
-                description="уникальное в рамках панели"
+                label={t('nodes.form.name')}
+                description={t('nodes.form.nameDesc')}
                 placeholder="eu-1"
                 required
                 {...form.getInputProps('name')}
               />
               <Select
-                label="Протокол"
-                description="основной core ноды"
+                label={t('nodes.form.protocol')}
+                description={t('nodes.form.protocolDesc')}
                 data={PROTOCOL_OPTIONS}
                 allowDeselect={false}
                 {...form.getInputProps('protocol')}
               />
             </Group>
             <TextInput
-              label="Адрес"
-              description="host:port для panel-mTLS"
+              label={t('nodes.form.address')}
+              description={t('nodes.form.addressDesc')}
               placeholder="n1.example.com:8443"
               required
               {...form.getInputProps('address')}
             />
             <Group grow>
               <Select
-                label="Страна"
-                description="ISO 3166-1 для GeoIP"
-                placeholder="Не указана"
+                label={t('nodes.form.country')}
+                description={t('nodes.form.countryDesc')}
+                placeholder={t('common.none')}
                 data={COUNTRY_OPTIONS}
                 searchable
                 clearable
-                nothingFoundMessage="Не найдено"
+                nothingFoundMessage={t('common.nothingFound')}
                 {...form.getInputProps('countryCode')}
               />
               <NumberInput
-                label="Consumption multiplier"
-                description="1 = норма, > 1 премиум"
+                label={t('nodes.form.multiplier')}
+                description={t('nodes.form.multiplierDesc')}
                 min={0.1}
                 max={10}
                 step={0.1}
@@ -252,9 +257,9 @@ export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Prop
             </Group>
             <Group justify="space-between" mt="md">
               <Button variant="default" onClick={handleClose}>
-                Отмена
+                {t('common.cancel')}
               </Button>
-              <Button onClick={nextStep}>Далее →</Button>
+              <Button onClick={nextStep}>{t('common.next')} →</Button>
             </Group>
           </Stack>
         )}
@@ -262,21 +267,17 @@ export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Prop
         {step === 1 && (
           <Stack>
             <Alert color="blue" variant="light" icon={<IconRocket size={16} />}>
-              Отметь профили которые сразу развернуть на этой ноде. Bindings
-              создадутся автоматически после регистрации. Можно ничего не
-              выбирать — позже задеплоишь через карточку Profile.
+              {t('nodes.form.profilesAlert')}
             </Alert>
 
             {profilesQuery.isLoading ? (
               <Text c="dimmed" ta="center" py="md">
-                Загружаю профили…
+                {t('common.loading')}
               </Text>
             ) : (profilesQuery.data?.profiles ?? []).length === 0 ? (
               <Paper withBorder p="md" radius="sm" ta="center">
                 <Text c="dimmed" size="sm">
-                  Профилей в системе пока нет — пропусти этот шаг и создай
-                  ноду без bindings. Позже сходишь на /profiles → создашь
-                  профиль → задеплоишь сюда.
+                  {t('nodes.form.noProfiles')}
                 </Text>
               </Paper>
             ) : (
@@ -284,8 +285,8 @@ export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Prop
                 <Stack gap="xs">
                   {profilesByMatch.match.length > 0 && (
                     <ProfileGroup
-                      title="Совместимые с протоколом"
-                      hint={`Эти профили сразу заработают на ${form.values.protocol}-ноде`}
+                      title={t('nodes.form.compatibleGroup')}
+                      hint={t('nodes.form.compatibleHint', { protocol: form.values.protocol })}
                       color="teal"
                       profiles={profilesByMatch.match}
                       selectedIds={selectedProfileIds}
@@ -294,8 +295,8 @@ export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Prop
                   )}
                   {profilesByMatch.mismatch.length > 0 && (
                     <ProfileGroup
-                      title="Других протоколов"
-                      hint={`Binding создастся, но клиенты не подключатся пока install-node не поставит соответствующий бинарь`}
+                      title={t('nodes.form.mismatchGroup')}
+                      hint={t('nodes.form.mismatchHint')}
                       color="yellow"
                       profiles={profilesByMatch.mismatch}
                       selectedIds={selectedProfileIds}
@@ -308,11 +309,14 @@ export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Prop
 
             <Group justify="space-between" mt="md">
               <Button variant="default" onClick={() => setStep(0)}>
-                ← Назад
+                ← {t('common.back')}
               </Button>
               <Button onClick={handleFinalSubmit} loading={loading} leftSection={<IconServer2 size={14} />}>
-                {isEdit ? 'Сохранить' : 'Создать ноду'}
-                {selectedProfileIds.length > 0 && ` + ${selectedProfileIds.length} bindings`}
+                {isEdit
+                  ? t('nodes.form.submitEdit')
+                  : selectedProfileIds.length > 0
+                    ? t('nodes.form.submitWithBindings', { count: selectedProfileIds.length })
+                    : t('nodes.form.submitCreate')}
               </Button>
             </Group>
           </Stack>

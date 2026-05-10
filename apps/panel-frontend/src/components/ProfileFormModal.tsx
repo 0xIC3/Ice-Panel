@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Alert,
   Button,
@@ -257,6 +258,7 @@ interface Props {
 }
 
 export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }: Props) {
+  const { t } = useTranslation();
   const isEdit = profile !== null;
   const mode: Mode = isEdit ? 'edit' : 'create';
 
@@ -443,26 +445,21 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
         form.reset();
         onClose();
       }}
-      title={isEdit ? `Профиль: ${profile.name}` : 'Создать профиль'}
+      title={isEdit ? t('profiles.form.titleEdit', { name: profile.name }) : t('profiles.form.titleCreate')}
       size="lg"
     >
       <form onSubmit={form.onSubmit(handleSubmit)}>
         <Stack>
           <Group grow align="flex-start">
             <TextInput
-              label="Имя"
-              description="уникальное в рамках панели"
+              label={t('profiles.form.name')}
               placeholder="vless-reality"
               required
               {...form.getInputProps('name')}
             />
             <Select
-              label="Протокол"
-              description={
-                isEdit
-                  ? '🔒 immutable после создания'
-                  : 'выбор замораживается после save'
-              }
+              label={t('profiles.form.protocol')}
+              description={isEdit ? t('profiles.form.protocolEdit') : undefined}
               data={[
                 { value: 'hysteria', label: 'Hysteria 2' },
                 { value: 'xray', label: 'Xray (VLESS / Trojan + REALITY)' },
@@ -479,17 +476,17 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
           </Group>
 
           <Textarea
-            label="Описание"
-            placeholder="Назначение профиля (опционально)"
+            label={t('profiles.form.description')}
+            placeholder=""
             autosize
             minRows={1}
             maxRows={3}
             {...form.getInputProps('description')}
           />
 
-          <Switch label="Включён" {...form.getInputProps('enabled', { type: 'checkbox' })} />
+          <Switch label={t('common.enabled')} {...form.getInputProps('enabled', { type: 'checkbox' })} />
 
-          <Divider label={`Конфигурация: ${form.values.protocol}`} labelPosition="center" />
+          <Divider label={form.values.protocol} labelPosition="center" />
 
           <RecipePicker
             protocol={form.values.protocol}
@@ -919,7 +916,7 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
           )}
 
           <Button type="submit" loading={loading} fullWidth>
-            {isEdit ? 'Сохранить' : 'Создать профиль'}
+            {isEdit ? t('profiles.form.submitEdit') : t('profiles.form.submitCreate')}
           </Button>
         </Stack>
       </form>

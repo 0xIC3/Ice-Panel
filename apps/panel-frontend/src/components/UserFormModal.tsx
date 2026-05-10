@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ActionIcon,
   Badge,
@@ -52,12 +53,15 @@ import {
   type User,
 } from '../lib/api';
 
-const STRATEGY_OPTIONS: { value: TrafficLimitStrategy; label: string }[] = [
-  { value: 'no_reset', label: 'Никогда не сбрасывать' },
-  { value: 'day', label: 'Ежедневно' },
-  { value: 'week', label: 'Еженедельно' },
-  { value: 'month', label: 'Ежемесячно' },
-  { value: 'rolling', label: 'Скользящие 30 дней' },
+// Strategy values are stable enum keys; the label is built from the
+// users.strategy.* i18n bundle inside the component so it follows the
+// language switch.
+const STRATEGY_VALUES: TrafficLimitStrategy[] = [
+  'no_reset',
+  'day',
+  'week',
+  'month',
+  'rolling',
 ];
 
 const STATUS_COLORS: Record<string, string> = {
@@ -123,7 +127,14 @@ interface Props {
 }
 
 export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Props) {
+  const { t } = useTranslation();
   const isEdit = user !== null;
+  // STRATEGY_VALUES are stable enum keys; we render labels via t() so the
+  // language switch reflows the select without re-mounting the form.
+  const strategyOptions = STRATEGY_VALUES.map((v) => ({
+    value: v,
+    label: t(`users.strategy.${v}`),
+  }));
 
   const squadsQuery = useQuery({ queryKey: ['squads'], queryFn: listSquads });
 
@@ -201,7 +212,7 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
           <ThemeIcon variant="light" radius="md" size={32}>
             <IconUser size={18} />
           </ThemeIcon>
-          <Text fw={600}>{isEdit ? 'Редактирование' : 'Создание пользователя'}</Text>
+          <Text fw={600}>{isEdit ? t('users.form.titleEdit') : t('users.form.titleCreate')}</Text>
         </Group>
       }
       size="xl"
@@ -219,9 +230,9 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
             {/* LEFT column */}
             <Stack gap="md">
               {!isEdit && (
-                <SectionCard icon={<IconUser size={16} />} title="Идентификация">
+                <SectionCard icon={<IconUser size={16} />} title={t('users.form.sections.identity')}>
                   <TextInput
-                    label="Username"
+                    label={t('users.form.username')}
                     placeholder="alice"
                     required
                     {...form.getInputProps('username')}
@@ -230,9 +241,9 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
               )}
 
               {isEdit && (
-                <SectionCard icon={<IconLock size={16} />} title="Статус">
+                <SectionCard icon={<IconLock size={16} />} title={t('users.table.status')}>
                   <Select
-                    label="Статус пользователя"
+                    label={t('users.table.status')}
                     data={[
                       { value: 'active', label: 'Active' },
                       { value: 'disabled', label: 'Disabled' },
@@ -242,11 +253,11 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
                 </SectionCard>
               )}
 
-              <SectionCard icon={<IconChartBar size={16} />} title="Трафик и лимиты">
+              <SectionCard icon={<IconChartBar size={16} />} title={t('users.form.sections.traffic')}>
                 <Stack gap="sm">
                   <NumberInput
-                    label="Лимит трафика (ГБ)"
-                    description="Оставь пустым — безлимит"
+                    label={t('users.form.trafficLimit')}
+                    description={t('users.form.trafficLimitDesc')}
                     placeholder="500"
                     min={0}
                     allowDecimal={false}
@@ -254,15 +265,15 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
                     {...form.getInputProps('trafficLimitGb')}
                   />
                   <Select
-                    label="Стратегия сброса"
-                    description="Как часто обнулять расход"
-                    data={STRATEGY_OPTIONS}
+                    label={t('users.form.resetStrategy')}
+                    description={t('users.form.resetStrategyDesc')}
+                    data={strategyOptions}
                     {...form.getInputProps('trafficLimitStrategy')}
                   />
                   {!isEdit && (
                     <NumberInput
-                      label="Истекает через (дней)"
-                      description="Оставь пустым — без срока"
+                      label={t('users.form.expireDays')}
+                      description={t('users.form.expireDaysDesc')}
                       placeholder="30"
                       min={1}
                       allowDecimal={false}
@@ -273,26 +284,26 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
                 </Stack>
               </SectionCard>
 
-              <SectionCard icon={<IconMail size={16} />} title="Контактная информация">
+              <SectionCard icon={<IconMail size={16} />} title={t('users.form.sections.contact')}>
                 <Stack gap="sm">
                   <TextInput
-                    label="Email"
+                    label={t('users.form.email')}
                     placeholder="user@example.com"
                     {...form.getInputProps('email')}
                   />
                   <TextInput
-                    label="Telegram ID"
-                    placeholder="optional"
+                    label={t('users.form.telegramId')}
+                    placeholder={t('users.form.telegramIdPlaceholder')}
                     {...form.getInputProps('telegramId')}
                   />
                 </Stack>
               </SectionCard>
 
-              <SectionCard icon={<IconTag size={16} />} title="Устройства и теги">
+              <SectionCard icon={<IconTag size={16} />} title={t('users.form.sections.devices')}>
                 <Stack gap="sm">
                   <NumberInput
-                    label="Лимит HWID-устройств"
-                    description="Оставь пустым — без ограничения. Учитывается только для клиентов отправляющих x-hwid header (Hiddify, Streisand, Happ)."
+                    label={t('users.form.hwidLimit')}
+                    description={t('users.form.hwidLimitDesc')}
                     placeholder="3"
                     min={1}
                     allowDecimal={false}
@@ -301,13 +312,13 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
                   />
                   {user && <UserDevicesPanel userId={user.id} />}
                   <TextInput
-                    label="Tag"
-                    placeholder="vip / trial / ..."
+                    label={t('users.form.tag')}
+                    placeholder={t('users.form.tagPlaceholder')}
                     {...form.getInputProps('tag')}
                   />
                   <Textarea
-                    label="Описание"
-                    placeholder="Внутренняя заметка"
+                    label={t('users.form.description')}
+                    placeholder={t('users.form.descriptionPlaceholder')}
                     autosize
                     minRows={2}
                     maxRows={4}
@@ -319,11 +330,9 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
 
             {/* RIGHT column */}
             <Stack gap="md">
-              <SectionCard icon={<IconShield size={16} />} title="Внутренние сквады">
+              <SectionCard icon={<IconShield size={16} />} title={t('users.form.sections.squads')}>
                 <Text size="xs" c="dimmed" mb="xs">
-                  В каких squad'ах состоит пользователь. «All» — system-managed
-                  fallback (auto-add только если не выбран ни один другой
-                  squad).
+                  {t('users.form.squadsDesc')}
                 </Text>
                 <Stack gap={6}>
                   {(squadsQuery.data?.squads ?? []).map((s) => {
@@ -357,10 +366,10 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
 
           <Group justify="flex-end" gap="sm">
             <Button variant="default" onClick={onClose} disabled={loading}>
-              Отмена
+              {t('common.cancel')}
             </Button>
             <Button type="submit" loading={loading} leftSection={<IconCheck size={16} />}>
-              {isEdit ? 'Сохранить' : 'Создать'}
+              {isEdit ? t('users.form.submitEdit') : t('users.form.submitCreate')}
             </Button>
           </Group>
         </Stack>
@@ -540,6 +549,7 @@ function SquadRow({
  * HWID-aware client or no limit is set.
  */
 function UserDevicesPanel({ userId }: { userId: string }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const devicesQuery = useQuery({
     queryKey: ['hwid-devices', userId],
@@ -550,12 +560,12 @@ function UserDevicesPanel({ userId }: { userId: string }) {
     mutationFn: (id: string) => deleteHwidDevice(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['hwid-devices', userId] });
-      notifications.show({ color: 'green', message: 'Устройство удалено' });
+      notifications.show({ color: 'green', message: t('common.deleted') });
     },
     onError: (err) =>
       notifications.show({
         color: 'red',
-        title: 'Не получилось удалить',
+        title: t('common.deleteError'),
         message: err instanceof Error ? err.message : String(err),
       }),
   });
@@ -567,12 +577,12 @@ function UserDevicesPanel({ userId }: { userId: string }) {
       <Group gap={6}>
         <IconDeviceDesktop size={14} />
         <Text size="sm" fw={500}>
-          Зарегистрированные устройства ({devices.length})
+          {t('users.form.devicesTitle', { count: devices.length })}
         </Text>
       </Group>
       {devices.length === 0 ? (
         <Text size="xs" c="dimmed">
-          Юзер ещё не подключался с HWID-aware клиента, либо лимит не задан.
+          {t('users.form.devicesEmpty')}
         </Text>
       ) : (
         <Stack gap={4}>
@@ -602,6 +612,7 @@ function DeviceRow({
   onDelete: () => void;
   deleting: boolean;
 }) {
+  const { t } = useTranslation();
   const truncated =
     device.hwid.length > 24 ? `${device.hwid.slice(0, 21)}…` : device.hwid;
   const lastSeen = new Date(device.lastSeenAt).toLocaleString();
@@ -620,10 +631,10 @@ function DeviceRow({
             )}
           </Group>
           <Text size="xs" c="dimmed">
-            last seen: {lastSeen}
+            {t('users.form.deviceLastSeen', { when: lastSeen })}
           </Text>
         </Stack>
-        <Tooltip label="Сбросить слот — юзер сможет залогиниться с другого устройства">
+        <Tooltip label={t('users.form.deviceDelete')}>
           <ActionIcon
             variant="subtle"
             color="red"

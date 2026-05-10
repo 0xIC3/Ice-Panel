@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Alert,
   Badge,
@@ -31,6 +32,7 @@ interface Props {
 }
 
 export function DeployProfileModal({ profile, onClose }: Props) {
+  const { t } = useTranslation();
   const opened = profile !== null;
   const qc = useQueryClient();
 
@@ -101,11 +103,11 @@ export function DeployProfileModal({ profile, onClose }: Props) {
       const c = result?.created ?? 0;
       const d = result?.deleted ?? 0;
       if (c === 0 && d === 0) {
-        notifications.show({ color: 'gray', message: 'Изменений нет' });
+        notifications.show({ color: 'gray', message: t('profiles.deploy.noChanges') });
       } else {
         notifications.show({
           color: 'green',
-          message: `Развернут: +${c} / снят: -${d}`,
+          message: t('profiles.deploy.saved', { added: c, removed: d }),
         });
       }
       onClose();
@@ -113,7 +115,7 @@ export function DeployProfileModal({ profile, onClose }: Props) {
     onError: (err) =>
       notifications.show({
         color: 'red',
-        title: 'Не получилось сохранить',
+        title: t('common.saveError'),
         message: err instanceof Error ? err.message : String(err),
       }),
   });
@@ -143,18 +145,14 @@ export function DeployProfileModal({ profile, onClose }: Props) {
       title={
         <Group gap="xs">
           <IconRocket size={18} />
-          <Text fw={600}>Развернуть «{profile?.name}» на нодах</Text>
+          <Text fw={600}>{t('profiles.deploy.title', { name: profile?.name ?? '' })}</Text>
         </Group>
       }
       size="lg"
     >
       <Stack>
         <Alert color="blue" variant="light">
-          Отметь ноды, на которых нужен этот профиль. Снятые галки удаляют
-          существующие bindings (cascade — пользователи теряют URL'ы для этой
-          ноды). Порт по умолчанию: <b>{defaultPort}</b>. Для per-node
-          override'ов (другой порт, publicHost, ACME-домен) пока используй API
-          напрямую — UI будет в slice 27.5.
+          {t('profiles.deploy.hint', { port: defaultPort })}
         </Alert>
 
         {loading ? (
@@ -163,7 +161,7 @@ export function DeployProfileModal({ profile, onClose }: Props) {
           </Group>
         ) : nodes.length === 0 ? (
           <Text c="dimmed" ta="center" py="md">
-            Нод нет — сначала создай ноду в разделе Nodes.
+            {t('profiles.deploy.noNodes')}
           </Text>
         ) : (
           <Stack gap="xs">
@@ -181,7 +179,7 @@ export function DeployProfileModal({ profile, onClose }: Props) {
 
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose} disabled={saveMutation.isPending}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button
             onClick={() => saveMutation.mutate()}
@@ -189,7 +187,7 @@ export function DeployProfileModal({ profile, onClose }: Props) {
             disabled={!dirty || loading}
             leftSection={<IconRocket size={14} />}
           >
-            Сохранить
+            {t('common.save')}
           </Button>
         </Group>
       </Stack>
