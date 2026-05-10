@@ -48,3 +48,20 @@ export async function notifyTelegram(text: string): Promise<void> {
 export function notifyTelegramAsync(text: string): void {
   void notifyTelegram(text);
 }
+
+/**
+ * Escape a user-supplied string for safe interpolation inside legacy
+ * `Markdown` parse_mode bodies. We don't try to block-quote — we just
+ * neutralize the metacharacters that would either crash Telegram's parser
+ * ("Bad Request: can't parse entities") or let an attacker forge bold /
+ * link / code-block sections inside an alert. Used for usernames, IPs,
+ * error messages and anything else that ultimately comes from a user.
+ *
+ * Why not switch to `MarkdownV2`? V2 needs every reserved char escaped
+ * everywhere — including in literal alert text we own — which makes the
+ * call sites unreadable. Legacy `Markdown` only treats `_`, `*`, `[`, `` ` ``
+ * as metacharacters, so escaping those is enough.
+ */
+export function escapeMarkdown(s: string): string {
+  return s.replace(/([_*`[\]])/g, '\\$1');
+}

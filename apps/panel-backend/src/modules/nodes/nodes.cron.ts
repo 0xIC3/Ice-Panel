@@ -3,7 +3,7 @@ import { prisma } from '../../prisma.js';
 import { redis } from '../../lib/redis.js';
 import { NodeTransport, NodeRequestError } from './nodes.transport.js';
 import { inboundSyncQueue } from '../inbounds/inbounds.queue.js';
-import { notifyTelegramAsync } from '../../lib/telegram-notify.js';
+import { notifyTelegramAsync, escapeMarkdown } from '../../lib/telegram-notify.js';
 
 const METRICS_KEY_PREFIX = 'node:metrics:';
 const METRICS_TTL_SECONDS = 60;
@@ -93,8 +93,8 @@ export async function pollNodeStatuses(): Promise<{ ok: number; down: number }> 
       if (statusChanged && node.status !== 'unknown') {
         const icon = result.status === 'online' ? '✅' : '🔴';
         notifyTelegramAsync(
-          `${icon} *Node ${result.status}*\nname: \`${node.name}\`\naddress: \`${node.address}\`` +
-            (result.message ? `\nlast: ${result.message}` : ''),
+          `${icon} *Node ${result.status}*\nname: \`${escapeMarkdown(node.name)}\`\naddress: \`${escapeMarkdown(node.address)}\`` +
+            (result.message ? `\nlast: ${escapeMarkdown(result.message)}` : ''),
         );
       }
     }),

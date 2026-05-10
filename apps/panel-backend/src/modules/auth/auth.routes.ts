@@ -5,7 +5,7 @@ import { LoginSchema, RegisterSchema } from './auth.schemas.js';
 import * as authService from './auth.service.js';
 import * as adminService from '../admin/admin.service.js';
 import { mapAdminToPublic } from '../admin/admin.mapper.js';
-import { notifyTelegramAsync } from '../../lib/telegram-notify.js';
+import { notifyTelegramAsync, escapeMarkdown } from '../../lib/telegram-notify.js';
 import { loginAttempts } from '../../lib/metrics.js';
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
@@ -57,7 +57,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
           secure: process.env.NODE_ENV === 'production',
         });
         notifyTelegramAsync(
-          `🔓 *Admin login*\nuser: \`${admin.username}\`\nip: \`${peerIp}\``,
+          `🔓 *Admin login*\nuser: \`${escapeMarkdown(admin.username)}\`\nip: \`${escapeMarkdown(peerIp)}\``,
         );
         loginAttempts.inc({ result: 'ok' });
         return reply.send({
@@ -72,7 +72,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
           // typing the wrong password — they're racing a stale lockout.
           loginAttempts.inc({ result: 'locked' });
           notifyTelegramAsync(
-            `🔒 *Login locked out*\nuser: \`${input.username}\`\nip: \`${peerIp}\`\nretry in: ${err.retryAfterSeconds}s`,
+            `🔒 *Login locked out*\nuser: \`${escapeMarkdown(input.username)}\`\nip: \`${escapeMarkdown(peerIp)}\`\nretry in: ${err.retryAfterSeconds}s`,
           );
           reply.header('Retry-After', err.retryAfterSeconds.toString());
           return reply.code(429).send({

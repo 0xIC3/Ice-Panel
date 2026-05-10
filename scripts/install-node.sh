@@ -893,9 +893,21 @@ EOF
   #   2. HY_PORT_RANGE is non-empty (admin can pass "" to opt out)
   #   3. iptables is present on the system
   if [[ -n "$HY_PORT_RANGE" ]] && command -v iptables >/dev/null 2>&1; then
+    # Validate format BEFORE we substitute the value into the generated
+    # helper script — the script runs as root and a careless typo (or a
+    # tampered upstream install pipeline) would otherwise get baked in
+    # verbatim. Format: `START-END` where both are 1024..65535 and END>START.
+    if ! [[ "$HY_PORT_RANGE" =~ ^([0-9]{4,5})-([0-9]{4,5})$ ]]; then
+      fail "--hysteria-port-range must be START-END (1024..65535), got: $HY_PORT_RANGE"
+    fi
+    HY_PR_START="${BASH_REMATCH[1]}"
+    HY_PR_END="${BASH_REMATCH[2]}"
+    if (( HY_PR_START < 1024 || HY_PR_END > 65535 || HY_PR_END <= HY_PR_START )); then
+      fail "--hysteria-port-range out of bounds: $HY_PORT_RANGE (need 1024<start<end<=65535)"
+    fi
     # iptables takes the range as `START:END` (colon). The flag we accept
     # is `START-END` (hyphen) so it matches the URI form admins see.
-    HY_RANGE_IPT="${HY_PORT_RANGE/-/:}"
+    HY_RANGE_IPT="${HY_PR_START}:${HY_PR_END}"
     HY_LISTEN_PORT=443
     HYHOP_BIN=/usr/local/bin/ice-panel-hyhop
     HYHOP_UNIT=/etc/systemd/system/ice-panel-hyhop.service

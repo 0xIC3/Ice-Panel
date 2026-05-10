@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { config } from '../config.js';
 import { redis } from './redis.js';
-import { notifyTelegramAsync } from './telegram-notify.js';
+import { notifyTelegramAsync, escapeMarkdown } from './telegram-notify.js';
 import { honeypotHits, geoBlockDenials } from './metrics.js';
 
 /**
@@ -59,7 +59,13 @@ function isPublicPath(url: string): boolean {
 
 function isHoneypotPath(url: string): boolean {
   // Strip query string before matching — `/.env?x=1` is still a probe.
-  const path = url.split('?', 1)[0] ?? url;
+  // Lowercase the path before matching: scanners regularly probe with
+  // mixed/upper casing (`/Wp-Admin`, `/.GIT/config`) and Linux file
+  // systems are case-sensitive but our trap is a pure pattern match,
+  // not a real filesystem lookup. Matching case-insensitively closes
+  // the trivial bypass.
+  const raw = url.split('?', 1)[0] ?? url;
+  const path = raw.toLowerCase();
   if (HONEYPOT_EXACT.has(path)) return true;
   for (const p of HONEYPOT_PREFIXES) {
     if (path.startsWith(p)) return true;
@@ -102,7 +108,7 @@ export async function registerSecurityGate(app: FastifyInstance): Promise<void> 
       const firstHit = await blacklist(ip);
       if (firstHit) {
         notifyTelegramAsync(
-          `🪤 *Honeypot triggered*\nip: \`${ip}\`\npath: \`${url}\`\nblacklisted for ${config.HONEYPOT_BLACKLIST_TTL_SEC}s`,
+          `🪤 *Honeypot triggered*\nip: \`${escapeMarkdown(ip)}\`\npath: \`${escapeMarkdown(url)}\`\nblacklisted for ${config.HONEYPOT_BLACKLIST_TTL_SEC}s`,
         );
       }
       // Plausible-but-empty fake. Static body so scanners that fingerprint
@@ -115,6 +121,15 @@ export async function registerSecurityGate(app: FastifyInstance): Promise<void> 
     }
 
     // Layer 3 — geo-block on gated (admin) paths.
+    //
+    // ⚠ Trust model: `CF-IPCountry` is only trustworthy when Cloudflare
+    // owns the public edge AND the backend is reachable only through CF
+    // (orange-cloud + IP allowlist from CF ranges, or terminated by Caddy
+    // upstream of which CF is the only allowed upstream). Without that,
+    // anyone can spoof `CF-IPCountry: RU` and walk through. Enforce CF
+    // orange-cloud at the network layer; this hook only does the policy
+    // check. The fallback `X-Country-Code` header is for non-CF
+    // deployments behind their own edge (Caddy/Nginx that strips/sets it).
     if (config.ADMIN_ALLOWED_COUNTRIES.length === 0) return;
     if (isPublicPath(url)) return;
     // The geo-block only applies to /api/* routes (the SPA shell + assets
@@ -124,7 +139,7 @@ export async function registerSecurityGate(app: FastifyInstance): Promise<void> 
     const raw = (request.headers['cf-ipcountry'] ??
       request.headers['x-country-code']) as string | string[] | undefined;
     const country = (Array.isArray(raw) ? raw[0] : raw)?.toUpperCase();
-    if (!country || !config.ADMIN_ALLOWED_COUNTRIES.includes(country)) {
+    if (!country || !/^[A-Z]{2}$/.test(country) || !config.ADMIN_ALLOWED_COUNTRIES.includes(country)) {
       geoBlockDenials.inc();
       return reply.code(403).send({ error: 'GEO_BLOCKED' });
     }

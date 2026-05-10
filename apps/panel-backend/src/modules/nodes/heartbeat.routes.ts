@@ -27,8 +27,18 @@ const AGENT_START_KEY_SUFFIX = ':agentStartTime';
 // been down for >7 days is "cold start" by any reasonable definition.
 const AGENT_START_TTL_SECONDS = 7 * 24 * 60 * 60;
 
+// Hard cap on the header value we're willing to ingest. The agent emits a
+// unix-nano string (~19 chars). 64 leaves slack for a future format bump.
+// Fastify has its own header size limit upstream, but this is defence in
+// depth: a compromised agent token shouldn't let an attacker dump arbitrary
+// large strings into Redis under a node-scoped key.
+const AGENT_START_MAX_LEN = 64;
+
 async function trackAgentStart(nodeId: string, startTime: string): Promise<void> {
-  if (!startTime) return;
+  if (!startTime || startTime.length > AGENT_START_MAX_LEN) return;
+  // Constrain charset too: only digits/letters/`-`/`_`. Anything else is
+  // by definition not a valid identifier we'd emit ourselves.
+  if (!/^[A-Za-z0-9_-]+$/.test(startTime)) return;
   const key = `${AGENT_START_KEY_PREFIX}${nodeId}${AGENT_START_KEY_SUFFIX}`;
   const previous = await redis.get(key);
   await redis.set(key, startTime, 'EX', AGENT_START_TTL_SECONDS);
