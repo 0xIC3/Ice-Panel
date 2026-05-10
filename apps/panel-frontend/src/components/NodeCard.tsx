@@ -22,6 +22,7 @@ import {
   IconTrash,
   IconUpload,
 } from '@tabler/icons-react';
+import { useTranslation } from 'react-i18next';
 import type { DashboardOverview } from '../lib/api';
 import { countryFlag } from '../lib/countries';
 
@@ -79,6 +80,7 @@ export function NodeCard({
   onRefreshBootstrap,
   refreshLoading,
 }: Props) {
+  const { t } = useTranslation();
   const m = node.metrics;
   const statusColor =
     node.status === 'online'
@@ -149,7 +151,10 @@ export function NodeCard({
               <Text size="xs" c="dimmed" ff="monospace" truncate>
                 {/* address пишется на странице, нету в dashboard — заменяем
                     inboundCount и todayBytes показываем здесь */}
-                {node.inboundCount} bindings · {formatBytes(node.todayBytes)} сегодня
+                {t('nodes.cardSummary', {
+                  count: node.inboundCount,
+                  bytes: formatBytes(node.todayBytes),
+                })}
               </Text>
             </Stack>
           </Group>

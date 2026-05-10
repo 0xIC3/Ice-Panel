@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ActionIcon,
   Alert,
@@ -110,6 +111,7 @@ export function NodeEditModal({
   saving,
   refreshing,
 }: Props) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const initial = splitAddress(node?.address ?? '');
   const form = useForm<FormValues>({
@@ -208,12 +210,12 @@ export function NodeEditModal({
       qc.invalidateQueries({ queryKey: ['bindings'] });
       qc.invalidateQueries({ queryKey: ['profiles'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
-      notifications.show({ color: 'green', message: 'Binding снят' });
+      notifications.show({ color: 'green', message: t('nodes.edit.bindingRemoved') });
     },
     onError: (err) =>
       notifications.show({
         color: 'red',
-        title: 'Не получилось снять',
+        title: t('nodes.edit.bindingRemoveFailed'),
         message: err instanceof Error ? err.message : String(err),
       }),
   });
@@ -231,12 +233,12 @@ export function NodeEditModal({
       qc.invalidateQueries({ queryKey: ['bindings'] });
       qc.invalidateQueries({ queryKey: ['profiles'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
-      notifications.show({ color: 'green', message: 'Binding добавлен' });
+      notifications.show({ color: 'green', message: t('nodes.edit.bindingAdded') });
     },
     onError: (err) =>
       notifications.show({
         color: 'red',
-        title: 'Не получилось задеплоить',
+        title: t('nodes.edit.bindingFailed'),
         message: err instanceof Error ? err.message : String(err),
       }),
   });
@@ -353,36 +355,36 @@ export function NodeEditModal({
               <ThemeIcon size={32} radius="md" variant="light" color="blue">
                 <IconWorld size={16} />
               </ThemeIcon>
-              <Text fw={600}>Параметры</Text>
+              <Text fw={600}>{t('nodes.edit.params')}</Text>
             </Group>
             <Stack gap="sm">
               <Group grow align="flex-start">
                 <TextInput
-                  label="Имя"
-                  description="уникальное"
+                  label={t('nodes.edit.paramsName')}
+                  description={t('nodes.edit.paramsNameDesc')}
                   required
                   {...form.getInputProps('name')}
                 />
                 <Select
-                  label="Протокол"
-                  description="основной core ноды"
+                  label={t('nodes.edit.paramsProtocol')}
+                  description={t('nodes.edit.paramsProtocolDesc')}
                   data={PROTOCOL_OPTIONS}
                   allowDeselect={false}
                   {...form.getInputProps('protocol')}
                 />
               </Group>
-              <Group align="flex-start" gap="sm">
+              <Group align="flex-end" gap="sm" wrap="nowrap">
                 <TextInput
                   style={{ flex: 1 }}
-                  label="Адрес"
-                  description="IP или DNS"
+                  label={t('nodes.edit.paramsAddress')}
+                  description={t('nodes.edit.paramsAddressDesc')}
                   required
                   {...form.getInputProps('host')}
                 />
                 <NumberInput
                   w={120}
-                  label="Node Port"
-                  description="mTLS"
+                  label={t('nodes.edit.paramsPort')}
+                  description={t('nodes.edit.paramsPortDesc')}
                   min={1}
                   max={65535}
                   allowDecimal={false}
@@ -393,17 +395,17 @@ export function NodeEditModal({
               </Group>
               <Group grow align="flex-start">
                 <Select
-                  label="Страна"
-                  description="ISO 3166-1"
+                  label={t('nodes.edit.paramsCountry')}
+                  description={t('nodes.edit.paramsCountryDesc')}
                   data={COUNTRY_OPTIONS}
                   searchable
                   clearable
-                  placeholder="Не указана"
+                  placeholder={t('common.none')}
                   {...form.getInputProps('countryCode')}
                 />
                 <NumberInput
-                  label="Multiplier"
-                  description="1 = норма"
+                  label={t('nodes.edit.paramsMultiplier')}
+                  description={t('nodes.edit.paramsMultiplierDesc')}
                   min={0.1}
                   max={10}
                   step={0.1}
@@ -413,9 +415,9 @@ export function NodeEditModal({
 
               <Group grow>
                 <Select
-                  label="Регион"
-                  description="группировка для фильтра + smart selection"
-                  placeholder="без региона"
+                  label={t('nodes.edit.paramsRegion')}
+                  description={t('nodes.edit.paramsRegionDesc')}
+                  placeholder={t('nodes.edit.paramsRegionPlaceholder')}
                   clearable
                   data={(regionsQuery.data?.regions ?? []).map((r) => ({
                     value: r.id,
@@ -424,9 +426,9 @@ export function NodeEditModal({
                   {...form.getInputProps('regionId')}
                 />
                 <NumberInput
-                  label="Max users"
-                  description="hint для capacity bar"
-                  placeholder="без лимита"
+                  label={t('nodes.edit.paramsMaxUsers')}
+                  description={t('nodes.edit.paramsMaxUsersDesc')}
+                  placeholder={t('nodes.edit.paramsMaxUsersPlaceholder')}
                   min={1}
                   max={100000}
                   allowDecimal={false}
@@ -444,7 +446,7 @@ export function NodeEditModal({
                 <ThemeIcon size={32} radius="md" variant="light" color="grape">
                   <IconCpu size={16} />
                 </ThemeIcon>
-                <Text fw={600}>Система</Text>
+                <Text fw={600}>{t('nodes.edit.system')}</Text>
               </Group>
               {m && (
                 <Badge variant="light" color="gray" size="xs" ff="monospace">
@@ -458,7 +460,10 @@ export function NodeEditModal({
                   icon={<IconCpu size={12} />}
                   label="CPU"
                   value={m.cpu.usagePercent}
-                  detail={`${m.cpu.cores} ядер · LA ${m.cpu.loadAvg1.toFixed(2)}/${m.cpu.loadAvg5.toFixed(2)}/${m.cpu.loadAvg15.toFixed(2)}`}
+                  detail={t('nodes.edit.cpuHint', {
+                    cores: m.cpu.cores,
+                    la: `${m.cpu.loadAvg1.toFixed(2)}/${m.cpu.loadAvg5.toFixed(2)}/${m.cpu.loadAvg15.toFixed(2)}`,
+                  })}
                 />
                 <MetricBar
                   icon={<IconDatabase size={12} />}
@@ -475,7 +480,7 @@ export function NodeEditModal({
                 <Divider my={4} />
                 <Group justify="space-between">
                   <Text size="xs" c="dimmed">
-                    Сегодня
+                    {t('nodes.edit.todayBytes')}
                   </Text>
                   <Text size="sm" fw={600} ff="monospace">
                     {formatBytes(overviewNode?.todayBytes ?? 0)}
@@ -483,18 +488,16 @@ export function NodeEditModal({
                 </Group>
                 <Group justify="space-between">
                   <Text size="xs" c="dimmed">
-                    Bindings
+                    {t('nodes.edit.bindings')}
                   </Text>
                   <Text size="sm" fw={600}>
                     {overviewNode?.inboundCount ?? bindingsWithProfile.length}
                   </Text>
                 </Group>
                 <Group justify="space-between">
-                  <Tooltip label="Юзеры в squad'ах с хотя бы одним профилем этой ноды (approx — может overcount'нуть cross-squad)">
-                    <Text size="xs" c="dimmed" style={{ cursor: 'help' }}>
-                      Доступна юзерам
-                    </Text>
-                  </Tooltip>
+                  <Text size="xs" c="dimmed">
+                    {t('nodes.edit.reachingUsers')}
+                  </Text>
                   <Text size="sm" fw={600}>
                     {reachingUsersApprox === 0 ? '—' : `~${reachingUsersApprox}`}
                   </Text>
@@ -502,7 +505,7 @@ export function NodeEditModal({
               </Stack>
             ) : (
               <Text size="xs" c="dimmed" ta="center" py="xl">
-                Метрики ещё не пришли — первый poll в течение 15 сек.
+                {t('nodes.metricsLoading')}
               </Text>
             )}
           </Card>
@@ -515,14 +518,13 @@ export function NodeEditModal({
               <ThemeIcon size={32} radius="md" variant="light" color="violet">
                 <IconRocket size={16} />
               </ThemeIcon>
-              <Text fw={600}>Bindings ({bindingsWithProfile.length})</Text>
+              <Text fw={600}>{t('nodes.edit.bindingsCount', { count: bindingsWithProfile.length })}</Text>
             </Group>
           </Group>
 
           {bindingsWithProfile.length === 0 ? (
             <Text size="xs" c="dimmed" py="md" ta="center">
-              На эту ноду пока ничего не задеплоено. Используй «Развернуть на
-              нодах» в карточке Profile, или quick-deploy ниже.
+              {t('nodes.edit.noBindings')}
             </Text>
           ) : (
             <Stack gap={4}>
@@ -558,7 +560,7 @@ export function NodeEditModal({
                         )}
                       </Stack>
                     </Group>
-                    <Tooltip label="Снять с этой ноды">
+                    <Tooltip label={t('nodes.edit.removeBindingTooltip')}>
                       <ActionIcon
                         variant="subtle"
                         color="red"
@@ -589,7 +591,7 @@ export function NodeEditModal({
           {availableProfiles.length > 0 && (
             <Box mt="sm">
               <Text size="xs" c="dimmed" mb={4}>
-                Quick-deploy — совместимые профили:
+                {t('nodes.edit.quickDeployHint')}
               </Text>
               <Group gap={6} wrap="wrap">
                 {availableProfiles.map((p) => (
@@ -622,7 +624,7 @@ export function NodeEditModal({
               loading={refreshing}
               onClick={onRefreshBootstrap}
             >
-              Перевыпустить bootstrap
+              {t('nodes.edit.refreshBootstrapBtn')}
             </Button>
             <Button
               variant="light"
@@ -630,15 +632,15 @@ export function NodeEditModal({
               leftSection={<IconTrash size={14} />}
               onClick={onDelete}
             >
-              Удалить ноду
+              {t('nodes.edit.deleteBtn')}
             </Button>
           </Group>
           <Group gap="xs">
             <Button variant="default" onClick={onClose}>
-              Отмена
+              {t('common.cancel')}
             </Button>
             <Button onClick={handleSave} loading={saving}>
-              Сохранить
+              {t('common.save')}
             </Button>
           </Group>
         </Group>
