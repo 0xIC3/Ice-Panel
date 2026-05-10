@@ -125,6 +125,20 @@ func (a *Adapter) Name() string { return Name }
 
 // Start brings up the auth-callback server, then optionally spawns the
 // hysteria subprocess via the shared subprocess package.
+//
+// Two lifecycle modes:
+//
+//   ServiceUnit set    → hysteria runs as a systemd unit (install-node.sh
+//                        wrote /etc/systemd/system/hysteria.service). The
+//                        agent only writes the config + reloads via
+//                        `systemctl restart <unit>` on ApplyInbound.
+//                        We MUST NOT also spawn an in-process copy or
+//                        the two compete for :443/udp and the second one
+//                        FATALs on "address already in use".
+//
+//   ServiceUnit empty  → "spawn mode" — agent owns the subprocess. Used
+//                        in tests + setups that don't want systemd in
+//                        the lifecycle loop.
 func (a *Adapter) Start(ctx context.Context) error {
 	if err := a.startAuthCallback(); err != nil {
 		return fmt.Errorf("start auth callback: %w", err)
@@ -132,6 +146,13 @@ func (a *Adapter) Start(ctx context.Context) error {
 
 	if a.cfg.BinaryPath == "" {
 		a.logger.Info("hysteria binary not configured — callback-only mode")
+		return nil
+	}
+
+	if a.cfg.ServiceUnit != "" {
+		a.logger.Info("hysteria managed by systemd — skipping in-process spawn",
+			"unit", a.cfg.ServiceUnit,
+		)
 		return nil
 	}
 

@@ -568,6 +568,12 @@ EOF
       if [[ -n "$HY_EMAIL" ]]; then
         echo "HYSTERIA_ACME_EMAIL=${HY_EMAIL}" >> "$ENV_FILE"
       fi
+      # Tell the agent we're delegating hysteria's lifecycle to systemd
+      # (the install just wrote /etc/systemd/system/hysteria.service).
+      # Without this, the agent's adapter assumes "spawn-mode" and tries
+      # to fork its own hysteria process — which then fights the systemd-
+      # managed copy for :443/udp and dies with "address already in use".
+      echo "HYSTERIA_SERVICE_UNIT=hysteria" >> "$ENV_FILE"
       ;;
     xray)
       cat >> "$ENV_FILE" <<EOF
