@@ -91,6 +91,11 @@ services:
       # ACME contact email auto-injected into Hysteria / Naive install
       # commands. Optional — UI emits placeholder when unset.
       ACME_DEFAULT_EMAIL: ${ACME_DEFAULT_EMAIL:-}
+      # Tier-1 security — Telegram alert webhook (cycle #6). Set both to
+      # enable login / lockout / node-event push notifications. Get a bot
+      # token from @BotFather; chat_id from @userinfobot.
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
     depends_on:
       postgres:
         condition: service_healthy

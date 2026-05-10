@@ -5,6 +5,7 @@ import { LoginSchema, RegisterSchema } from './auth.schemas.js';
 import * as authService from './auth.service.js';
 import * as adminService from '../admin/admin.service.js';
 import { mapAdminToPublic } from '../admin/admin.mapper.js';
+import { notifyTelegramAsync } from '../../lib/telegram-notify.js';
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
   // GET /api/auth/status — public discovery: tells the frontend which auth
@@ -34,6 +35,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     },
     async (request, reply) => {
       const input = LoginSchema.parse(request.body);
+      const peerIp = request.ip;
       try {
         const admin = await authService.login(input);
         const token = await reply.jwtSign({
@@ -53,6 +55,9 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
           maxAge: 60 * 60 * 24, // 24h — matches default JWT_EXPIRES_IN.
           secure: process.env.NODE_ENV === 'production',
         });
+        notifyTelegramAsync(
+          `🔓 *Admin login*\nuser: \`${admin.username}\`\nip: \`${peerIp}\``,
+        );
         return reply.send({
           admin: mapAdminToPublic(admin),
           token,
@@ -63,6 +68,9 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
           // discloses retryAfter so a friendly UI can countdown, but the
           // 401 vs 429 distinction also tells legit users they aren't
           // typing the wrong password — they're racing a stale lockout.
+          notifyTelegramAsync(
+            `🔒 *Login locked out*\nuser: \`${input.username}\`\nip: \`${peerIp}\`\nretry in: ${err.retryAfterSeconds}s`,
+          );
           reply.header('Retry-After', err.retryAfterSeconds.toString());
           return reply.code(429).send({
             error: 'ACCOUNT_LOCKED',

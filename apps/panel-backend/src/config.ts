@@ -80,6 +80,23 @@ const ConfigSchema = z.object({
   // cert (Hysteria 2 / NaiveProxy / Caddy). Optional — install command
   // emits a placeholder when unset, admin fills manually.
   ACME_DEFAULT_EMAIL: z.email().optional(),
+
+  // Tier-1 security — Telegram alert webhook (cycle #5 SECURITY.md).
+  // When BOT_TOKEN + CHAT_ID are both set, the panel pushes notifications
+  // for high-signal security events:
+  //   - admin login success / lockout / failed lockout
+  //   - node self-destruct trigger
+  //   - node bootstrap token issued
+  // Optional — when either is unset, calls to `notifyTelegram` are no-ops.
+  // Get a bot token from @BotFather; chat_id from @userinfobot.
+  TELEGRAM_BOT_TOKEN: z
+    .string()
+    .optional()
+    .transform((v) => (v === '' ? undefined : v)),
+  TELEGRAM_CHAT_ID: z
+    .string()
+    .optional()
+    .transform((v) => (v === '' ? undefined : v)),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
