@@ -99,7 +99,6 @@ export function AppLayout() {
               target="_blank"
               rel="noreferrer"
               label={t('sidebar.queues')}
-              description={t('sidebar.queuesDesc')}
               leftSection={<IconListCheck size={18} />}
             />
             <NavLink
