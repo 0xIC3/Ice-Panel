@@ -462,7 +462,7 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
     >
       <form onSubmit={form.onSubmit(handleSubmit)}>
         <Stack>
-          <Group grow align="flex-start">
+          <Group grow align="flex-end">
             <TextInput
               label={t('profiles.form.name')}
               placeholder="vless-reality"
