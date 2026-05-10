@@ -831,6 +831,20 @@ WantedBy=multi-user.target
 EOF
     systemctl daemon-reload
   fi
+  # ───── IPv6 sanity-check for hysteria's outbound resolver ─────
+  # Cycle #5 finding: many VPS providers route IPv4 cleanly but leave IPv6
+  # half-configured (AAAA records resolve, but the host can't actually reach
+  # IPv6 destinations). Hysteria proxies a client-requested DNS name and
+  # Go's net resolver tries IPv6 first by default — when AAAA wins, every
+  # request times out at the v6 hop and the user sees "client connected
+  # but YouTube doesn't load." Force IPv4 preference via gai.conf so the
+  # libc resolver returns A records first; IPv6 still works if it works,
+  # this just demotes it from the default winner.
+  if ! grep -q '^precedence ::ffff:0:0/96  100' /etc/gai.conf 2>/dev/null; then
+    log "Configuring /etc/gai.conf to prefer IPv4 for hysteria's outbound resolver"
+    echo 'precedence ::ffff:0:0/96  100' >> /etc/gai.conf
+  fi
+
   systemctl enable hysteria.service >/dev/null 2>&1 || true
   systemctl restart hysteria.service
   log "Hysteria 2 started — first run will obtain the LE certificate via HTTP-01"
