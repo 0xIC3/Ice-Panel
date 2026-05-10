@@ -317,13 +317,26 @@ export function NodeEditModal({
                 cores?: { name: string; running: boolean }[];
               };
               if (!parsed.cores) throw new Error('no cores');
+              // Show only the core that matches this node's installed
+              // protocol — agent reports all 7 adapter slots and most
+              // are stubs ("✓ HYSTERIA" on an xray-only node is noise).
+              // If the node is online and the relevant core is also
+              // running, drop the alert entirely — no actionable
+              // information for the admin.
+              const relevant = parsed.cores.filter(
+                (c) => c.name.toLowerCase() === node.protocol.toLowerCase(),
+              );
+              if (relevant.length === 0) return null;
+              if (node.status === 'online' && relevant.every((c) => c.running)) {
+                return null;
+              }
               return (
                 <Alert color="yellow" variant="light" p="xs">
                   <Group gap={6} wrap="wrap">
                     <Text size="xs" fw={500}>
-                      Cores:
+                      {t('nodes.edit.coresLabel')}:
                     </Text>
-                    {parsed.cores.map((c) => (
+                    {relevant.map((c) => (
                       <Badge
                         key={c.name}
                         size="xs"
@@ -393,7 +406,7 @@ export function NodeEditModal({
                   {...form.getInputProps('port')}
                 />
               </Group>
-              <Group grow align="flex-start">
+              <Group grow align="flex-end">
                 <Select
                   label={t('nodes.edit.paramsCountry')}
                   description={t('nodes.edit.paramsCountryDesc')}
@@ -413,7 +426,7 @@ export function NodeEditModal({
                 />
               </Group>
 
-              <Group grow>
+              <Group grow align="flex-end">
                 <Select
                   label={t('nodes.edit.paramsRegion')}
                   description={t('nodes.edit.paramsRegionDesc')}
