@@ -29,6 +29,8 @@ auth:
   type: http
   http:
     url: http://127.0.0.1:9000/auth
+
+ignoreClientBandwidth: true
 `
 	if got != want {
 		t.Errorf("minimal render mismatch\n--- got ---\n%s--- want ---\n%s", got, want)

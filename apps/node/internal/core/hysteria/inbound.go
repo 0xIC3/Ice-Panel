@@ -114,6 +114,19 @@ func renderConfig(adapterCfg Config, inbound InboundConfig) ([]byte, error) {
 		}
 	}
 
+	// Cycle #5 ground truth: Hysteria 2 + Brutal CC requires the client to
+	// declare its own bandwidth at session start. Hiddify iOS / NekoBox /
+	// Streisand frequently negotiate `up=0` and the tunnel handshake then
+	// completes successfully but every proxied request times out at tx=0.
+	// Setting `ignoreClientBandwidth: true` forces BBR (CUBIC-class
+	// congestion control) and removes the client-bandwidth dependency
+	// entirely — at the cost of not using Brutal's aggressive scheduling.
+	// For real-world residential broadband this is invisible; for clients
+	// that DO declare valid bandwidth values via our subscription URI
+	// (`upmbps=`/`downmbps=`) Brutal still kicks in. Net: defaults that
+	// "just work" without sacrificing power-user tunability.
+	b.WriteString("\nignoreClientBandwidth: true\n")
+
 	return b.Bytes(), nil
 }
 

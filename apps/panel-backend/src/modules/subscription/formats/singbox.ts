@@ -44,12 +44,24 @@ export function buildSingboxJson(endpoints: SubscriptionEndpoint[]): string {
         server: e.host,
         server_port: e.port,
         password: e.password,
+        // Brutal CC bandwidth declaration. Without these the client
+        // negotiates a 0-byte send window — handshake succeeds but every
+        // proxied request times out at tx=0. The server can override via
+        // `ignoreClientBandwidth: true` (recommended default in our
+        // adapter), but supplying real values here keeps Brutal CC active
+        // when the server does honour client bandwidth.
+        up_mbps: e.upMbps ?? 50,
+        down_mbps: e.downMbps ?? 100,
         ...(e.obfsPassword
           ? { obfs: { type: 'salamander', password: e.obfsPassword } }
           : {}),
         tls: {
           enabled: true,
           server_name: e.host,
+          // ALPN h3 is mandatory for some sing-box / Hiddify iOS builds —
+          // without it the QUIC stream multiplexer never opens proxy
+          // streams even though the QUIC connection itself is fine.
+          alpn: ['h3'],
         },
       });
     } else if (e.protocol === 'xray') {

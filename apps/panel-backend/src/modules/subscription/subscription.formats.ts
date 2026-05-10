@@ -92,6 +92,11 @@ export interface HysteriaSubscriptionEndpoint extends SubscriptionEndpointBase {
   /** Salamander obfuscation password — present only when the inbound has
    *  `obfsPassword` set. Critical on RU/IR/CN ISPs that DPI-throttle bare QUIC. */
   obfsPassword?: string;
+  /** Brutal CC bandwidth declaration in Mbps. Forwarded into URI / singbox
+   *  / clash output so the client negotiates a non-zero send window. See
+   *  HysteriaUriOpts.upMbps for the gory detail. */
+  upMbps?: number;
+  downMbps?: number;
 }
 
 export interface XraySubscriptionEndpoint extends SubscriptionEndpointBase {

@@ -20,6 +20,14 @@ export interface HysteriaUriOpts {
    *  + `obfs-password=...` query params. Critical on RU/IR/CN ISPs where
    *  bare QUIC is throttled or dropped by DPI mid-session. */
   obfsPassword?: string;
+  /** Brutal CC bandwidth declaration in Mbps — required for the Hysteria
+   *  client to negotiate a non-zero send window. Without these, Brutal
+   *  picks 0 and the tunnel handshakes successfully but `tx=0` for every
+   *  request — exact "connected but no traffic" symptom. Cycle #5 ground
+   *  truth. Defaults are tuned for residential broadband; admins can
+   *  override per binding when the node is on a faster/slower link. */
+  upMbps?: number;
+  downMbps?: number;
 }
 
 export function buildHysteriaUri(opts: HysteriaUriOpts): string {
@@ -33,5 +41,9 @@ export function buildHysteriaUri(opts: HysteriaUriOpts): string {
     params.set('obfs', 'salamander');
     params.set('obfs-password', opts.obfsPassword);
   }
+  // Brutal CC bandwidth — see HysteriaUriOpts.upMbps comment. Default
+  // 50/100 if caller didn't specify so we never emit a 0-window URI.
+  params.set('upmbps', String(opts.upMbps ?? 50));
+  params.set('downmbps', String(opts.downMbps ?? 100));
   return `hysteria2://${encodeURIComponent(opts.password)}@${opts.host}:${opts.port}/?${params.toString()}#${encodeURIComponent(opts.name)}`;
 }

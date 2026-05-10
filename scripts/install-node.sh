@@ -792,6 +792,15 @@ masquerade:
 bandwidth:
   up: 1 gbps
   down: 1 gbps
+
+# Cycle #5 ground truth: clients (Hiddify iOS, NekoBox, Streisand) often
+# negotiate up=0 with Brutal CC at session start, leading to "tunnel
+# handshakes but tx=0, websites don't load". Forcing BBR here removes
+# the dependency on a sane client-side bandwidth declaration. Clients
+# that DO emit valid upmbps/downmbps via subscription URI still benefit
+# from Brutal because we re-render this section on ApplyInbound from
+# the panel.
+ignoreClientBandwidth: true
 EOF
       if [[ -n "$HY_OBFS_PASSWORD" ]]; then
         cat <<EOF
