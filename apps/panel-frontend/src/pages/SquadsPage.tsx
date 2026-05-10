@@ -319,13 +319,13 @@ function SquadCard({
           icon={<IconLink size={12} />}
           value={profileCount}
           color="indigo"
-          tooltip="Профилей"
+          tooltip={t('squads.form.profiles')}
         />
         <CountBadge
           icon={<IconUsers size={12} />}
           value={memberCount}
           color="blue"
-          tooltip="Участников"
+          tooltip={t('squads.form.membersBadge')}
         />
       </Group>
 
@@ -336,7 +336,7 @@ function SquadCard({
         leftSection={<IconEdit size={14} />}
         onClick={onEdit}
       >
-        {isAll ? 'Открыть' : 'Изменить'}
+        {isAll ? t('squads.open') : t('common.edit')}
       </Button>
     </Card>
   );

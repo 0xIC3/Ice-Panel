@@ -101,6 +101,7 @@ function expireRelative(iso: string | null): { text: string; tone: 'good' | 'war
 // ───── Subscription URL cell ─────
 
 function SubscriptionCell({ url }: { url: string }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   async function handleCopy() {
     try {
@@ -118,7 +119,7 @@ function SubscriptionCell({ url }: { url: string }) {
 
   return (
     <Group gap={2} wrap="nowrap">
-      <Tooltip label={copied ? 'Скопировано' : 'Скопировать sub URL'}>
+      <Tooltip label={copied ? t('common.copied') : t('common.copy')}>
         <ActionIcon
           variant="subtle"
           color={copied ? 'teal' : 'gray'}
@@ -129,7 +130,7 @@ function SubscriptionCell({ url }: { url: string }) {
           {copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
         </ActionIcon>
       </Tooltip>
-      <Tooltip label="Открыть подписку">
+      <Tooltip label={t('users.table.subscription')}>
         <ActionIcon
           variant="subtle"
           color="gray"
@@ -325,7 +326,7 @@ export function UsersPage() {
       <SimpleGrid cols={{ base: 2, sm: 3, lg: 5 }} spacing="sm">
         <StatChip
           icon={<IconUsers size={20} />}
-          label="Всего"
+          label={t('common.all')}
           value={stats.total}
           color="blue"
           active={statusFilter === 'all'}
@@ -378,7 +379,7 @@ export function UsersPage() {
           value={statusFilter}
           onChange={(v) => setStatusFilter(v as StatusFilter)}
           data={[
-            { value: 'all', label: 'Все' },
+            { value: 'all', label: t('common.all') },
             { value: 'active', label: 'Active' },
             { value: 'expired', label: 'Expired' },
             { value: 'limited', label: 'Limited' },

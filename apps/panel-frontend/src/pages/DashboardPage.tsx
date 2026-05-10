@@ -111,11 +111,12 @@ function StatCard({ icon, label, value, hint, hintColor = 'gray', iconColor }: S
 }
 
 function Sparkline({ data, height = 110 }: { data: { hour: string; bytes: number }[]; height?: number }) {
+  const { t } = useTranslation();
   if (data.length < 2) {
     return (
       <Group justify="center" h={height}>
         <Text c="dimmed" size="sm">
-          Недостаточно данных для графика — соберём после первого часа трафика
+          {t('dashboard.traffic.noChartData')}
         </Text>
       </Group>
     );
