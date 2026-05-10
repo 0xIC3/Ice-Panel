@@ -2,12 +2,16 @@
 # deploy.sh — full panel re-deploy (slice 34 ops)
 #
 # Pulls the latest code, applies any new Prisma migrations, rebuilds all
-# containers (Docker layer cache makes this fast — only changed stages
-# actually rebuild), and prints status + a tail of the backend log so
-# you can spot a startup error before tabbing away.
+# containers (--no-cache by default so the same nginx.conf / dist / env
+# change never lands on a stale layer), and prints status + a tail of
+# the backend log so you can spot a startup error before tabbing away.
 #
 # Usage:
-#   ./scripts/deploy.sh             # standard re-deploy
+#   ./scripts/deploy.sh             # standard re-deploy (--no-cache default)
+#   ./scripts/deploy.sh --cache     # opt out of --no-cache for a faster
+#                                     deploy when you trust Docker's layer
+#                                     hashing (i.e. you only changed code,
+#                                     not nginx.conf / Dockerfile)
 #   ./scripts/deploy.sh --cleanup   # also prune old images/build cache
 #                                     after the rebuild lands
 #
@@ -16,9 +20,12 @@
 set -euo pipefail
 
 CLEANUP_AFTER=0
+NO_CACHE=1   # default ON — paid ~30s for "what I see is what shipped"
 for arg in "$@"; do
     case "$arg" in
         --cleanup|--prune) CLEANUP_AFTER=1 ;;
+        --cache)           NO_CACHE=0 ;;
+        --no-cache)        NO_CACHE=1 ;;
         *)
             echo "[deploy] unknown arg: $arg" >&2
             exit 2
@@ -48,7 +55,10 @@ echo "[deploy] prisma migrate deploy"
 "${DC[@]}" up --abort-on-container-exit --exit-code-from migrate migrate
 "${DC[@]}" rm -fsv migrate || true
 
-echo "[deploy] rebuild + restart all services"
+echo "[deploy] rebuild + restart all services$([[ $NO_CACHE -eq 1 ]] && echo ' (--no-cache)')"
+if [[ $NO_CACHE -eq 1 ]]; then
+    "${DC[@]}" build --no-cache backend frontend
+fi
 "${DC[@]}" up -d --build
 
 echo "[deploy] status"
