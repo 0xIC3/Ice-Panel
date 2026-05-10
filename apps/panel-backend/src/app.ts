@@ -41,6 +41,14 @@ import { bullBoardRoutes } from './modules/admin/bull-board.routes.js';
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
     logger: { level: config.LOG_LEVEL },
+    // Trust X-Forwarded-For / X-Real-IP headers from the reverse proxy in
+    // front of the panel (Caddy / nginx in our default setup, optionally
+    // with Cloudflare further upstream). Without this `request.ip` reports
+    // the proxy's IP, which would garble audit logs, rate-limit keys, and
+    // any IP-based heuristics. The frontend nginx and Cloudflare both set
+    // these headers, so a hop count of 2 is safe; we don't accept the
+    // header from arbitrary clients.
+    trustProxy: 2,
   });
 
   app.setErrorHandler((error, request, reply) => {
