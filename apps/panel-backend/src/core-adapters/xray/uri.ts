@@ -39,21 +39,48 @@ export interface VlessRealityUriOpts {
   hostHeader?: string;
   /** gRPC serviceName. Required when network=grpc. */
   serviceName?: string;
+  /** Slice 30.1 — per-host overrides emitted into the URI. */
+  /** ALPN list (e.g. ['h2','http/1.1']). Joined by comma into `alpn` param. */
+  alpn?: string[];
+  /** `?allowInsecure=1` flag — when the host fronts the inbound through a
+   *  self-signed CDN. Clients that don't honour the flag still try TLS verify
+   *  and fail, but the flag is harmless to emit. */
+  allowInsecure?: boolean;
+  /** `none` disables client-side TLS (CDN-terminated host); `tls` forces it
+   *  even when the adapter's default would be reality. `default` omits the
+   *  override and lets the client follow the adapter's chosen security. */
+  securityLayer?: 'default' | 'tls' | 'none';
 }
 
 export function buildVlessRealityUri(opts: VlessRealityUriOpts): string {
   const network: VlessNetwork = opts.network ?? 'raw';
   const flow = opts.flow ?? 'xtls-rprx-vision';
 
+  // Slice 30.1 — `securityLayer` host override. `tls` and `none` replace the
+  // adapter's default `reality`; `default` keeps the canonical REALITY layer.
+  // `none` is used when the host fronts the inbound through a CDN that owns
+  // the TLS termination — the client speaks plain HTTP/2 to the CDN and the
+  // CDN terminates TLS upstream.
+  let security = 'reality';
+  if (opts.securityLayer === 'tls') security = 'tls';
+  else if (opts.securityLayer === 'none') security = 'none';
+
   const params = new URLSearchParams({
     type: network,
-    security: 'reality',
+    security,
     encryption: 'none',
     pbk: opts.publicKey,
     sid: opts.shortId,
     sni: opts.sni,
     fp: opts.fingerprint ?? 'chrome',
   });
+
+  if (opts.alpn && opts.alpn.length > 0) {
+    params.set('alpn', opts.alpn.join(','));
+  }
+  if (opts.allowInsecure) {
+    params.set('allowInsecure', '1');
+  }
 
   // Vision is only meaningful with raw/xhttp. ws/grpc/httpupgrade/kcp don't
   // accept it — most clients ignore it, but a few (Xray itself when strict)

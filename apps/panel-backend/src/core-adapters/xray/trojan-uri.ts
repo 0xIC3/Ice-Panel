@@ -31,19 +31,34 @@ export interface TrojanRealityUriOpts {
   path?: string;
   hostHeader?: string;
   serviceName?: string;
+  /** Slice 30.1 — per-host overrides. See VlessRealityUriOpts for semantics. */
+  alpn?: string[];
+  allowInsecure?: boolean;
+  securityLayer?: 'default' | 'tls' | 'none';
 }
 
 export function buildTrojanRealityUri(opts: TrojanRealityUriOpts): string {
   const network: TrojanNetwork = opts.network ?? 'raw';
 
+  let security = 'reality';
+  if (opts.securityLayer === 'tls') security = 'tls';
+  else if (opts.securityLayer === 'none') security = 'none';
+
   const params = new URLSearchParams({
     type: network,
-    security: 'reality',
+    security,
     pbk: opts.publicKey,
     sid: opts.shortId,
     sni: opts.sni,
     fp: opts.fingerprint ?? 'chrome',
   });
+
+  if (opts.alpn && opts.alpn.length > 0) {
+    params.set('alpn', opts.alpn.join(','));
+  }
+  if (opts.allowInsecure) {
+    params.set('allowInsecure', '1');
+  }
 
   if (network === 'ws' || network === 'xhttp' || network === 'httpupgrade') {
     if (opts.path) params.set('path', opts.path);

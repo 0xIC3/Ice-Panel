@@ -273,6 +273,11 @@ export async function generateSubscription(
       // user.xrayUuid as the Trojan password (UUIDs have plenty of entropy
       // and admins are already managing them; a separate trojanPassword
       // column would be redundant credential management).
+      // Slice 30.1 — per-host overrides emitted into URI. Empty alpn array
+      // falls through (URI builder skips the param), so back-compat is exact.
+      const hostAlpn = hostMeta.alpn;
+      const hostAllowInsecure = hostMeta.allowInsecure;
+      const hostSecurityLayer = hostMeta.securityLayer;
       const uri =
         subprotocol === 'trojan'
           ? buildTrojanRealityUri({
@@ -288,6 +293,9 @@ export async function generateSubscription(
               hostHeader: xrayHostHeader,
               serviceName: cfg.serviceName,
               name: nodeName,
+              alpn: hostAlpn,
+              allowInsecure: hostAllowInsecure,
+              securityLayer: hostSecurityLayer,
             })
           : buildVlessRealityUri({
               uuid: user.xrayUuid,
@@ -303,6 +311,9 @@ export async function generateSubscription(
               hostHeader: xrayHostHeader,
               serviceName: cfg.serviceName,
               name: nodeName,
+              alpn: hostAlpn,
+              allowInsecure: hostAllowInsecure,
+              securityLayer: hostSecurityLayer,
             });
       endpoints.push({
         protocol: 'xray',
