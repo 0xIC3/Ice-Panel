@@ -3,6 +3,8 @@ import {
   ActionIcon,
   Badge,
   Button,
+  Code,
+  CopyButton,
   Group,
   SegmentedControl,
   SimpleGrid,
@@ -218,13 +220,36 @@ export function NodesPage() {
   }
 
   function handleDelete(node: Node) {
+    // Cleanup command shown post-delete so admins remember to wipe the
+    // VPS — otherwise the orphaned agent keeps occupying the mTLS port
+    // and an old server cert + CA pair sits around as future drift bait.
+    const uninstallCmd =
+      'bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) --uninstall';
     modals.openConfirmModal({
       title: `Delete node "${node.name}"?`,
       children: (
-        <Text size="sm">
-          The node will be soft-deleted. Existing users stop being synced to it. The mTLS payload
-          you saved will no longer be valid; provisioning a replacement requires a new node.
-        </Text>
+        <Stack gap="sm">
+          <Text size="sm">
+            The node will be soft-deleted. All bindings to this node are removed (cascade — users
+            lose URLs for those profiles). The agent on the VPS keeps running until you manually
+            stop it.
+          </Text>
+          <Text size="sm" fw={600}>
+            After deleting, run this on the node's VPS to clean up the agent:
+          </Text>
+          <Group gap="xs" align="flex-start" wrap="nowrap">
+            <Code block style={{ flex: 1, fontSize: 11, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+              {uninstallCmd}
+            </Code>
+            <CopyButton value={uninstallCmd}>
+              {({ copied, copy }) => (
+                <Button size="xs" variant="light" color={copied ? 'teal' : 'blue'} onClick={copy}>
+                  {copied ? 'Copied' : 'Copy'}
+                </Button>
+              )}
+            </CopyButton>
+          </Group>
+        </Stack>
       ),
       labels: { confirm: 'Delete', cancel: 'Cancel' },
       confirmProps: { color: 'red' },

@@ -77,6 +77,23 @@
 #
 # Re-runnable. Existing /etc/ice-panel-node/env is preserved unless --payload
 # (or --payload-file or --bootstrap) is given again.
+#
+# === RE-INSTALL / UNINSTALL ===
+#
+# When the panel is rebuilt, deleted-and-recreated, or you've registered the
+# node fresh in the panel UI, the old server cert on the VPS won't validate
+# against the new panel CA. Two flags handle this:
+#
+#   bash <(curl -fsSL .../install-node.sh) --reset \
+#     --panel-url ... --bootstrap ... --protocol ...
+#     # wipes prior state silently, then installs fresh
+#
+#   bash <(curl -fsSL .../install-node.sh) --uninstall
+#     # stops + disables systemd unit, removes binary, /etc/ice-panel-node,
+#     # /opt/ice-panel-node, and the UFW allow-rule for $NODE_PORT/tcp.
+#     # Per-protocol services (xray.service, etc) are kept intact.
+#
+# Without either flag, an existing install triggers an interactive prompt.
 
 set -euo pipefail
 
@@ -96,6 +113,8 @@ PROTOCOL=""
 PAYLOAD=""
 PANEL_URL=""
 BOOTSTRAP_TOKEN=""
+RESET=0
+UNINSTALL=0
 
 # Hysteria 2 server config (only used with --protocol hysteria). When DOMAIN
 # is given, the script writes /etc/hysteria/config.yaml + a hysteria systemd
@@ -124,6 +143,36 @@ XR_PORT="443"
 # truncates pastes at 4096 bytes, so anything pasted directly into the
 # terminal (or via `--payload "..."` with the user shell-pasting into the
 # command line) gets cut. File-backed payload sidesteps the TTY entirely.
+# Wipe everything install-node.sh creates: systemd unit, binary, source
+# checkout, env dir, UFW allow-rule for the mTLS port. Protocol-specific
+# bits (hysteria/xray system services, /etc/hysteria, /etc/xray) are kept
+# — those came from upstream installers and admins may want them around
+# for a manual cleanup. Idempotent — safe to run on a half-installed VPS.
+do_uninstall() {
+  log "Stopping ice-panel-node service (if running)"
+  systemctl stop ice-panel-node 2>/dev/null || true
+  systemctl disable ice-panel-node 2>/dev/null || true
+
+  log "Removing systemd unit + drop-ins"
+  rm -f /etc/systemd/system/ice-panel-node.service
+  rm -rf /etc/systemd/system/ice-panel-node.service.d
+  systemctl daemon-reload || true
+
+  log "Removing binary"
+  rm -f /usr/local/bin/ice-panel-node
+
+  log "Removing env directory (/etc/ice-panel-node)"
+  rm -rf /etc/ice-panel-node
+
+  log "Removing source checkout ($ICE_NODE_DIR)"
+  rm -rf "$ICE_NODE_DIR"
+
+  if command -v ufw >/dev/null && ufw status | grep -q "${NODE_PORT}/tcp"; then
+    log "Removing UFW allow rule for ${NODE_PORT}/tcp"
+    ufw --force delete allow "${NODE_PORT}/tcp" >/dev/null || true
+  fi
+}
+
 resolve_payload() {
   local value="$1"
   if [[ "$value" == @* ]]; then
@@ -156,6 +205,13 @@ while [[ $# -gt 0 ]]; do
     --xray-reality-server-names) XR_SERVER_NAMES="$2"; shift 2 ;;
     --xray-reality-dest)         XR_DEST="$2"; shift 2 ;;
     --xray-port)                 XR_PORT="$2"; shift 2 ;;
+    # Re-installation flow on a VPS that already hosts a previous agent:
+    #   --reset      → wipe prior state silently before installing
+    #   --uninstall  → wipe prior state and exit (no install)
+    # Without either flag, a detected prior install triggers an interactive
+    # "overwrite? [y/N]" prompt; non-interactive runs (no tty) abort.
+    --reset)         RESET=1; shift ;;
+    --uninstall)     UNINSTALL=1; shift ;;
     -h|--help)
       grep '^#' "$0" | sed 's/^# \?//'
       exit 0
@@ -163,6 +219,20 @@ while [[ $# -gt 0 ]]; do
     *) fail "Unknown arg: $1" ;;
   esac
 done
+
+# ───── -1. Uninstall fast-path ─────
+# Run BEFORE bootstrap-token redemption — otherwise `--uninstall` would
+# pointlessly consume a one-shot bootstrap token.
+if [[ $UNINSTALL -eq 1 ]]; then
+  if [[ -f /etc/ice-panel-node/env || -x /usr/local/bin/ice-panel-node ]]; then
+    log "Uninstalling previous ice-panel-node …"
+    do_uninstall
+    log "✅ Uninstall complete. Rerun install-node.sh to set up a fresh agent."
+  else
+    log "Nothing to uninstall — no prior ice-panel-node found."
+  fi
+  exit 0
+fi
 
 # If both --panel-url and --bootstrap given, redeem the bootstrap token to
 # fetch the full payload from panel over HTTP. This is the recommended flow
@@ -251,6 +321,35 @@ EOF
     warn "TTY paste limit. Re-run with --payload @/path/to/file for the full thing."
   fi
 }
+
+# ───── 0. Existing-install handling ─────
+# Detect a prior installation. The env file is the canonical marker — if
+# it's there, the agent has at least been bootstrapped against *some*
+# panel before. Re-using it against a different (or freshly-rebuilt)
+# panel is the #1 source of "panel can't reach node" support tickets,
+# because the old server cert won't validate against the new panel CA.
+EXISTING_INSTALL=0
+if [[ -f /etc/ice-panel-node/env || -x /usr/local/bin/ice-panel-node ]]; then
+  EXISTING_INSTALL=1
+fi
+
+if [[ $EXISTING_INSTALL -eq 1 ]]; then
+  if [[ $RESET -eq 1 ]]; then
+    log "--reset given — wiping previous installation"
+    do_uninstall
+  elif [[ -e /dev/tty ]]; then
+    warn "Detected previous ice-panel-node install on this VPS."
+    warn "Re-installing against a different panel without wiping state will"
+    warn "cause mTLS verification to fail (old server cert vs new panel CA)."
+    read -rp "Wipe previous installation and continue? [y/N]: " ans </dev/tty || ans=""
+    case "${ans,,}" in
+      y|yes) do_uninstall ;;
+      *)     fail "Aborted by user. Pass --reset to skip this prompt, or --uninstall to remove without re-installing." ;;
+    esac
+  else
+    fail "Previous install detected and no /dev/tty for prompt. Pass --reset to overwrite or --uninstall to remove."
+  fi
+fi
 
 case "$PROTOCOL" in
   hysteria|xray|amneziawg|naive|shadowsocks|mtproto|mieru) ;;
