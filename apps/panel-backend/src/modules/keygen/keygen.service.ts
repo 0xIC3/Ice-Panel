@@ -12,11 +12,19 @@ const SINGLETON_ID = 1;
  * Payload handed to a node on registration. Encoded into a base64url blob
  * via {@link encodeNodePayload}; the node decodes it on first boot to learn
  * its identity and trust anchor.
+ *
+ * Slice 38 — added `panelUrl`, `nodeId`, `heartbeatToken` for the agent's
+ * heartbeat self-destruct loop. They're optional in the type so existing
+ * payloads that lack them (issued before the migration landed) still
+ * decode; agents whose payloads are missing them simply skip heartbeats.
  */
 export interface NodePayload {
   nodeCertPem: string;
   nodeKeyPem: string;
   caCertPem: string;
+  panelUrl?: string;
+  nodeId?: string;
+  heartbeatToken?: string;
 }
 
 /**

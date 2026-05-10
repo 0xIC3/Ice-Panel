@@ -1,6 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import { prisma } from '../../prisma.js';
 import { issueNodeCert, encodeNodePayload } from '../keygen/keygen.service.js';
+import { config } from '../../config.js';
+import { signHeartbeatToken } from './heartbeat-token.js';
 
 const TOKEN_TTL_MS = 15 * 60 * 1000; // 15 minutes
 const TOKEN_PREFIX = 'bs_';
@@ -71,7 +73,18 @@ export async function redeemBootstrapToken(token: string): Promise<string> {
     commonName: row.node.name,
     sans: buildSans(row.node.address),
   });
-  return encodeNodePayload(cert);
+  // Slice 38 — bundle heartbeat-self-destruct credentials. The agent will
+  // poll PANEL_URL/api/internal/nodes/me/status with this token and exit
+  // on 410 Gone. heartbeat_secret was generated at node-create time (or
+  // backfilled by the migration) and never leaves the panel — only the
+  // HMAC of it does.
+  const secretBuf = Buffer.from(row.node.heartbeatSecret as Uint8Array);
+  return encodeNodePayload({
+    ...cert,
+    panelUrl: config.PUBLIC_URL,
+    nodeId: row.node.id,
+    heartbeatToken: signHeartbeatToken(row.node.id, secretBuf),
+  });
 }
 
 const IPV4_RE = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;

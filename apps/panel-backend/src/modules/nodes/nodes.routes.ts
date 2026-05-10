@@ -50,6 +50,16 @@ export async function nodesRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
+  // Slice 38 — heartbeat self-destruct. Public-but-Bearer-authed; the
+  // bearer is an HMAC the agent received in its bootstrap payload.
+  await app.register(
+    async (s) => {
+      const { heartbeatRoutes } = await import('./heartbeat.routes.js');
+      await heartbeatRoutes(s);
+    },
+    { prefix: '/api/internal/nodes' },
+  );
+
   app.post('/api/nodes', auth, async (request, reply) => {
     const input = CreateNodeSchema.parse(request.body);
     try {

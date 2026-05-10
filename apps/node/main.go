@@ -16,6 +16,7 @@ import (
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core/mtproto"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core/shadowsocks"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core/xray"
+	"github.com/0xIC3/Ice-Panel/apps/node/internal/heartbeat"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/payload"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/server"
 )
@@ -76,11 +77,37 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Slice 38 — heartbeat self-destruct. Runs in the background, polls
+	// the panel for "you are still wanted." On 410 Gone (3 in a row) it
+	// cancels the root context, which makes srv.Run return; the rest of
+	// shutdown happens via the existing stopAdapters path below. After
+	// stopAdapters we exit with code 42, which the systemd unit treats
+	// as "do not restart." Any other path falls through to a normal exit.
+	selfDestruct := false
+	if os.Getenv("ICE_NODE_DISABLE_HEARTBEAT") != "1" {
+		go heartbeat.Run(ctx, heartbeat.Config{
+			PanelURL:       pld.PanelURL,
+			HeartbeatToken: pld.HeartbeatToken,
+			OnGone: func(reason string) {
+				logger.Warn("heartbeat triggered self-destruct — initiating shutdown", "reason", reason)
+				selfDestruct = true
+				cancel()
+			},
+		}, logger)
+	} else {
+		logger.Info("heartbeat: disabled via ICE_NODE_DISABLE_HEARTBEAT=1")
+	}
+
 	if err := srv.Run(ctx); err != nil {
 		logger.Error("server exited with error", "err", err)
 	}
 
 	stopAdapters(adapters, logger)
+
+	if selfDestruct {
+		logger.Warn("self-destruct complete — exiting with code 42 (systemd will not restart)")
+		os.Exit(42)
+	}
 }
 
 func buildAdapters(logger *slog.Logger) []core.CoreAdapter {

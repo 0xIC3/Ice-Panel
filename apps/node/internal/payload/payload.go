@@ -12,10 +12,18 @@ import (
 
 // Payload is the agent's identity material — issued once at node creation
 // and stored on the node-agent host.
+//
+// Slice 38 fields (PanelURL/NodeID/HeartbeatToken) drive the heartbeat
+// self-destruct loop. They're optional in the JSON so older payloads
+// (issued before the panel rolled out the column) still decode; agents
+// missing these fields simply skip heartbeats.
 type Payload struct {
-	NodeCertPem string `json:"nodeCertPem"`
-	NodeKeyPem  string `json:"nodeKeyPem"`
-	CACertPem   string `json:"caCertPem"`
+	NodeCertPem    string `json:"nodeCertPem"`
+	NodeKeyPem     string `json:"nodeKeyPem"`
+	CACertPem      string `json:"caCertPem"`
+	PanelURL       string `json:"panelUrl,omitempty"`
+	NodeID         string `json:"nodeId,omitempty"`
+	HeartbeatToken string `json:"heartbeatToken,omitempty"`
 }
 
 // Decode parses a base64url-encoded JSON Payload. The panel uses

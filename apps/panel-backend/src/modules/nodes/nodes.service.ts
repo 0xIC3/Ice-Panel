@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { issueNodeCert, encodeNodePayload } from '../keygen/keygen.service.js';
 import { eventBus } from '../../lib/event-bus.js';
 import { prisma } from '../../prisma.js';
@@ -66,6 +67,10 @@ export async function createNode(
       consumptionMultiplier: BigInt(input.consumptionMultiplier),
       regionId: input.regionId ?? null,
       maxUsers: input.maxUsers ?? null,
+      // Slice 38 — heartbeat-self-destruct secret. 32 bytes of entropy is
+      // overkill for HMAC-SHA256 keying, but stays well under the 64-byte
+      // block size and matches our convention for symmetric secrets.
+      heartbeatSecret: randomBytes(32),
     });
   } catch (err) {
     // Catch DB-level UNIQUE violation. Soft-deleted rows still hold the

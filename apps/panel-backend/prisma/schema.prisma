@@ -228,6 +228,14 @@ model Node {
   regionId              String?   @map("region_id") @db.Uuid
   maxUsers              Int?      @map("max_users")
 
+  // Slice 38 — heartbeat self-destruct. Random 32-byte secret, generated
+  // at node creation. The bootstrap payload bundles a stateless HMAC token
+  // (nodeId + sig over heartbeatSecret) that the agent presents on every
+  // heartbeat poll. Server-side verification looks the secret up here and
+  // checks `deletedAt`. Backfill: existing rows get a freshly-generated
+  // secret in the migration so they keep working post-rollout.
+  heartbeatSecret       Bytes     @map("heartbeat_secret")
+
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt             DateTime? @map("deleted_at") @db.Timestamptz(6)

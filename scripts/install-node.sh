@@ -664,6 +664,10 @@ EnvironmentFile=${ENV_FILE}
 ExecStart=/usr/local/bin/ice-panel-node
 Restart=always
 RestartSec=5
+# Slice 38 — heartbeat self-destruct exits with code 42 to signal "panel
+# disowned this node, don't restart me." Any other exit (crash, panic,
+# ENV typo, transient OOM-kill) goes through Restart=always as before.
+RestartPreventExitStatus=42
 LimitNOFILE=1048576
 NoNewPrivileges=true
 ProtectSystem=strict
