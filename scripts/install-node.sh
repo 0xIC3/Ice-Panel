@@ -149,10 +149,12 @@ XR_PORT="443"
 # terminal (or via `--payload "..."` with the user shell-pasting into the
 # command line) gets cut. File-backed payload sidesteps the TTY entirely.
 # Wipe everything install-node.sh creates: systemd unit, binary, source
-# checkout, env dir, UFW allow-rule for the mTLS port. Protocol-specific
-# bits (hysteria/xray system services, /etc/hysteria, /etc/xray) are kept
-# — those came from upstream installers and admins may want them around
-# for a manual cleanup. Idempotent — safe to run on a half-installed VPS.
+# checkout, env dir, UFW allow-rule for the mTLS port, AND the per-
+# protocol config the script generates (hysteria/xray service config).
+# We deliberately keep upstream binaries (the `hysteria` / `xray` exes
+# from their official installers) — only the config files, which are
+# tied to the panel's domain/email/keys, get wiped so a re-install
+# regenerates them cleanly. Idempotent — safe on a half-installed VPS.
 do_uninstall() {
   log "Stopping ice-panel-node service (if running)"
   systemctl stop ice-panel-node 2>/dev/null || true
@@ -161,6 +163,16 @@ do_uninstall() {
   log "Removing systemd unit + drop-ins"
   rm -f /etc/systemd/system/ice-panel-node.service
   rm -rf /etc/systemd/system/ice-panel-node.service.d
+
+  log "Stopping + removing protocol-specific services + their generated configs"
+  for svc in hysteria xray; do
+    systemctl stop "$svc" 2>/dev/null || true
+    systemctl disable "$svc" 2>/dev/null || true
+  done
+  rm -f /etc/systemd/system/hysteria.service
+  rm -rf /etc/systemd/system/hysteria.service.d
+  rm -f /etc/hysteria/config.yaml
+  rm -f /etc/xray/config.json
   systemctl daemon-reload || true
 
   log "Removing binary"
@@ -545,6 +557,17 @@ HYSTERIA_CONFIG=${PROTO_CONFIG}
 HYSTERIA_AUTH_HOST=127.0.0.1
 HYSTERIA_AUTH_PORT=9000
 EOF
+      # Pass domain + email through to the agent so subsequent ApplyInbound
+      # pushes can rewrite the Hysteria config without losing identity.
+      # Without these, the agent's hysteria adapter falls back to defaults
+      # ("your.domain.net") on the next config write — exactly the bug we
+      # just chased on the first ice-hys2-test install.
+      if [[ -n "$HY_DOMAIN" ]]; then
+        echo "HYSTERIA_HOSTNAME=${HY_DOMAIN}" >> "$ENV_FILE"
+      fi
+      if [[ -n "$HY_EMAIL" ]]; then
+        echo "HYSTERIA_ACME_EMAIL=${HY_EMAIL}" >> "$ENV_FILE"
+      fi
       ;;
     xray)
       cat >> "$ENV_FILE" <<EOF
