@@ -2,8 +2,8 @@
 # deploy-backend.sh — backend-only re-deploy.
 #
 # Pulls latest, applies pending migrations (always cheap when there are
-# none), rebuilds + restarts panel-backend. Frontend stays untouched —
-# use this when you only edited apps/panel-backend/, prisma/, or
+# none), rebuilds + restarts backend. Frontend stays untouched —
+# use this when you only edited apps/backend/, prisma/, or
 # packages/shared/.
 #
 # Usage:  ./scripts/deploy-backend.sh
@@ -26,11 +26,11 @@ git pull
 echo "[deploy-be] prisma migrate deploy"
 "${DC[@]}" run --rm migrate
 
-echo "[deploy-be] rebuild + restart panel-backend"
-"${DC[@]}" up -d --build panel-backend
+echo "[deploy-be] rebuild + restart backend"
+"${DC[@]}" up -d --build backend
 
 echo "[deploy-be] status"
-"${DC[@]}" ps panel-backend
+"${DC[@]}" ps backend
 
-echo "[deploy-be] panel-backend tail"
-"${DC[@]}" logs --tail=40 panel-backend || true
+echo "[deploy-be] backend tail"
+"${DC[@]}" logs --tail=40 backend || true

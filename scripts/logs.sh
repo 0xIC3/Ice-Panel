@@ -1,19 +1,22 @@
 #!/usr/bin/env bash
 # logs.sh — quick log inspector for the panel stack.
 #
-# Default: tail last 100 lines from EVERY service (panel-backend +
-# panel-frontend + caddy + postgres + redis), one block per service.
-# Use this when something feels off after a deploy.
+# Default (no args) prints the last 100 lines of every Docker service
+# (backend / frontend / postgres / redis) plus a tail of the host's
+# Caddy systemd unit when it's installed (Caddy runs as a native
+# systemd service, not a docker container — install-panel.sh does
+# `apt-get install caddy` in domain mode).
 #
 # Modes:
 #   ./scripts/logs.sh              # last 100 of every service
-#   ./scripts/logs.sh -f           # follow live
+#   ./scripts/logs.sh -f           # follow live (all services)
 #   ./scripts/logs.sh be           # backend only (alias: backend)
 #   ./scripts/logs.sh fe           # frontend only (alias: frontend)
-#   ./scripts/logs.sh caddy        # caddy / TLS
+#   ./scripts/logs.sh caddy        # caddy / TLS (journalctl, not Docker)
 #   ./scripts/logs.sh db           # postgres
 #   ./scripts/logs.sh redis        # redis
 #   ./scripts/logs.sh be -f        # follow specific service
+#   ./scripts/logs.sh --tail=500   # override default 100
 
 set -euo pipefail
 
@@ -27,16 +30,17 @@ fi
 
 DC=(docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE")
 
-# Resolve short alias → compose service name. Stays in sync with
-# docker-compose.prod.yml — update if services change.
+# Resolve short alias → either a compose service name (Docker logs) or
+# the literal string "caddy" (systemd path). Stays in sync with
+# docker-compose.prod.yml — update if services rename.
 SERVICE=""
 FOLLOW=0
 TAIL_N=100
 
 for arg in "$@"; do
     case "$arg" in
-        be|backend)         SERVICE="panel-backend" ;;
-        fe|frontend)        SERVICE="panel-frontend" ;;
+        be|backend)         SERVICE="backend" ;;
+        fe|frontend)        SERVICE="frontend" ;;
         caddy|tls)          SERVICE="caddy" ;;
         db|postgres|pg)     SERVICE="postgres" ;;
         redis|cache)        SERVICE="redis" ;;
@@ -49,6 +53,25 @@ for arg in "$@"; do
     esac
 done
 
+# Caddy lives outside Docker — it's a host-side systemd unit set up by
+# install-panel.sh. Route its logs through journalctl instead of
+# `docker compose logs`.
+caddy_logs() {
+    local follow_flag=""
+    if [[ $FOLLOW -eq 1 ]]; then follow_flag="-f"; fi
+    if command -v journalctl >/dev/null 2>&1; then
+        journalctl -u caddy $follow_flag --no-pager -n "$TAIL_N" 2>/dev/null \
+            || echo "(caddy systemd unit not found — bare-IP install, skipping)"
+    else
+        echo "(journalctl not available — can't read caddy logs)"
+    fi
+}
+
+if [[ "$SERVICE" == "caddy" ]]; then
+    caddy_logs
+    exit $?
+fi
+
 ARGS=(--tail="$TAIL_N")
 if [[ $FOLLOW -eq 1 ]]; then
     ARGS+=(-f)
@@ -59,13 +82,21 @@ if [[ -n "$SERVICE" ]]; then
     exit $?
 fi
 
-# All-services mode — one block per service. `docker compose logs` with
-# no args prints them interleaved which is hard to skim; loop to keep
-# them grouped.
-for s in panel-backend panel-frontend caddy postgres redis; do
+# All-services mode — one block per service. Printing them grouped is
+# easier to skim than the interleaved default.
+for s in backend frontend postgres redis; do
     echo "═══════════════════════════════════════════════════════════"
     echo " $s (last $TAIL_N lines)"
     echo "═══════════════════════════════════════════════════════════"
     "${DC[@]}" logs --tail="$TAIL_N" "$s" 2>/dev/null || echo "(service '$s' not running)"
     echo
 done
+
+# Caddy block at the end so even an all-services tail covers TLS
+# issues. Output stays empty + a friendly note when bare-IP mode skipped
+# the install.
+echo "═══════════════════════════════════════════════════════════"
+echo " caddy (systemd, last $TAIL_N lines)"
+echo "═══════════════════════════════════════════════════════════"
+caddy_logs
+echo

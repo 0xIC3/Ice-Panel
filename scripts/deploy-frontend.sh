@@ -2,7 +2,7 @@
 # deploy-frontend.sh — fast path for SPA-only changes.
 #
 # Skips Prisma migrate + backend rebuild. Use this when you only edited
-# anything under apps/panel-frontend/ — typically <30s end-to-end vs
+# anything under apps/frontend/ — typically <30s end-to-end vs
 # ~2 min for the full deploy.
 #
 # Usage:  ./scripts/deploy-frontend.sh
@@ -22,8 +22,8 @@ DC=(docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE")
 echo "[deploy-fe] git pull"
 git pull
 
-echo "[deploy-fe] rebuild + restart panel-frontend"
-"${DC[@]}" up -d --build panel-frontend
+echo "[deploy-fe] rebuild + restart frontend"
+"${DC[@]}" up -d --build frontend
 
 echo "[deploy-fe] status"
-"${DC[@]}" ps panel-frontend
+"${DC[@]}" ps frontend

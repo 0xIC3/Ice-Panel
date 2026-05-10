@@ -48,8 +48,8 @@ echo "[deploy] rebuild + restart all services"
 echo "[deploy] status"
 "${DC[@]}" ps
 
-echo "[deploy] panel-backend tail"
-"${DC[@]}" logs --tail=30 panel-backend || true
+echo "[deploy] backend tail"
+"${DC[@]}" logs --tail=30 backend || true
 
 if [[ $CLEANUP_AFTER -eq 1 ]]; then
     echo
