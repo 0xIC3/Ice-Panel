@@ -144,8 +144,16 @@ no actual traffic — iOS Hiddify / Happ / Streisand show "Timeout" or
 1. **iOS users on RU ISPs.** TSPU / Russian ISPs aggressively throttle
    bare QUIC on UDP/443. Server-side everything looks healthy. We've hit
    this in cycle #2 and again in cycle #5. Workarounds, in priority order:
-   - **Port-hopping** (slice 31.5, planned) — `listen: :20000-30000` on
-     server, `mport=20000-30000` in URI; TSPU can't keep up with rotation.
+   - **Port-hopping** (slice 31.5, shipped 2026-05-11) — install-node.sh
+     applies an iptables UDP REDIRECT `20000-50000 → :443` (managed by
+     `ice-panel-hyhop.service`). In the panel: open the Hysteria profile,
+     fill "Port range start/end" (e.g. 20000/50000) and save. URI now
+     emits `mport=20000-50000`, sing-box `server_ports`, Clash `ports`,
+     and the client rotates UDP ports per connection. TSPU can't pin a
+     single port to throttle. The profile range MUST be a subset of the
+     install-time range — to widen, re-run install-node.sh with
+     `--hysteria-port-range START-END`. To disable on a given node, pass
+     `--hysteria-port-range ''`.
    - **Non-443 UDP port** — switching to e.g. 12443/udp often pushes the
      traffic past portspec-based filters.
    - **Different hosting / route** — Hetzner DE / OVH FR routes from RU
