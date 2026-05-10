@@ -97,6 +97,35 @@ const ConfigSchema = z.object({
     .string()
     .optional()
     .transform((v) => (v === '' ? undefined : v)),
+
+  // Tier-1 security — admin geo-block. CSV list of ISO 3166-1 alpha-2
+  // country codes allowed on `/api/*` routes EXCEPT the public-by-design
+  // ones (subscription, heartbeat, bootstrap). Empty → disabled (any
+  // country allowed). The country is read from `CF-IPCountry` (Cloudflare
+  // edge header) and falls back to `X-Country-Code` if a non-Cloudflare
+  // front-edge wants to opt in. When the header is missing entirely on a
+  // gated request we DENY (fail-closed). Cloudflare orange-cloud is a
+  // hard prerequisite for this control.
+  ADMIN_ALLOWED_COUNTRIES: z
+    .string()
+    .optional()
+    .transform((v) =>
+      v
+        ? v
+            .split(',')
+            .map((s) => s.trim().toUpperCase())
+            .filter((s) => /^[A-Z]{2}$/.test(s))
+        : [],
+    ),
+
+  // Tier-1 security — honey-route blacklist TTL (seconds). When an IP
+  // hits a known scanner path (/wp-admin, /.env, ...), we surface a
+  // plausible fake response AND add the IP to `sec:blacklist:<ip>` in
+  // Redis for this duration. Subsequent requests from that IP get a
+  // fast 403 before any business logic runs. 3600s = 1h is a reasonable
+  // default — long enough to wear a scanner down, short enough that a
+  // legit user on a shared-NAT egress isn't permanently shut out.
+  HONEYPOT_BLACKLIST_TTL_SEC: z.coerce.number().int().min(60).default(3600),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

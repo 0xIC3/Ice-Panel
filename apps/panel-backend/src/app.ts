@@ -28,6 +28,7 @@ import { testConnectRoutes } from './modules/test-connect/test-connect.routes.js
 import { apiTokensRoutes } from './modules/api-tokens/api-tokens.routes.js';
 import { settingsRoutes } from './modules/settings/settings.routes.js';
 import { bullBoardRoutes } from './modules/admin/bull-board.routes.js';
+import { registerSecurityGate } from './lib/security-gate.js';
 
 /**
  * Build the Fastify instance with all plugins and routes registered.
@@ -134,6 +135,14 @@ export async function buildApp(): Promise<FastifyInstance> {
       signed: false,
     },
   });
+
+  // Tier-1 security: blacklist + honeypot + geo-block. Mounted before
+  // every route so a flagged IP can't even reach business logic. Skipped
+  // entirely under NODE_ENV=test — tests pose as random IPs and we don't
+  // want them tripping the honeypot when they probe `/.env` etc.
+  if (config.NODE_ENV !== 'test') {
+    await registerSecurityGate(app);
+  }
 
   await app.register(authRoutes);
   await app.register(usersRoutes);

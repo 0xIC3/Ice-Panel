@@ -96,6 +96,10 @@ services:
       # token from @BotFather; chat_id from @userinfobot.
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      # Tier-1 security — admin geo-block + honeypot. ADMIN_ALLOWED_COUNTRIES
+      # empty → geo-block disabled. Requires Cloudflare orange-cloud (CF-IPCountry).
+      ADMIN_ALLOWED_COUNTRIES: ${ADMIN_ALLOWED_COUNTRIES:-}
+      HONEYPOT_BLACKLIST_TTL_SEC: ${HONEYPOT_BLACKLIST_TTL_SEC:-3600}
     depends_on:
       postgres:
         condition: service_healthy
