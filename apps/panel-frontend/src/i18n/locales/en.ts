@@ -483,6 +483,88 @@ export default {
     appliedAlert: 'Applied: {{name}}',
     dpiLabel: 'DPI',
     speedLabel: 'Speed',
+    cards: {
+      'xray-reality-vision-raw': {
+        name: 'REALITY + Vision (raw)',
+        description: 'Canonical stealth — masquerades as a real HTTPS site',
+        details:
+          'VLESS + REALITY + Vision flow over raw TCP. To DPI the traffic looks like a normal HTTPS request to a major CDN site (Cloudflare/Apple/etc). Vision flow adds zero-copy splice — the fastest path with no masking overhead. Recommended default for most situations.',
+        notes: [
+          "Vision only works with raw — don't change the transport after applying",
+        ],
+      },
+      'xray-reality-xhttp': {
+        name: 'REALITY + xhttp (HTTP/2 chunked)',
+        description: 'For aggressive DPI that cuts VLESS+raw',
+        details:
+          'VLESS + REALITY + xhttp transport. Traffic ships as HTTP/2 chunked-stream — looks like ordinary HTTP/2 to a CDN. ~10-15% slower than raw due to framing, but bypasses DPI that started cutting REALITY+raw in some ISPs. No Vision (xhttp does not support it).',
+        notes: [
+          "The path is randomised — don't share it publicly",
+          "If REALITY+raw is blocked in your network, xhttp usually still works",
+        ],
+      },
+      'xray-trojan-reality': {
+        name: 'Trojan + REALITY',
+        description: 'Password-auth instead of UUID, anti-probe defence',
+        details:
+          "Trojan via xray-core + REALITY. Users authenticate with a password (we reuse user.xrayUuid as the password). On bad auth the server returns a real HTTPS response from the decoy site — anti-probe defence. No Vision (Trojan doesn't support it). Useful for legacy clients that don't understand VLESS.",
+      },
+      'hysteria-default': {
+        name: 'Hysteria 2 (clean)',
+        description: 'UDP, low latency, no obfs — for free regions',
+        details:
+          'Hysteria 2 over QUIC (UDP) without obfuscation. Lowest latency (UDP, no TCP handshake) and good throughput via Brutal CC. No obfs — DPI may flag QUIC traffic. Use in regions without active UDP-DPI.',
+      },
+      'hysteria-salamander': {
+        name: 'Hysteria 2 + Salamander (RU mobile)',
+        description: 'Obfuscation for UDP-DPI on Russian mobile carriers',
+        details:
+          'Hysteria 2 with Salamander obfuscation password. Each UDP packet is XOR-encrypted with a key derived from the password — DPI sees no QUIC signature. On Russian mobile carriers (Megafon/MTS/Beeline) clean Hysteria is often throttled to tx:0; Salamander typically passes through. Brutal CC tuned for 100 Mbps peaks.',
+        notes: [
+          "Obfs password generated randomly — don't lose it, clients need it",
+          'Brutal CC 100/100 Mbps — adjust to your node\'s real bandwidth',
+        ],
+      },
+      'awg-default': {
+        name: 'AmneziaWG (default)',
+        description: 'Default obfs parameters — works for most ISPs',
+        details:
+          'AmneziaWG (a WireGuard fork with DPI bypass). Default Jc/Jmin/Jmax + S/H obfuscation hides the WireGuard signature. Fits most providers. For aggressive ISPs try the "Iran-tuned" recipe.',
+      },
+      'awg-iran': {
+        name: 'AmneziaWG (Iran-tuned)',
+        description: 'Obfuscation tuned for Iranian DPI',
+        details:
+          "AmneziaWG with obfuscation parameters recommended by the Amnezia team for Iranian ISPs. Jc=4 (junk count), specific S1-S4 padding, H1-H4 header bytes. The default parameters fail Iranian DPI; these usually pass. Often helps on corporate firewalls too.",
+      },
+      'naive-default': {
+        name: 'NaiveProxy (Caddy)',
+        description: 'HTTP/2 proxy with Chrome fingerprint, probe-resistant',
+        details:
+          "NaiveProxy via Caddy fork. Traffic moves over HTTP/2 as a normal HTTPS request with the correct Chrome JA3 fingerprint. ACME cert from Let's Encrypt automatically. One of the stealthiest options where xray and hysteria are already banned.",
+        notes: [
+          'Fill hostname and tlsEmail manually — needs a real domain with an A-record on the node',
+        ],
+      },
+      'ss-2022-blake3': {
+        name: 'SS-2022 (blake3-aes-256)',
+        description: 'Modern Shadowsocks — XChaCha20-level security',
+        details:
+          'Shadowsocks 2022 with the 2022-blake3-aes-256-gcm cipher. Modern alternative AEAD — better performance and probe-resistance than legacy chacha20. Supported by all current SS clients (Outline, Shadowrocket, sing-box).',
+      },
+      'mtproto-default': {
+        name: 'MTProto (Telegram)',
+        description: 'Telegram-only — a separate use case',
+        details:
+          'MTProto proxy for Telegram. NOT a general-purpose VPN — Telegram traffic only. One shared secret across all users (upstream 9seconds/mtg limitation). Useful when Telegram is blocked but you want a fast pipe specifically for the messenger.',
+      },
+      'mieru-default': {
+        name: 'Mieru (Chinese GFW)',
+        description: 'Tuned against the Great Firewall — random padding',
+        details:
+          "Mieru by enfein — a modern stealth protocol with aggressive padding, designed against the Chinese GFW. Traffic looks like noise — no signatures. Supported by sing-box. Use when other protocols are cut in mainland China.",
+      },
+    },
   },
   hosts: {
     sectionLabel: 'Hosts ({{count}})',
