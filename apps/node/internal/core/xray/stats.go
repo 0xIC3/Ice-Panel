@@ -30,14 +30,35 @@ type xrayStatsResponse struct {
 	Stat []xrayStatEntry `json:"stat"`
 }
 
-// `value` arrives as a bare JSON number from `xray api statsquery` (not a
-// string, despite older xray-core docs hinting otherwise). Go's strict
-// strconv-int Unmarshal would fail to decode int → string, killing the
-// whole batch. `json.Number` accepts both numbers and stringified numbers,
-// covering the few xray-core forks that quote their values.
+// `value` arrives from `xray api statsquery` either as a bare JSON number
+// (mainline xray-core) or as a JSON string (a couple of xray-core forks
+// that quote int64 values to dodge JS-side 53-bit precision loss). We
+// accept either by reading the value as json.RawMessage and parsing in a
+// helper; previously we used json.Number which only accepts bare numbers
+// and silently broke the fork case AND any malformed entry would fail the
+// whole batch instead of being skippable.
 type xrayStatEntry struct {
-	Name  string      `json:"name"`
-	Value json.Number `json:"value"`
+	Name  string          `json:"name"`
+	Value json.RawMessage `json:"value"`
+}
+
+// statEntryInt64 returns (n, ok) — ok=false on malformed value. Accepts:
+//   - bare number              `123`
+//   - quoted number string     `"123"`
+//   - quoted garbage           `"not-a-number"`  → ok=false
+func statEntryInt64(raw json.RawMessage) (int64, bool) {
+	s := strings.TrimSpace(string(raw))
+	if len(s) == 0 {
+		return 0, false
+	}
+	if s[0] == '"' && s[len(s)-1] == '"' {
+		s = s[1 : len(s)-1]
+	}
+	n, err := parseInt64String(s)
+	if err != nil {
+		return 0, false
+	}
+	return n, true
 }
 
 // queryUserStats invokes `xray api statsquery` and returns per-user byte
@@ -80,8 +101,8 @@ func queryUserStats(
 		if !ok {
 			continue // unknown shape — skip rather than fail the whole batch
 		}
-		bytes, perr := e.Value.Int64()
-		if perr != nil {
+		bytes, ok := statEntryInt64(e.Value)
+		if !ok {
 			continue
 		}
 		entry := result[userID]

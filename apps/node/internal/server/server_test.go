@@ -111,7 +111,7 @@ func TestHandleRemoveUser(t *testing.T) {
 
 func TestHandleStats(t *testing.T) {
 	srv := newTestServer(t)
-	srv.startedAt = srv.startedAt // zero — fine for a stub
+	// startedAt left at its newTestServer default — fine for this stub.
 
 	req := httptest.NewRequest(http.MethodGet, "/stats", nil)
 	rr := httptest.NewRecorder()
