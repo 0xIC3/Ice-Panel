@@ -75,6 +75,11 @@ const ConfigSchema = z.object({
   LOGIN_LOCKOUT_FAILURES: z.coerce.number().int().min(1).default(5),
   LOGIN_LOCKOUT_DURATION_MIN: z.coerce.number().int().min(1).default(15),
   LOGIN_LOCKOUT_WINDOW_MIN: z.coerce.number().int().min(1).default(15),
+
+  // ACME contact email used by node-installers that need a Let's Encrypt
+  // cert (Hysteria 2 / NaiveProxy / Caddy). Optional — install command
+  // emits a placeholder when unset, admin fills manually.
+  ACME_DEFAULT_EMAIL: z.email().optional(),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

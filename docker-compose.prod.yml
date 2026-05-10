@@ -88,6 +88,9 @@ services:
       LOGIN_LOCKOUT_FAILURES: ${LOGIN_LOCKOUT_FAILURES:-5}
       LOGIN_LOCKOUT_DURATION_MIN: ${LOGIN_LOCKOUT_DURATION_MIN:-15}
       LOGIN_LOCKOUT_WINDOW_MIN: ${LOGIN_LOCKOUT_WINDOW_MIN:-15}
+      # ACME contact email auto-injected into Hysteria / Naive install
+      # commands. Optional — UI emits placeholder when unset.
+      ACME_DEFAULT_EMAIL: ${ACME_DEFAULT_EMAIL:-}
     depends_on:
       postgres:
         condition: service_healthy

@@ -38,6 +38,7 @@ async function renderRefreshBootstrapCommand(
   panelUrl: string,
   token: string,
   protocol: string,
+  nodeAddress: string,
 ): Promise<string> {
   const panelIp = await getPanelPublicIp();
   const lines = [
@@ -50,6 +51,27 @@ async function renderRefreshBootstrapCommand(
     lines.push(`  --panel-ip ${panelIp}`);
   } else {
     lines.push('  --panel-ip YOUR_PANEL_PUBLIC_IP  # auto-detect failed, replace with panel IP');
+  }
+  // Auto-inject ACME flags for protocols that need a real cert.
+  const acmeDomain = nodeAddress.split(':')[0] ?? '';
+  const acmeEmail = (process.env.ACME_DEFAULT_EMAIL ?? '').trim();
+  if (protocol === 'hysteria' && acmeDomain) {
+    lines[lines.length - 1] += ' \\';
+    lines.push(`  --hysteria-domain ${acmeDomain} \\`);
+    lines.push(
+      acmeEmail
+        ? `  --hysteria-email ${acmeEmail}`
+        : '  --hysteria-email admin@example.com  # set ACME_DEFAULT_EMAIL env to inject automatically',
+    );
+  }
+  if (protocol === 'naive' && acmeDomain) {
+    lines[lines.length - 1] += ' \\';
+    lines.push(`  --naive-domain ${acmeDomain} \\`);
+    lines.push(
+      acmeEmail
+        ? `  --naive-email ${acmeEmail}`
+        : '  --naive-email admin@example.com  # set ACME_DEFAULT_EMAIL env to inject automatically',
+    );
   }
   return lines.join('\n');
 }
@@ -122,6 +144,7 @@ export async function nodesRoutes(app: FastifyInstance): Promise<void> {
           publicUrlFromRequest(request),
           tokenInfo.token,
           node.protocol,
+          node.address,
         ),
       });
     } catch (err) {

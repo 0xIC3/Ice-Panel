@@ -101,7 +101,12 @@ export async function createNode(
   const bootstrap: BootstrapInfo = {
     token: tokenInfo.token,
     expiresAt: tokenInfo.expiresAt.toISOString(),
-    command: await renderBootstrapCommand(ctx.panelUrl, tokenInfo.token, node.protocol),
+    command: await renderBootstrapCommand(
+      ctx.panelUrl,
+      tokenInfo.token,
+      node.protocol,
+      node.address,
+    ),
   };
 
   // Trigger backfill so existing active users land on this fresh node.
@@ -117,6 +122,7 @@ async function renderBootstrapCommand(
   panelUrl: string,
   token: string,
   protocol: string,
+  nodeAddress?: string,
 ): Promise<string> {
   // Slice S7 — auto-detect or accept env-override of the panel's egress
   // IP so the install command can lock the agent's UFW to it. See
@@ -134,6 +140,32 @@ async function renderBootstrapCommand(
     lines.push(`  --panel-ip ${panelIp}`);
   } else {
     lines.push('  --panel-ip YOUR_PANEL_PUBLIC_IP  # auto-detect failed, replace with panel IP');
+  }
+
+  // Slice S7 — protocols that need an ACME cert (Hysteria, Naive) get
+  // their domain + email auto-baked in. Domain comes from node.address
+  // (host part, port stripped); admin already typed it during create-
+  // node and keeping it in sync here avoids the "agent installs but
+  // server doesn't start" gotcha. ACME_DEFAULT_EMAIL is panel-wide env.
+  const acmeDomain = nodeAddress?.split(':')[0] ?? '';
+  const acmeEmail = (process.env.ACME_DEFAULT_EMAIL ?? '').trim();
+  if (protocol === 'hysteria' && acmeDomain) {
+    lines[lines.length - 1] += ' \\';
+    lines.push(`  --hysteria-domain ${acmeDomain} \\`);
+    if (acmeEmail) {
+      lines.push(`  --hysteria-email ${acmeEmail}`);
+    } else {
+      lines.push('  --hysteria-email admin@example.com  # set ACME_DEFAULT_EMAIL env to inject automatically');
+    }
+  }
+  if (protocol === 'naive' && acmeDomain) {
+    lines[lines.length - 1] += ' \\';
+    lines.push(`  --naive-domain ${acmeDomain} \\`);
+    if (acmeEmail) {
+      lines.push(`  --naive-email ${acmeEmail}`);
+    } else {
+      lines.push('  --naive-email admin@example.com  # set ACME_DEFAULT_EMAIL env to inject automatically');
+    }
   }
   return lines.join('\n');
 }
