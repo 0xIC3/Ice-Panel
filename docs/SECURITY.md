@@ -90,8 +90,8 @@ Listed in priority/impact order. Effort is rough engineer-days at our scale.
 ### Tier 1 — fits in a single sprint, real defence
 
 1. ~~**Telegram / email webhook on critical events**~~ ✅ **partially shipped 2026-05-11.** Telegram bot push for `auth.login_ok` and `auth.lockout` via `TELEGRAM_BOT_TOKEN`+`TELEGRAM_CHAT_ID` env vars (no-op when either is unset). Fire-and-forget — flaky Telegram API can't break login flow. Still TODO: `admin.created`, `node.deleted`, `keygen_ca.rotated` events. *Lib: `apps/panel-backend/src/lib/telegram-notify.ts`.*
-2. **Geo-block panel by country** — env `ADMIN_ALLOWED_COUNTRIES=RU,DE` checked against `CF-IPCountry` (or MaxMind GeoLite2 db). Skip when `request.path` starts with `/sub/` (subscribers worldwide). *~1 day.*
-3. **Honey users + honey routes** — auto-seeded fake user that should never be polled; hits to `/wp-admin`/`/.env` etc. → 200 fake response + IP-blacklist for 1h. *~1 day.*
+2. ~~**Geo-block panel by country**~~ ✅ **shipped 2026-05-11.** `ADMIN_ALLOWED_COUNTRIES` env (CSV ISO codes) checked against `CF-IPCountry`/`X-Country-Code` on `/api/*` only, skipping `/sub/*`, `/api/internal/*`, `/api/auth/status`, `/health`. Fail-closed when header missing on gated path. Empty list → disabled.
+3. ~~**Honey routes**~~ ✅ **shipped 2026-05-11** (honey users still TODO). Hits to `/wp-admin`, `/.env`, `/xmlrpc.php`, `/.git/*`, `/phpmyadmin`, etc. → fake 404 HTML + IP into `sec:blacklist:<ip>` (Redis, `HONEYPOT_BLACKLIST_TTL_SEC` default 3600s). Subsequent requests from blacklisted IPs short-circuit at 403 before any business logic. Telegram alert on first-hit-of-IP. *Lib: `apps/panel-backend/src/lib/security-gate.ts`.*
 4. **fail2ban integration** — drop a jail config for `/api/auth/login` 401s + `/sub/:token` 404s. Optional `--harden` flag in `install-panel.sh`. *~half day.*
 
 ### Tier 2 — meaningful but not urgent
