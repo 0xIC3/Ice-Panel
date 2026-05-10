@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Alert,
   Badge,
@@ -81,6 +82,7 @@ export function SquadFormModal({
   onSubmit,
   loading,
 }: Props) {
+  const { t } = useTranslation();
   const isEdit = squad !== null;
   const isAllSquad = squad?.id === ALL_SQUAD_ID;
   const [search, setSearch] = useState('');
@@ -178,7 +180,7 @@ export function SquadFormModal({
           <ThemeIcon variant="light" radius="md" size={32} color="indigo">
             <IconLink size={18} />
           </ThemeIcon>
-          <Text fw={600}>{isEdit ? 'Изменить сквад' : 'Создать сквад'}</Text>
+          <Text fw={600}>{isEdit ? t('squads.form.titleEdit') : t('squads.form.titleCreate')}</Text>
         </Group>
       }
       size="lg"
@@ -252,15 +254,15 @@ export function SquadFormModal({
           )}
 
           <TextInput
-            label="Имя"
-            placeholder="Trial / VIP / Stage"
+            label={t('squads.form.name')}
+            placeholder={t('squads.form.namePlaceholder')}
             required
             disabled={isAllSquad}
             {...form.getInputProps('name')}
           />
           <Textarea
-            label="Описание"
-            placeholder="Зачем эта группа нужна (необязательно)"
+            label={t('squads.form.description')}
+            placeholder={t('squads.form.descriptionPlaceholder')}
             autosize
             minRows={2}
             disabled={isAllSquad}
@@ -271,10 +273,10 @@ export function SquadFormModal({
             label={
               <Group gap={6}>
                 <Text size="sm" fw={600}>
-                  Профили
+                  {t('squads.form.profiles')}
                 </Text>
                 <Badge size="sm" variant="light" color="indigo">
-                  {selectedCount} выбрано
+                  {t('squads.form.profilesSelected', { count: selectedCount })}
                 </Badge>
               </Group>
             }
@@ -283,7 +285,7 @@ export function SquadFormModal({
 
           {!isAllSquad && (
             <TextInput
-              placeholder="Поиск по имени / протоколу…"
+              placeholder={t('squads.form.profilesSearch')}
               leftSection={<IconSearch size={16} />}
               value={search}
               onChange={(e) => setSearch(e.currentTarget.value)}
@@ -295,8 +297,8 @@ export function SquadFormModal({
               <Paper withBorder p="md" radius="sm" ta="center">
                 <Text c="dimmed" size="sm">
                   {profiles.length === 0
-                    ? 'Профилей в системе пока нет.'
-                    : 'Ничего не найдено по поиску.'}
+                    ? t('squads.form.profilesEmpty')
+                    : t('squads.form.profilesNothingFound')}
                 </Text>
               </Paper>
             ) : (
@@ -319,11 +321,11 @@ export function SquadFormModal({
 
           <Group justify="flex-end" gap="sm">
             <Button variant="default" onClick={onClose} disabled={loading}>
-              {isAllSquad ? 'Закрыть' : 'Отмена'}
+              {isAllSquad ? t('common.close') : t('common.cancel')}
             </Button>
             {!isAllSquad && (
               <Button type="submit" loading={loading} leftSection={<IconCheck size={16} />}>
-                {isEdit ? 'Сохранить' : 'Создать'}
+                {isEdit ? t('squads.form.submitEdit') : t('squads.form.submitCreate')}
               </Button>
             )}
           </Group>

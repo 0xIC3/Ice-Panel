@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Alert,
   Badge,
@@ -28,32 +29,30 @@ interface Props {
  * can still tweak individual fields after applying.
  */
 export function RecipePicker({ protocol, onPick }: Props) {
+  const { t } = useTranslation();
   const recipes = recipesForProtocol(protocol);
   const [picked, setPicked] = useState<string | null>(null);
 
   if (recipes.length === 0) {
-    return (
-      <Alert color="gray" variant="light">
-        Для этого протокола рецептов пока нет — заполни поля ниже вручную.
-      </Alert>
-    );
+    return null;
   }
+
+  const pickedRecipe = recipes.find((r) => r.id === picked);
 
   return (
     <Stack gap="xs">
       <Group justify="space-between" align="flex-end">
         <Stack gap={0}>
           <Text fw={600} size="sm">
-            Рецепты быстрой настройки
+            {t('recipes.title')}
           </Text>
           <Text size="xs" c="dimmed">
-            Клик — поля ниже заполнятся под выбранный сценарий. Ручная правка
-            остаётся доступной.
+            {t('recipes.subtitle')}
           </Text>
         </Stack>
         {picked && (
           <Badge variant="light" color="teal" leftSection={<IconCheck size={11} />}>
-            Recipe применён
+            {t('recipes.appliedBadge')}
           </Badge>
         )}
       </Group>
@@ -72,27 +71,18 @@ export function RecipePicker({ protocol, onPick }: Props) {
         ))}
       </SimpleGrid>
 
-      {picked && (
+      {picked && pickedRecipe && (
         <Alert color="teal" variant="light" icon={<IconCheck size={16} />}>
-          {recipes.find((r) => r.id === picked)?.notes?.length ? (
-            <Stack gap={4}>
-              <Text size="xs" fw={500}>
-                Применён: {recipes.find((r) => r.id === picked)?.name}
-              </Text>
-              {recipes
-                .find((r) => r.id === picked)
-                ?.notes?.map((n, i) => (
-                  <Text key={i} size="xs">
-                    • {n}
-                  </Text>
-                ))}
-            </Stack>
-          ) : (
-            <Text size="xs">
-              Применён: {recipes.find((r) => r.id === picked)?.name}.
-              Поля заполнены — можно сохранять или подкрутить детали ниже.
+          <Stack gap={4}>
+            <Text size="xs" fw={500}>
+              {t('recipes.appliedAlert', { name: pickedRecipe.name })}
             </Text>
-          )}
+            {pickedRecipe.notes?.map((n, i) => (
+              <Text key={i} size="xs">
+                • {n}
+              </Text>
+            ))}
+          </Stack>
         </Alert>
       )}
     </Stack>

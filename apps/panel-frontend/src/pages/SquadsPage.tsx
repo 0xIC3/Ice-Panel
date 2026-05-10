@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ActionIcon,
   Button,
@@ -44,6 +45,7 @@ import {
 import { SquadFormModal } from '../components/SquadFormModal';
 
 export function SquadsPage() {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const [createOpen, { open: openCreate, close: closeCreate }] = useDisclosure(false);
   const [editing, setEditing] = useState<Squad | null>(null);
@@ -57,12 +59,12 @@ export function SquadsPage() {
     mutationFn: createSquad,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['squads'] });
-      notifications.show({ color: 'green', message: 'Сквад создан' });
+      notifications.show({ color: 'green', message: t('squads.notify.created') });
     },
     onError: (err) =>
       notifications.show({
         color: 'red',
-        title: 'Не получилось создать',
+        title: t('common.createError'),
         message: err instanceof Error ? err.message : String(err),
       }),
   });
@@ -72,12 +74,12 @@ export function SquadsPage() {
       updateSquad(id, input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['squads'] });
-      notifications.show({ color: 'green', message: 'Сквад обновлён' });
+      notifications.show({ color: 'green', message: t('squads.notify.updated') });
     },
     onError: (err) =>
       notifications.show({
         color: 'red',
-        title: 'Не получилось сохранить',
+        title: t('common.saveError'),
         message: err instanceof Error ? err.message : String(err),
       }),
   });
@@ -86,12 +88,12 @@ export function SquadsPage() {
     mutationFn: deleteSquad,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['squads'] });
-      notifications.show({ color: 'green', message: 'Сквад удалён' });
+      notifications.show({ color: 'green', message: t('squads.notify.deleted') });
     },
     onError: (err) =>
       notifications.show({
         color: 'red',
-        title: 'Не получилось удалить',
+        title: t('common.deleteError'),
         message: err instanceof Error ? err.message : String(err),
       }),
   });
@@ -109,15 +111,13 @@ export function SquadsPage() {
 
   function handleDelete(squad: Squad) {
     modals.openConfirmModal({
-      title: `Удалить сквад «${squad.name}»?`,
+      title: t('squads.deleteTitle', { name: squad.name }),
       children: (
         <Text size="sm">
-          {squad.memberCount > 0
-            ? `${squad.memberCount} пользователей в этой группе. Те, у кого нет других сквадов, останутся в «All».`
-            : 'Никого не зацепит — группа пустая.'}
+          {t('squads.deleteBody')}
         </Text>
       ),
-      labels: { confirm: 'Удалить', cancel: 'Отмена' },
+      labels: { confirm: t('common.delete'), cancel: t('common.cancel') },
       confirmProps: { color: 'red' },
       onConfirm: () => deleteMutation.mutate(squad.id),
     });
@@ -159,13 +159,13 @@ export function SquadsPage() {
     <Stack gap="lg">
       <Group justify="space-between" align="flex-end">
         <Stack gap={2}>
-          <Title order={2}>Внутренние сквады</Title>
+          <Title order={2}>{t('squads.title')}</Title>
           <Text c="dimmed" size="sm">
-            Group ACL — кто какие inbound'ы видит в подписке
+            {t('squads.subtitle')}
           </Text>
         </Stack>
         <Group>
-          <Tooltip label="Обновить">
+          <Tooltip label={t('common.refresh')}>
             <ActionIcon
               variant="subtle"
               size="lg"
@@ -176,13 +176,13 @@ export function SquadsPage() {
             </ActionIcon>
           </Tooltip>
           <Button leftSection={<IconPlus size={16} />} onClick={openCreate}>
-            Создать
+            {t('squads.create')}
           </Button>
         </Group>
       </Group>
 
       <TextInput
-        placeholder="Поиск по имени или описанию…"
+        placeholder={t('squads.searchPlaceholder')}
         leftSection={<IconSearch size={16} />}
         value={search}
         onChange={(e) => setSearch(e.currentTarget.value)}
@@ -195,9 +195,7 @@ export function SquadsPage() {
               <IconUsers size={24} />
             </ThemeIcon>
             <Text c="dimmed" size="sm">
-              {squads.length === 0
-                ? 'Нет сквадов. «All» создаётся миграцией — проверь что она применена.'
-                : 'Ничего не найдено по запросу.'}
+              {squads.length === 0 ? t('squads.empty') : t('common.nothingFound')}
             </Text>
           </Stack>
         </Card>
@@ -246,6 +244,7 @@ function SquadCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useTranslation();
   const isAll = squad.id === ALL_SQUAD_ID;
   const profileCount = squad.profileIds.length;
   const memberCount = squad.memberCount;
@@ -300,7 +299,7 @@ function SquadCard({
           </Menu.Target>
           <Menu.Dropdown>
             <Menu.Item leftSection={<IconEdit size={14} />} onClick={onEdit}>
-              {isAll ? 'Открыть (read-only)' : 'Редактировать'}
+              {isAll ? t('squads.open') : t('common.edit')}
             </Menu.Item>
             <Menu.Item
               color="red"
@@ -308,7 +307,7 @@ function SquadCard({
               disabled={isAll}
               onClick={onDelete}
             >
-              Удалить
+              {t('common.delete')}
             </Menu.Item>
           </Menu.Dropdown>
         </Menu>

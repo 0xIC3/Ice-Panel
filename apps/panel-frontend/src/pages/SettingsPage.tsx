@@ -674,6 +674,7 @@ function SubscriptionMetadataCard() {
  * just give admins the chair to maintain the table.
  */
 function RegionsCard() {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const regionsQuery = useQuery({ queryKey: ['regions'], queryFn: listRegions });
   const [name, setName] = useState('');
@@ -686,12 +687,12 @@ function RegionsCard() {
       qc.invalidateQueries({ queryKey: ['regions'] });
       setName('');
       setCode('');
-      notifications.show({ color: 'green', message: 'Регион создан' });
+      notifications.show({ color: 'green', message: t('regions.notify.created') });
     },
     onError: (err) =>
       notifications.show({
         color: 'red',
-        title: 'Не получилось создать',
+        title: t('common.createError'),
         message: err instanceof Error ? err.message : String(err),
       }),
   });
@@ -702,12 +703,12 @@ function RegionsCard() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['regions'] });
       setEditing(null);
-      notifications.show({ color: 'green', message: 'Регион обновлён' });
+      notifications.show({ color: 'green', message: t('regions.notify.updated') });
     },
     onError: (err) =>
       notifications.show({
         color: 'red',
-        title: 'Не получилось сохранить',
+        title: t('common.saveError'),
         message: err instanceof Error ? err.message : String(err),
       }),
   });
@@ -717,27 +718,27 @@ function RegionsCard() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['regions'] });
       qc.invalidateQueries({ queryKey: ['nodes'] });
-      notifications.show({ color: 'green', message: 'Регион удалён' });
+      notifications.show({ color: 'green', message: t('regions.notify.deleted') });
     },
     onError: (err) =>
       notifications.show({
         color: 'red',
-        title: 'Не получилось удалить',
+        title: t('common.deleteError'),
         message: err instanceof Error ? err.message : String(err),
       }),
   });
 
   function handleDelete(r: Region) {
     modals.openConfirmModal({
-      title: `Удалить регион «${r.name}»?`,
+      title: t('regions.deleteTitle', { name: r.name }),
       children: (
         <Text size="sm">
           {r.nodeCount && r.nodeCount > 0
-            ? `${r.nodeCount} нод останутся, но потеряют привязку к региону (поле обнулится).`
-            : 'Ни одна нода не привязана — действие безопасное.'}
+            ? t('regions.deleteWithNodes', { count: r.nodeCount })
+            : t('regions.deleteSafe')}
         </Text>
       ),
-      labels: { confirm: 'Удалить', cancel: 'Отмена' },
+      labels: { confirm: t('common.delete'), cancel: t('common.cancel') },
       confirmProps: { color: 'red' },
       onConfirm: () => deleteMutation.mutate(r.id),
     });
@@ -752,10 +753,9 @@ function RegionsCard() {
           <IconWorld size={18} />
         </ThemeIcon>
         <Stack gap={0}>
-          <Text fw={600}>Регионы</Text>
+          <Text fw={600}>{t('regions.title')}</Text>
           <Text size="xs" c="dimmed">
-            Логическая группировка нод (EU / RU / Asia / …) — используется
-            для фильтрации в /nodes и для smart server-side selection (slice 28).
+            {t('regions.description')}
           </Text>
         </Stack>
       </Group>
@@ -763,7 +763,7 @@ function RegionsCard() {
       <Stack gap="sm" maw={620}>
         {regions.length === 0 ? (
           <Text size="xs" c="dimmed">
-            Регионов нет. Создай первый — например, «Europe» с кодом «EU».
+            {t('regions.empty')}
           </Text>
         ) : (
           <Stack gap={4}>
@@ -790,7 +790,7 @@ function RegionsCard() {
                           {r.name}
                         </Text>
                         <Text size="xs" c="dimmed">
-                          {r.nodeCount ?? 0} нод
+                          {t('regions.nodesCount', { count: r.nodeCount ?? 0 })}
                         </Text>
                       </Stack>
                     </Group>
@@ -820,15 +820,15 @@ function RegionsCard() {
 
         <Group gap="sm" align="flex-end">
           <TextInput
-            label="Имя"
-            placeholder="Europe"
+            label={t('regions.name')}
+            placeholder={t('regions.namePlaceholder')}
             value={name}
             onChange={(e) => setName(e.currentTarget.value)}
             style={{ flex: 2 }}
           />
           <TextInput
-            label="Код"
-            placeholder="EU"
+            label={t('regions.code')}
+            placeholder={t('regions.codePlaceholder')}
             value={code}
             onChange={(e) => setCode(e.currentTarget.value.toUpperCase())}
             style={{ flex: 1 }}
@@ -842,7 +842,7 @@ function RegionsCard() {
               createMutation.mutate({ name: name.trim(), code: code.trim() })
             }
           >
-            Добавить
+            {t('regions.add')}
           </Button>
         </Group>
       </Stack>
@@ -861,19 +861,20 @@ function RegionEditRow({
   onSave: (input: { name: string; code: string }) => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState(region.name);
   const [code, setCode] = useState(region.code);
   return (
     <Paper withBorder p="xs" radius="sm">
       <Group gap="xs" align="flex-end">
         <TextInput
-          label="Имя"
+          label={t('regions.name')}
           value={name}
           onChange={(e) => setName(e.currentTarget.value)}
           style={{ flex: 2 }}
         />
         <TextInput
-          label="Код"
+          label={t('regions.code')}
           value={code}
           onChange={(e) => setCode(e.currentTarget.value.toUpperCase())}
           style={{ flex: 1 }}
@@ -887,7 +888,7 @@ function RegionEditRow({
           OK
         </Button>
         <Button size="sm" variant="subtle" onClick={onCancel}>
-          Отмена
+          {t('common.cancel')}
         </Button>
       </Group>
     </Paper>
