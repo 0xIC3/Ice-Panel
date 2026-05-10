@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../../prisma.js';
 import { verifyHeartbeatToken } from './heartbeat-token.js';
+import { config } from '../../config.js';
 
 /**
  * Slice 38 — heartbeat self-destruct endpoint.
@@ -23,7 +24,17 @@ import { verifyHeartbeatToken } from './heartbeat-token.js';
  * brief outages from spuriously destroying production nodes.
  */
 export async function heartbeatRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/me/status', async (request, reply) => {
+  app.get('/me/status', {
+    config: {
+      // Bad bearers cost a DB roundtrip per request. Cap so a flood from
+      // one source can't keep the panel busy. Real agents poll once a
+      // minute, so 120/min/IP is generous for legitimate behind-NAT cases.
+      rateLimit: {
+        max: config.RATE_LIMIT_HEARTBEAT_PER_MIN,
+        timeWindow: '1 minute',
+      },
+    },
+  }, async (request, reply) => {
     const auth = request.headers.authorization;
     if (!auth || !auth.startsWith('Bearer ')) {
       return reply.code(401).send({ error: 'MISSING_BEARER' });

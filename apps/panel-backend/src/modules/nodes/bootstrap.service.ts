@@ -1,6 +1,10 @@
 import { randomBytes } from 'node:crypto';
 import { prisma } from '../../prisma.js';
-import { issueNodeCert, encodeNodePayload } from '../keygen/keygen.service.js';
+import {
+  issueNodeCert,
+  encodeNodePayload,
+  getPanelClientFingerprint,
+} from '../keygen/keygen.service.js';
 import { config } from '../../config.js';
 import { signHeartbeatToken } from './heartbeat-token.js';
 
@@ -79,11 +83,13 @@ export async function redeemBootstrapToken(token: string): Promise<string> {
   // backfilled by the migration) and never leaves the panel — only the
   // HMAC of it does.
   const secretBuf = Buffer.from(row.node.heartbeatSecret as Uint8Array);
+  const panelClientFingerprint = await getPanelClientFingerprint();
   return encodeNodePayload({
     ...cert,
     panelUrl: config.PUBLIC_URL,
     nodeId: row.node.id,
     heartbeatToken: signHeartbeatToken(row.node.id, secretBuf),
+    panelClientFingerprint,
   });
 }
 

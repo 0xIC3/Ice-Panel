@@ -22,6 +22,39 @@ import (
 	"strings"
 )
 
+// allowedHookPrefixes is the strict whitelist of commands acceptable in
+// PostUp/PostDown. awg-quick treats those fields as a shell command, so
+// anything outside this list — pipes, redirects, &&, $(...), backticks,
+// arbitrary binaries — is rejected with an error before render.
+var allowedHookPrefixes = []string{
+	"iptables ",
+	"ip6tables ",
+	"ip ",          // `ip route add ...` etc.
+	"sysctl ",
+	"echo ",        // common in install-time NAT setup snippets
+}
+
+// validatePostHook returns an error unless `cmd` either is empty or starts
+// with one of `allowedHookPrefixes` AND contains no shell metacharacters.
+// Empty string is fine — render emits an unused PostUp/PostDown line in
+// that case, awg-quick treats it as a no-op.
+func validatePostHook(cmd string) error {
+	if cmd == "" {
+		return nil
+	}
+	for _, ch := range []string{";", "&", "|", "$", "`", "\n", ">", "<"} {
+		if strings.Contains(cmd, ch) {
+			return fmt.Errorf("disallowed shell metacharacter %q in hook", ch)
+		}
+	}
+	for _, p := range allowedHookPrefixes {
+		if strings.HasPrefix(cmd, p) {
+			return nil
+		}
+	}
+	return fmt.Errorf("hook command must start with one of: %s", strings.Join(allowedHookPrefixes, ", "))
+}
+
 // InboundConfig is the static part of the AmneziaWG interface — generated once
 // from admin settings (slice 23 will move these into the inbounds table) and
 // kept constant across user mutations. Peer set is passed separately to
@@ -162,6 +195,19 @@ func renderConfig(inbound InboundConfig, peers []Peer) (string, error) {
 	fmt.Fprintf(&b, "H2 = %d\n", cfg.H2)
 	fmt.Fprintf(&b, "H3 = %d\n", cfg.H3)
 	fmt.Fprintf(&b, "H4 = %d\n", cfg.H4)
+	// awg-quick evaluates PostUp/PostDown as a shell command, so anything
+	// we render here runs as root on every interface bounce. PostUp/Down
+	// are NOT accepted on the panel→node wire (see adapter.go ApplyInbound)
+	// — they only reach this point from install-time env on the VPS, which
+	// is admin-controlled. We still hard-whitelist allowed command prefixes
+	// here as defence-in-depth so a future maintainer who plumbs them
+	// through the wire by accident can't accidentally introduce RCE.
+	if err := validatePostHook(cfg.PostUp); err != nil {
+		return "", fmt.Errorf("PostUp: %w", err)
+	}
+	if err := validatePostHook(cfg.PostDown); err != nil {
+		return "", fmt.Errorf("PostDown: %w", err)
+	}
 	fmt.Fprintf(&b, "PostUp = %s\n", cfg.PostUp)
 	fmt.Fprintf(&b, "PostDown = %s\n", cfg.PostDown)
 

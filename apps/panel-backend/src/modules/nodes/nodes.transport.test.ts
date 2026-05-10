@@ -1,13 +1,17 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createServer, type Server } from 'node:https';
 import type { AddressInfo } from 'node:net';
-import { generateCa, generateNodeCert, type CertBundle } from '../keygen/keygen.crypto.js';
-import { NodeTransport, NodeRequestError } from './nodes.transport.js';
+import {
+  generateCa,
+  generateNodeCert,
+  generatePanelClientCert,
+} from '../keygen/keygen.crypto.js';
+import { NodeTransport, NodeRequestError, type MtlsOverride } from './nodes.transport.js';
 
 interface ServerHandle {
   server: Server;
   address: string;
-  ca: CertBundle;
+  mtls: MtlsOverride;
 }
 
 async function startMockMtlsServer(): Promise<ServerHandle> {
@@ -16,6 +20,10 @@ async function startMockMtlsServer(): Promise<ServerHandle> {
     commonName: 'localhost',
     sans: [{ type: 'ip', value: '127.0.0.1' }],
   });
+  // Slice S6 — panel side now presents a clientAuth-only leaf, not the
+  // CA itself. Build that here so the test exercises the same code path
+  // production uses.
+  const panelClient = await generatePanelClientCert(ca);
 
   const server = createServer(
     {
@@ -77,7 +85,15 @@ async function startMockMtlsServer(): Promise<ServerHandle> {
     server.listen(0, '127.0.0.1', () => resolve());
   });
   const addr = server.address() as AddressInfo;
-  return { server, address: `127.0.0.1:${addr.port}`, ca };
+  return {
+    server,
+    address: `127.0.0.1:${addr.port}`,
+    mtls: {
+      caCertPem: ca.certPem,
+      panelClientCertPem: panelClient.certPem,
+      panelClientKeyPem: panelClient.privateKeyPem,
+    },
+  };
 }
 
 let handle: ServerHandle;
@@ -94,7 +110,7 @@ afterAll(async () => {
 
 describe('NodeTransport (mTLS)', () => {
   it('addUser performs an mTLS POST and resolves on 200', async () => {
-    const transport = new NodeTransport({ address: handle.address }, handle.ca);
+    const transport = new NodeTransport({ address: handle.address }, handle.mtls);
     await expect(
       transport.addUser({
         userId: '11111111-1111-1111-1111-111111111111',
@@ -106,21 +122,21 @@ describe('NodeTransport (mTLS)', () => {
   });
 
   it('removeUser resolves on 200', async () => {
-    const transport = new NodeTransport({ address: handle.address }, handle.ca);
+    const transport = new NodeTransport({ address: handle.address }, handle.mtls);
     await expect(
       transport.removeUser({ userId: '11111111-1111-1111-1111-111111111111' }),
     ).resolves.toBeUndefined();
   });
 
   it('healthcheck returns parsed body', async () => {
-    const transport = new NodeTransport({ address: handle.address }, handle.ca);
+    const transport = new NodeTransport({ address: handle.address }, handle.mtls);
     const result = await transport.healthcheck();
     expect(result.status).toBe('ok');
     expect(Array.isArray(result.cores)).toBe(true);
   });
 
   it('getStats returns parsed body', async () => {
-    const transport = new NodeTransport({ address: handle.address }, handle.ca);
+    const transport = new NodeTransport({ address: handle.address }, handle.mtls);
     const stats = await transport.getStats();
     expect(stats.uptime).toBe(42);
     expect(stats.totalBytesIn).toBe(1000);
@@ -139,7 +155,7 @@ describe('NodeTransport (mTLS)', () => {
     }
     const transport = new ErrorRouteTransport(
       { address: handle.address },
-      handle.ca,
+      handle.mtls,
     );
     await expect(transport.addUserViaError()).rejects.toBeInstanceOf(NodeRequestError);
   });

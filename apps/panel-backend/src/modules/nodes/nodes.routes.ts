@@ -34,7 +34,18 @@ export async function nodesRoutes(app: FastifyInstance): Promise<void> {
   // Public bootstrap-redeem route — the token IS the credential (single-use,
   // 15-min TTL). Per-route auth opt-in pattern matches auth.routes.ts and
   // avoids the addHook scope ambiguity that previously made this 401.
-  app.get('/api/internal/bootstrap/:token', async (request, reply) => {
+  app.get('/api/internal/bootstrap/:token', {
+    config: {
+      // Token is a one-shot 192-bit secret, but we still don't want to be
+      // a guessing oracle. 10 attempts/min/IP is enough for the legitimate
+      // single redeem and slow enough that brute-forcing within the 15-min
+      // TTL is infeasible.
+      rateLimit: {
+        max: config.RATE_LIMIT_BOOTSTRAP_PER_MIN,
+        timeWindow: '1 minute',
+      },
+    },
+  }, async (request, reply) => {
     const params = BootstrapTokenParam.parse(request.params);
     try {
       const payload = await bootstrap.redeemBootstrapToken(params.token);

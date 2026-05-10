@@ -9,7 +9,7 @@ import type {
   ApplyInboundsRequest,
   ApplyInboundsResponse,
 } from '@ice-panel/shared';
-import { bootstrapCa } from '../keygen/keygen.service.js';
+import { bootstrapCa, getPanelClientCert } from '../keygen/keygen.service.js';
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 
@@ -24,17 +24,23 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 let sharedAgent: Agent | null = null;
 let sharedAgentPromise: Promise<Agent> | null = null;
 
-async function getSharedAgent(
-  caOverride?: { certPem: string; privateKeyPem: string },
-): Promise<Agent> {
+export interface MtlsOverride {
+  /** PEM of the CA cert used to verify node server certs. */
+  caCertPem: string;
+  /** Panel-client leaf cert (clientAuth-only, signed by CA). */
+  panelClientCertPem: string;
+  panelClientKeyPem: string;
+}
+
+async function getSharedAgent(override?: MtlsOverride): Promise<Agent> {
   // Test injections must always build a fresh agent — they pass
   // synthetic CAs that mustn't leak between cases.
-  if (caOverride) {
+  if (override) {
     return new Agent({
       connect: {
-        ca: caOverride.certPem,
-        cert: caOverride.certPem,
-        key: caOverride.privateKeyPem,
+        ca: override.caCertPem,
+        cert: override.panelClientCertPem,
+        key: override.panelClientKeyPem,
         rejectUnauthorized: true,
       },
       keepAliveTimeout: 30_000,
@@ -46,12 +52,17 @@ async function getSharedAgent(
   if (sharedAgentPromise) return sharedAgentPromise;
 
   sharedAgentPromise = (async () => {
+    // CA cert: trust anchor for verifying node server certs.
+    // Panel-client cert: clientAuth-only leaf signed by CA. Slice S6 —
+    // we no longer present the CA itself as our TLS leaf, which used to
+    // mean any compromised node could impersonate the panel to its peers.
     const ca = await bootstrapCa();
+    const panelClient = await getPanelClientCert();
     const agent = new Agent({
       connect: {
         ca: ca.certPem,
-        cert: ca.certPem,
-        key: ca.privateKeyPem,
+        cert: panelClient.certPem,
+        key: panelClient.privateKeyPem,
         rejectUnauthorized: true,
       },
       // undici defaults are conservative for short-lived connections; we
@@ -104,16 +115,18 @@ interface RequestOptions {
 /**
  * Panel→node mTLS REST client. One instance per outgoing call (no pooling
  * yet — calls are infrequent and each one rebuilds the TLS agent). The CA
- * material loaded via {@link bootstrapCa} is used both to verify the node's
- * server cert and (simplified for slice 9) as the panel's client cert.
+ * cert (via {@link bootstrapCa}) verifies the node's server cert. The
+ * panel-client leaf (via {@link getPanelClientCert}) — clientAuth-only,
+ * signed by the CA — is what the panel actually presents on handshake;
+ * the CA private key never appears in a TLS exchange (slice S6).
  *
- * Tests can override `caOverride` to inject a known bundle without touching
- * the live `keygen_ca` table.
+ * Tests can pass an `MtlsOverride` to inject a synthetic bundle without
+ * touching the live `keygen_ca` table.
  */
 export class NodeTransport {
   constructor(
     private readonly node: NodeTransportTarget,
-    private readonly caOverride?: { certPem: string; privateKeyPem: string },
+    private readonly mtlsOverride?: MtlsOverride,
   ) {}
 
   private buildUrl(path: string): string {
@@ -137,7 +150,7 @@ export class NodeTransport {
     body?: unknown,
     opts: RequestOptions = {},
   ): Promise<TRes> {
-    const agent = await getSharedAgent(this.caOverride);
+    const agent = await getSharedAgent(this.mtlsOverride);
     const controller = new AbortController();
     const timer = setTimeout(
       () => controller.abort(),
@@ -168,7 +181,7 @@ export class NodeTransport {
       clearTimeout(timer);
       // Test-mode override: per-call agent is short-lived, close it.
       // Production sharedAgent is process-scoped and stays open.
-      if (this.caOverride) {
+      if (this.mtlsOverride) {
         await agent.close();
       }
     }

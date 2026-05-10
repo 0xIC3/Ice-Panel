@@ -2,6 +2,8 @@ import { prisma } from '../../prisma.js';
 import {
   generateCa,
   generateNodeCert,
+  generatePanelClientCert,
+  certFingerprintSha256,
   type CertBundle,
   type NodeCertOptions,
 } from './keygen.crypto.js';
@@ -25,6 +27,12 @@ export interface NodePayload {
   panelUrl?: string;
   nodeId?: string;
   heartbeatToken?: string;
+  // Slice S6 — SHA-256 fingerprint (lowercase hex, no colons) of the
+  // panel-client cert. Agents pin this and reject any TLS leaf whose
+  // SHA-256 doesn't match — even if it's CA-signed. Closes the lateral-
+  // movement window where a compromised node's leaf could be replayed
+  // against other nodes.
+  panelClientFingerprint?: string;
 }
 
 /**
@@ -44,14 +52,61 @@ export async function bootstrapCa(): Promise<CertBundle> {
   }
 
   const ca = await generateCa();
+  // First-time bootstrap: also generate the panel-client cert so the
+  // single DB row is always self-consistent. Existing rows from before
+  // S6 lazily backfill via getPanelClientCert() below.
+  const panelClient = await generatePanelClientCert(ca);
   await prisma.keygenCa.create({
     data: {
       id: SINGLETON_ID,
       certPem: ca.certPem,
       privateKeyPem: ca.privateKeyPem,
+      panelClientCertPem: panelClient.certPem,
+      panelClientKeyPem: panelClient.privateKeyPem,
     },
   });
   return ca;
+}
+
+/**
+ * Slice S6 — separate clientAuth-only leaf for panel→node mTLS handshakes.
+ * The CA private key never appears in a TLS handshake.
+ *
+ * Lazy-backfilled: rows that pre-date S6 had NULL panel_client_*; on the
+ * first call we generate the leaf (signed by the CA), persist, and return.
+ * Subsequent calls are a single SELECT.
+ */
+export async function getPanelClientCert(): Promise<CertBundle> {
+  const ca = await bootstrapCa();
+  const row = await prisma.keygenCa.findUnique({
+    where: { id: SINGLETON_ID },
+  });
+  if (row?.panelClientCertPem && row.panelClientKeyPem) {
+    return {
+      certPem: row.panelClientCertPem,
+      privateKeyPem: row.panelClientKeyPem,
+    };
+  }
+  // Backfill — only happens once per upgraded install.
+  const panelClient = await generatePanelClientCert(ca);
+  await prisma.keygenCa.update({
+    where: { id: SINGLETON_ID },
+    data: {
+      panelClientCertPem: panelClient.certPem,
+      panelClientKeyPem: panelClient.privateKeyPem,
+    },
+  });
+  return panelClient;
+}
+
+/**
+ * SHA-256 fingerprint of the panel-client cert. Each node payload bundles
+ * this string; the agent pins the leaf and rejects any other cert during
+ * mTLS handshakes — even valid CA-signed leaves from a compromised peer.
+ */
+export async function getPanelClientFingerprint(): Promise<string> {
+  const cert = await getPanelClientCert();
+  return certFingerprintSha256(cert.certPem);
 }
 
 /**

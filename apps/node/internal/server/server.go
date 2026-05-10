@@ -4,8 +4,10 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -77,14 +79,41 @@ func (s *Server) Run(ctx context.Context) error {
 		return errors.New("invalid CA pem in payload")
 	}
 
+	// Slice S6 — pin the panel-client cert by SHA-256 fingerprint. CA-trust
+	// alone is not enough: with a single CA in the trust pool, ANY
+	// CA-signed leaf passes verification, including a leaf stolen from a
+	// compromised peer node. Pinning the panel-client cert collapses the
+	// blast radius back to "panel only."
+	//
+	// Backwards compat: payloads issued before S6 don't carry a fingerprint.
+	// Those agents fall back to "verify CA chain only" — same as before. To
+	// roll the fleet to pinning, re-issue bootstrap tokens (admin clicks
+	// "Refresh bootstrap" + reinstalls with --reset).
+	expectedFingerprint := strings.ToLower(s.cfg.Payload.PanelClientFingerprint)
+	verifyPeer := func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
+		if expectedFingerprint == "" {
+			return nil // pre-S6 payload — no pinning available
+		}
+		if len(rawCerts) == 0 {
+			return errors.New("client presented no cert")
+		}
+		sum := sha256.Sum256(rawCerts[0])
+		gotFingerprint := hex.EncodeToString(sum[:])
+		if gotFingerprint != expectedFingerprint {
+			return fmt.Errorf("panel-client cert fingerprint mismatch (got %s, expected %s)", gotFingerprint, expectedFingerprint)
+		}
+		return nil
+	}
+
 	httpSrv := &http.Server{
 		Addr:    s.cfg.Host + ":" + s.cfg.Port,
 		Handler: s.routes(),
 		TLSConfig: &tls.Config{
-			Certificates: []tls.Certificate{cert},
-			ClientCAs:    caPool,
-			ClientAuth:   tls.RequireAndVerifyClientCert,
-			MinVersion:   tls.VersionTLS12,
+			Certificates:          []tls.Certificate{cert},
+			ClientCAs:             caPool,
+			ClientAuth:            tls.RequireAndVerifyClientCert,
+			MinVersion:            tls.VersionTLS12,
+			VerifyPeerCertificate: verifyPeer,
 		},
 		ReadHeaderTimeout: 10 * time.Second,
 	}

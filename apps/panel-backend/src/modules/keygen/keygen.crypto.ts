@@ -99,16 +99,15 @@ export async function generateCa(): Promise<CertBundle> {
     publicKey: keys.publicKey,
     signingKey: keys.privateKey,
     extensions: [
+      // CA-only: no leaf-cert capability bits, no digitalSignature. The
+      // panel uses a *separate* clientAuth-only cert (see generatePanelClientCert)
+      // for talking to nodes; the CA private key never appears in a TLS
+      // handshake. This prevents a compromised node — which holds the CA
+      // *cert* in clientCAs — from being able to mint or impersonate
+      // anything under it.
       new x509.BasicConstraintsExtension(true, 0, true),
-      // `digitalSignature` is included so the CA cert itself can serve as the
-      // panel's TLS client cert (slice 9 simplification — see nodes.transport).
-      // No EKU on the CA: per RFC 5280, an absent EKU means "no purpose
-      // restriction", so the CA can sign certs for both serverAuth and
-      // clientAuth and can also be presented as a leaf cert during handshake.
       new x509.KeyUsagesExtension(
-        x509.KeyUsageFlags.keyCertSign |
-          x509.KeyUsageFlags.cRLSign |
-          x509.KeyUsageFlags.digitalSignature,
+        x509.KeyUsageFlags.keyCertSign | x509.KeyUsageFlags.cRLSign,
         true,
       ),
     ],
@@ -118,6 +117,69 @@ export async function generateCa(): Promise<CertBundle> {
     certPem: cert.toString('pem'),
     privateKeyPem: await exportPrivateKeyPem(keys.privateKey),
   };
+}
+
+// ───── Panel client cert (clientAuth-only, signed by CA) ─────
+//
+// Slice S6 — used to be: panel presented the CA cert itself as its TLS
+// leaf when calling node-agents. Any compromised node leaf could then
+// also identify as the CA, talk to other nodes, and steal credentials
+// fleet-wide.
+//
+// New flow: at CA-bootstrap time we also issue a single panel-client
+// leaf with EKU=clientAuth ONLY (no serverAuth, no caCertSign). The
+// CA private key stays in the DB and never participates in a handshake.
+// The panel-client cert's SHA-256 fingerprint is shipped to every node
+// in the bootstrap payload; agents pin the leaf and reject anything
+// else, even if it's CA-signed.
+export async function generatePanelClientCert(ca: CertBundle): Promise<CertBundle> {
+  const caCert = new x509.X509Certificate(ca.certPem);
+  const caKey = await importPrivateKey(ca.privateKeyPem);
+
+  const keys = (await webcrypto.subtle.generateKey(
+    ALGORITHM,
+    true,
+    ['sign', 'verify'],
+  )) as { publicKey: Key; privateKey: Key };
+
+  const cert = await x509.X509CertificateGenerator.create({
+    serialNumber: randomSerialHex(),
+    subject: 'CN=Ice-Panel-Client',
+    issuer: caCert.subject,
+    notBefore: new Date(),
+    notAfter: new Date(Date.now() + TEN_YEARS_MS),
+    signingAlgorithm: ALGORITHM,
+    publicKey: keys.publicKey,
+    signingKey: caKey,
+    extensions: [
+      new x509.BasicConstraintsExtension(false, undefined, true),
+      // Critical: clientAuth ONLY. No serverAuth means a stolen node
+      // can't use this to impersonate the panel as a TLS server either.
+      new x509.ExtendedKeyUsageExtension([OID_CLIENT_AUTH], true),
+      new x509.KeyUsagesExtension(
+        x509.KeyUsageFlags.digitalSignature | x509.KeyUsageFlags.keyEncipherment,
+        true,
+      ),
+    ],
+  });
+
+  return {
+    certPem: cert.toString('pem'),
+    privateKeyPem: await exportPrivateKeyPem(keys.privateKey),
+  };
+}
+
+// ───── Cert fingerprint helpers ─────
+
+/**
+ * SHA-256 fingerprint over the DER-encoded cert. Lowercase hex, no colons.
+ * Matches what `openssl x509 -fingerprint -sha256 -noout -in cert.pem`
+ * produces when you strip the `:` separators and lowercase.
+ */
+export async function certFingerprintSha256(certPem: string): Promise<string> {
+  const cert = new x509.X509Certificate(certPem);
+  const digest = await webcrypto.subtle.digest('SHA-256', cert.rawData);
+  return Buffer.from(digest).toString('hex');
 }
 
 // ───── Per-node cert (signed by CA) ─────

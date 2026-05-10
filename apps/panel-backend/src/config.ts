@@ -36,13 +36,25 @@ const ConfigSchema = z.object({
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
 
   // Public-facing base URL of this panel (e.g. https://panel.example.com).
-  // Used to generate bootstrap commands and subscription links.
-  // When unset, the URL is derived from the incoming request headers.
-  PUBLIC_URL: z
-    .string()
-    .optional()
-    .transform((v) => (v === '' ? undefined : v))
-    .pipe(z.url().optional()),
+  // REQUIRED — used to generate bootstrap install commands, subscription
+  // links, AND the panelUrl baked into node payloads (slice 38 heartbeat).
+  // Letting it be optional silently broke heartbeat self-destruct because
+  // agents shipped with `panelUrl=undefined` and never polled — the
+  // mechanism that was supposed to revoke a stolen bundle just sat dead.
+  PUBLIC_URL: z.url(),
+
+  // Number of trusted reverse-proxy hops in front of the backend. Zero
+  // (default) → request.ip is the immediate socket peer; X-Forwarded-For
+  // is ignored. Production behind Caddy + Cloudflare uses 2. Don't bump
+  // this above the actual hop count or any client can spoof X-Forwarded-
+  // For and bypass per-IP rate limits.
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(8).default(0),
+
+  // Per-route rate-limit knobs, tunable per deployment. Defaults are
+  // tuned for a small panel; raise on busy multi-thousand-user instances.
+  RATE_LIMIT_SUB_PER_MIN: z.coerce.number().int().min(1).default(30),
+  RATE_LIMIT_BOOTSTRAP_PER_MIN: z.coerce.number().int().min(1).default(10),
+  RATE_LIMIT_HEARTBEAT_PER_MIN: z.coerce.number().int().min(1).default(120),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

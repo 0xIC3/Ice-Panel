@@ -13,6 +13,7 @@ import {
 } from '../settings/settings.service.js';
 import { enforceHwid } from '../hwid/hwid.service.js';
 import { prisma } from '../../prisma.js';
+import { config } from '../../config.js';
 
 const TokenParamSchema = z.object({
   token: z.string().min(8).max(128),
@@ -137,7 +138,24 @@ async function resolveFormat(
 
 export async function subscriptionRoutes(app: FastifyInstance): Promise<void> {
   // GET /sub/:token — public (the token IS the credential).
-  app.get('/sub/:token', async (request, reply) => {
+  // Tight rate-limit: keyed by (ip, token). Without this, an attacker can
+  // bandwidth-flood by re-fetching one valid token, or burn through token
+  // candidates by enumeration. Default 30/min is well above legit clients
+  // (Hiddify refreshes every 24h) and well below scan/exfil throughput.
+  app.get('/sub/:token', {
+    config: {
+      rateLimit: {
+        max: config.RATE_LIMIT_SUB_PER_MIN,
+        timeWindow: '1 minute',
+        // Per-token bucket so one client polling on the same token doesn't
+        // share rate-budget with unrelated subscriptions on shared CGNAT.
+        keyGenerator: (req) => {
+          const t = (req.params as { token?: string })?.token ?? 'unknown';
+          return `${req.ip}:${t}`;
+        },
+      },
+    },
+  }, async (request, reply) => {
     const params = TokenParamSchema.parse(request.params);
     const query = QuerySchema.parse(request.query);
     const userAgent = typeof request.headers['user-agent'] === 'string'

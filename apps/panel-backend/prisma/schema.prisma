@@ -43,6 +43,14 @@ model KeygenCa {
   id            Int      @id @default(1)
   certPem       String   @map("cert_pem")
   privateKeyPem String   @map("private_key_pem")
+  // Slice S6 — separate panel-client cert (clientAuth-only, signed by CA).
+  // Used to be: panel presented the CA itself as its TLS leaf, which
+  // collapsed any compromised node into root-equivalent on the rest of
+  // the fleet. Now the CA private key never participates in a handshake.
+  // Nullable for one release so existing rows backfill on first call;
+  // bootstrapCa() generates them lazily.
+  panelClientCertPem    String? @map("panel_client_cert_pem")
+  panelClientKeyPem     String? @map("panel_client_key_pem")
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@map("keygen_ca")
