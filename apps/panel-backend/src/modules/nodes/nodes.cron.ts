@@ -2,6 +2,7 @@ import type { HostMetricsResponse } from '@ice-panel/shared';
 import { prisma } from '../../prisma.js';
 import { redis } from '../../lib/redis.js';
 import { NodeTransport, NodeRequestError } from './nodes.transport.js';
+import { inboundSyncQueue } from '../inbounds/inbounds.queue.js';
 
 const METRICS_KEY_PREFIX = 'node:metrics:';
 const METRICS_TTL_SECONDS = 60;
@@ -55,15 +56,33 @@ export async function pollNodeStatuses(): Promise<{ ok: number; down: number }> 
       else down++;
       // Only write to DB when the status string actually changes — keeps
       // `lastStatusChange` meaningful and avoids row-write churn on every tick.
-      if (result.status !== node.status || result.message) {
+      const statusChanged = result.status !== node.status;
+      if (statusChanged || result.message) {
         await prisma.node.update({
           where: { id: node.id },
           data: {
             status: result.status,
-            lastStatusChange: result.status !== node.status ? new Date() : undefined,
+            lastStatusChange: statusChanged ? new Date() : undefined,
             lastStatusMessage: result.message,
           },
         });
+      }
+      // Re-push inbounds when a node comes back up. Without this, any
+      // applyInbounds attempts that happened while the node was offline
+      // (e.g. auto-deploy at node creation, or binding edits during a
+      // network blip) get exhausted by BullMQ retries and never resume —
+      // xray/etc would stay unconfigured even though the agent is alive.
+      // Cheap: the node-agent dedupes identical pushes on its side.
+      if (statusChanged && result.status === 'online') {
+        void inboundSyncQueue
+          .add(
+            'applyNodeInbounds',
+            { nodeId: node.id },
+            { jobId: `apply-${node.id}` },
+          )
+          .catch((err: unknown) => {
+            console.error(`[cron] re-enqueue applyInbounds for ${node.name} failed:`, err);
+          });
       }
     }),
   );
