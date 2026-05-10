@@ -38,6 +38,20 @@ import (
 type Config struct {
 	PanelURL       string
 	HeartbeatToken string
+	// AgentStartTime is a per-process identifier that lets the panel detect
+	// when this agent has restarted (and therefore lost its in-memory user
+	// map). Sent in every heartbeat as the `X-Agent-Start-Time` header. The
+	// panel side stores the last-seen value per node; when it differs from
+	// what's incoming, the panel re-issues applyInbounds + addUser fan-out
+	// without admin intervention.
+	//
+	// Slice 38 follow-up (2026-05-11) — closes the cycle-5 operational gap
+	// where agent restart silently dropped iOS auth callbacks until an
+	// admin toggled a profile in the UI.
+	//
+	// Format is free-form (the panel just byte-compares); we use unix-nano
+	// of process start which is monotonic per host and trivially unique.
+	AgentStartTime string
 	// Optional: nil means use http.DefaultClient with a 10s timeout. Tests
 	// inject a recording client. Production callers should leave nil.
 	HTTPClient *http.Client
@@ -94,7 +108,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) {
 		case <-tick.C:
 		}
 
-		status, err := pollOnce(ctx, client, url, cfg.HeartbeatToken)
+		status, err := pollOnce(ctx, client, url, cfg.HeartbeatToken, cfg.AgentStartTime)
 		switch {
 		case err != nil:
 			// Network error / timeout / parse fail — DO NOT count as gone.
@@ -133,12 +147,15 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) {
 // 401 would be too aggressive: any future panel-side bug that broke
 // HMAC verification globally would silently kill every node in the
 // fleet at once.
-func pollOnce(ctx context.Context, client *http.Client, url, token string) (string, error) {
+func pollOnce(ctx context.Context, client *http.Client, url, token, agentStartTime string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
+	if agentStartTime != "" {
+		req.Header.Set("X-Agent-Start-Time", agentStartTime)
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", err

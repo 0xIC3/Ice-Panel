@@ -2,6 +2,50 @@ import type { FastifyInstance } from 'fastify';
 import { prisma } from '../../prisma.js';
 import { verifyHeartbeatToken } from './heartbeat-token.js';
 import { config } from '../../config.js';
+import { redis } from '../../lib/redis.js';
+import { inboundSyncQueue } from '../inbounds/inbounds.queue.js';
+
+/**
+ * Slice 38 follow-up — detect agent restart and re-issue applyInbounds.
+ *
+ * The agent emits `X-Agent-Start-Time` (a per-process unix-nano string) in
+ * every heartbeat. We persist the last-seen value in Redis at
+ * `node:<id>:agentStartTime`. When the incoming value differs from the
+ * stored one, we enqueue an `applyNodeInbounds` job which re-pushes the
+ * inbound set + all active users — closing the cycle-5 gap where iOS auth
+ * callbacks 404'd after agent restart until an admin toggled a profile.
+ *
+ * First-seen (no stored value) does NOT trigger a resync: that branch fires
+ * on panel-side cold start (Redis empty) when the agent didn't actually
+ * restart, and forcing a fan-out there is just noise.
+ */
+const AGENT_START_KEY_PREFIX = 'node:';
+const AGENT_START_KEY_SUFFIX = ':agentStartTime';
+// 7 days. The key just needs to outlive heartbeat-interval (60s) by a wide
+// margin so that a brief Redis outage or panel restart doesn't lose the
+// last-seen value and false-positive on the next heartbeat. A panel that's
+// been down for >7 days is "cold start" by any reasonable definition.
+const AGENT_START_TTL_SECONDS = 7 * 24 * 60 * 60;
+
+async function trackAgentStart(nodeId: string, startTime: string): Promise<void> {
+  if (!startTime) return;
+  const key = `${AGENT_START_KEY_PREFIX}${nodeId}${AGENT_START_KEY_SUFFIX}`;
+  const previous = await redis.get(key);
+  await redis.set(key, startTime, 'EX', AGENT_START_TTL_SECONDS);
+  if (previous && previous !== startTime) {
+    // Agent restarted (in-memory user map wiped). Re-push inbounds + users.
+    // `jobId` matches what other call sites in the inbound-sync flow use so
+    // BullMQ collapses overlapping requests into one push.
+    await inboundSyncQueue.add(
+      'applyNodeInbounds',
+      { nodeId },
+      { jobId: `apply-${nodeId}-restart-${startTime}` },
+    );
+    console.log(
+      `[heartbeat] node=${nodeId} agent restart detected (prev=${previous} new=${startTime}) — enqueued applyInbounds`,
+    );
+  }
+}
 
 /**
  * Slice 38 — heartbeat self-destruct endpoint.
@@ -70,6 +114,19 @@ export async function heartbeatRoutes(app: FastifyInstance): Promise<void> {
     if (node.deletedAt) {
       return reply.code(410).send({ error: 'GONE' });
     }
+    // Slice 38 follow-up — auto-resync on agent restart. Fire-and-forget
+    // (we don't want a Redis hiccup to fail the heartbeat itself; if the
+    // restart-detect fails, the worst case is the in-memory user map stays
+    // stale until the admin toggles a profile, which was the pre-slice-38
+    // status quo).
+    const incomingStart = (request.headers['x-agent-start-time'] as string | undefined)?.trim();
+    if (incomingStart) {
+      trackAgentStart(verified.nodeId, incomingStart).catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.log(`[heartbeat] node=${verified.nodeId} trackAgentStart failed: ${msg}`);
+      });
+    }
+
     if (node.status === 'disabled') {
       return reply.send({ status: 'disabled' });
     }

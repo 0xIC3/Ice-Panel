@@ -83,11 +83,18 @@ func main() {
 	// shutdown happens via the existing stopAdapters path below. After
 	// stopAdapters we exit with code 42, which the systemd unit treats
 	// as "do not restart." Any other path falls through to a normal exit.
+	// Slice 38 follow-up — process-start identifier. Sent in every heartbeat
+	// so the panel can detect agent restart and re-issue applyInbounds +
+	// addUser fan-out. Unix-nano is per-host monotonic and unique enough;
+	// the panel side only byte-compares.
+	agentStartTime := strconv.FormatInt(time.Now().UnixNano(), 10)
+
 	selfDestruct := false
 	if os.Getenv("ICE_NODE_DISABLE_HEARTBEAT") != "1" {
 		go heartbeat.Run(ctx, heartbeat.Config{
 			PanelURL:       pld.PanelURL,
 			HeartbeatToken: pld.HeartbeatToken,
+			AgentStartTime: agentStartTime,
 			OnGone: func(reason string) {
 				logger.Warn("heartbeat triggered self-destruct — initiating shutdown", "reason", reason)
 				selfDestruct = true
