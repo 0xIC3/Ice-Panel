@@ -4,7 +4,7 @@ What's actually validated by real traffic vs what's scaffolded. **Updated after 
 
 > **Companion docs:** [ROADMAP.md](./ROADMAP.md) tracks slices; [TESTING.md](./TESTING.md) carries per-slice checklists; **this file** answers "what can I sell to a paying user today, vs what's still a science experiment".
 
-> **Last updated:** 2026-05-08 (VPS cycle #3 — VLESS+REALITY+Vision **re-validated through Profile+Binding model end-to-end** on fresh `ice-panel-test 89.169.32.239` → `ice-xray-test 89.169.34.14`). Critical assertion: slice 27 refactor did not break the only paid-user-ready path. Bearer `icp_*` auth + mTLS + DeployProfileModal UI + cron healthcheck-degraded semantics + install-panel.sh PUBLIC_URL all verified on prod. New BullMQ foot-gun found and fixed: `removeOnFail: { age: 86400 }` on `apply-${nodeId}` jobId would lock the slot for 24h after a transient failure — replaced with `removeOnFail: true`.
+> **Last updated:** 2026-05-10 (VPS cycle #5 — full Phase 3 closure + multi-protocol multi-node validated). Confirmed in prod: VLESS+REALITY (raw / xhttp / gRPC / Trojan) + Hysteria 2 with Salamander obfs. Heartbeat self-destruct, mTLS panel-client cert pinning, UFW lock-down, Hiddify import — all green. Two install-script footguns caught and patched mid-cycle: hysteria adapter spawning subprocess in parallel with systemd-managed unit (now respects `HYSTERIA_SERVICE_UNIT`); install-node.sh `--reset` not wiping `/etc/hysteria/config.yaml` (now wipes per-protocol generated configs).
 
 ## ✅ Confirmed by real traffic
 
@@ -22,12 +22,37 @@ The only one. Anything else listed below is some shade of "tested locally / loop
 ### VLESS + REALITY + xhttp (HTTP/2 chunked transport, no Vision)
 
 - **Slice:** 24c part 2
-- **Verified:** **VPS test #3 (2026-05-08)** — first real-traffic confirmation
-- **Clients confirmed:** Hiddify — real browser traffic to telegram + apple endpoints, agent log shows `accepted tcp:... [vless-in >> direct] email: <userId>`
-- **Path forward:** Vision is incompatible with non-raw transports — `flow` must be empty. Panel form lets admin pick `(none)` from Flow dropdown; agent stopped force-coercing empty→vision (was a defensive default, broke xhttp). xray uses `splithttp` listener under the hood (`listening TCP for XHTTP on 0.0.0.0:443`).
-- **Status when shipping a paying user today:** safe (alongside REALITY+Vision-raw, now the second proven path)
+- **Verified:** VPS cycle #3 (2026-05-08), **re-confirmed cycle #5 (2026-05-10)** through new recipe library
+- **Clients confirmed:** Hiddify — real browser traffic
+- **Status when shipping a paying user today:** safe
 
-This is the single protocol path you should default new commercial users to.
+### VLESS + REALITY + gRPC
+
+- **Slice:** 24c part 2
+- **Verified:** **VPS cycle #5 (2026-05-10)** via Hiddify
+- **Status:** safe
+
+### Trojan + REALITY (raw)
+
+- **Slice:** 24c part 3a
+- **Verified:** **VPS cycle #5 (2026-05-10)** via Hiddify
+- **Status:** safe (password-auth instead of UUID, anti-probe parity with VLESS)
+
+### Hysteria 2 + Salamander obfuscation
+
+- **Slice:** 11 (core), 24b2 (ApplyInbound)
+- **Verified:** **VPS cycle #5 (2026-05-10)** via Hiddify on `ice-hys2-test.icepath.tech`
+- **Setup:** ACME http-01 cert from Let's Encrypt, Salamander obfs (random pwd), Brutal CC 100/100 Mbps, masquerade `bing.com`, UDP/443
+- **Lifecycle model:** systemd-managed `hysteria.service` (install-node.sh wrote the unit). Agent's adapter respects `HYSTERIA_SERVICE_UNIT=hysteria` and only writes config + reloads via `systemctl restart` on ApplyInbound — NEVER spawns its own subprocess (would compete for :443/udp).
+- **Test-Connect caveat:** Probe is TCP-only — for UDP protocols Test-Connect always shows ⚠ "TCP timeout / UDP-based protocol — tested TCP port reachability only". This is **expected**, not a bug. Real validation = client connect.
+- **Status when shipping a paying user today:** safe
+
+### Multi-protocol multi-node fan-out
+
+- **Verified:** **VPS cycle #5 (2026-05-10)** — single user gets both vless + hy2 endpoints in their subscription, Hiddify shows two profile entries, switches cleanly between cores
+- **What it proves:** profile + binding + host model (slice 27/30) actually works under real traffic with two independent VPS hosting two different cores. End-to-end multi-node ops.
+
+The four xray transports + Hysteria are the **default safe set** for new commercial users today.
 
 ## ⚠️ Pipeline proven, real traffic NOT proven
 
@@ -35,7 +60,6 @@ Code is honest but unverified end-to-end against a real client. Don't promise to
 
 | Protocol | What's proven | Gap before sellable |
 |---|---|---|
-| **Hysteria2** | Loopback on VPS works (curl through local hy2 → example.com 200 OK ~4ms); auth callback verified; ACME cert issued | VPS-cycle #2: real client from RU mobile ISP gets `tx: 0` after handshake (DPI throttle, NOT a code bug). Need a different ISP/VPS pair OR `salamander` obfs OR port-hop config. |
 | **AmneziaWG** | Adapter registered; `applyInbounds` reaches the node; kernel module installs; `awg syncconf` smart-diff classifier landed | No real awg-client connect ever. AmneziaVPN client install + verify on next VPS cycle. |
 | **NaiveProxy** | Caddyfile render + `caddy reload` plumbing | Never run live. Need xcaddy build + real naive-client connect. |
 | **Shadowsocks 2022** | Render config (with server PSK), URI builder, adapter wired through xray-core; SS2022/legacy AEAD ciphers in schema | Never run live. Outline / Shadowrocket / sing-box connect verify pending. |

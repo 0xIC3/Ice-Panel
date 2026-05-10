@@ -1400,6 +1400,28 @@ Per-user-bucket branding (custom Profile-Title, host-overrides for VIPs, sub-pag
 | 17 | hy2 real client `tx: 0` от RU мобильного ISP к ice-naive-test:443/UDP | ISP-уровневый блок/тротлинг QUIC datagrams (Salamander obfs не помог, `disablePathMTUDiscovery` не помог) | **Не баг кода** — pipeline доказан loopback'ом, см. TESTING.md cycle #2 |
 | 18 | bootstrap-hysteria.sh не существовал | Нужен standalone installer чтобы node-agent не должен был сам ставить hysteria | `91e8b1a` |
 
+### Cycle #5 (2026-05-10) — Phase 3 closed + multi-protocol multi-node ✅
+
+Полный E2E прогон в проде после security-аудита и slice 38 (heartbeat self-destruct). Подтверждено: VLESS+REALITY (raw / xhttp / gRPC / Trojan все 4 варианта) + Hysteria 2 + Salamander на отдельной ноде, multi-node fan-out в одну подписку.
+
+| # | Bug / Finding | Root cause | Fix |
+|---|---|---|---|
+| 19 | mTLS lateral movement | CA cert использовался как панель-leaf; компрометация одной ноды → угон всех | Slice S6 — отдельный panelClient cert + SHA-256 fingerprint pinning в agent VerifyPeerCertificate |
+| 20 | trustProxy=2 hardcoded | Спуфинг X-Forwarded-For в dev / single-host | TRUST_PROXY_HOPS env, default 0 |
+| 21 | Subscription/bootstrap/heartbeat без per-route rate-limit | Token enumeration / brute-force | per-route `rateLimit` configs (30/10/120 per min), key=ip+token для /sub |
+| 22 | Login bruteforce от botnet | Per-IP лимита недостаточно | Username-lockout в Redis (5 fails → 15 min lock) |
+| 23 | install-node.sh `<YOUR_IP>` placeholder ломает bash | `<...>` это редирект | `YOUR_PANEL_PUBLIC_IP` без brackets + auto-detect через ipify |
+| 24 | docker-compose не пробрасывал S7 env | env стояли в .env.production но не доходили до контейнера | environment block в compose |
+| 25 | Prisma migration tihо упала, помечена finished_at | DO $$ pgcrypto-conditional блок свалился в транзакции | manual ALTER + UPDATE _prisma_migrations; на будущее: unconditional CREATE EXTENSION |
+| 26 | Frontend nginx stale upstream IP после backend restart | Statc upstream{} block кэширует IP навсегда | resolver 127.0.0.11 + set $backend в proxy_pass |
+| 27 | --no-cache не дефолт в deploy scripts | Recurring "stale layer" сюрпризы | --no-cache теперь default, --cache opt-out |
+| 28 | gRPC serviceName не валидируется | Mantine required ловит пустое значение, плейсхолдер не помогает | useEffect авто-проставляет 'GunService' при выборе grpc |
+| 29 | ws/httpupgrade добавлены в REALITY transport dropdown | REALITY несовместим с ws/httpupgrade — xray-core отвергает | Откатил, оставил raw/xhttp/grpc для REALITY |
+| 30 | Hysteria FATAL "address in use" | Agent адаптер спавнит subprocess параллельно systemd-юниту | Start() респектит HYSTERIA_SERVICE_UNIT, install-node.sh пишет env var |
+| 31 | --reset не чистил /etc/hysteria/config.yaml | do_uninstall удалял только agent-стуфф | Расширил do_uninstall: hysteria/xray config + systemd units |
+| 32 | install-node.sh не писал HYSTERIA_HOSTNAME/EMAIL/SERVICE_UNIT | Флаги парсились но не сохранялись | env-write block расширен |
+| 33 | UI install command не подставлял ACME flags для Hysteria/Naive | Без --hysteria-domain агент install'ится но cert не получит | renderBootstrapCommand auto-injects из node.address + ACME_DEFAULT_EMAIL env |
+
 ---
 
 ## Что я (как пользователь панели) узнаю по ходу
