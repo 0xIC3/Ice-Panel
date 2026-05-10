@@ -692,16 +692,12 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
                     { value: 'raw', label: t('profiles.form.cfg.realityNetworkRaw') },
                     { value: 'xhttp', label: 'xhttp (HTTP/2 chunked)' },
                     { value: 'grpc', label: 'gRPC' },
-                    { value: 'ws', label: 'WebSocket (Vision-incompatible)' },
-                    { value: 'httpupgrade', label: 'HTTPUpgrade (CF-friendly)' },
                   ]}
                   allowDeselect={false}
                   {...form.getInputProps('xrayNetwork')}
                 />
               </Group>
-              {(form.values.xrayNetwork === 'xhttp' ||
-                form.values.xrayNetwork === 'ws' ||
-                form.values.xrayNetwork === 'httpupgrade') && (
+              {form.values.xrayNetwork === 'xhttp' && (
                 <Group grow align="flex-start">
                   <TextInput
                     label="Path"
