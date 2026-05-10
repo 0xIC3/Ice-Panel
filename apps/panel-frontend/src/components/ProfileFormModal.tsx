@@ -43,6 +43,8 @@ interface FormValues {
   hyMasqueradeUrl: string;
   hyBrutalUp: number | '';
   hyBrutalDown: number | '';
+  hyPortHopStart: number | '';
+  hyPortHopEnd: number | '';
 
   // Xray
   xrayDest: string;
@@ -133,6 +135,8 @@ function defaults(profile: Profile | null): FormValues {
     hyMasqueradeUrl: '',
     hyBrutalUp: '',
     hyBrutalDown: '',
+    hyPortHopStart: '',
+    hyPortHopEnd: '',
 
     xrayDest: 'www.cloudflare.com:443',
     xrayServerNames: 'www.cloudflare.com',
@@ -183,6 +187,8 @@ function defaults(profile: Profile | null): FormValues {
         hyMasqueradeUrl: (cfg.masqueradeUrl as string) ?? '',
         hyBrutalUp: (cfg.brutalUpMbps as number) ?? '',
         hyBrutalDown: (cfg.brutalDownMbps as number) ?? '',
+        hyPortHopStart: (cfg.portHoppingStart as number) ?? '',
+        hyPortHopEnd: (cfg.portHoppingEnd as number) ?? '',
       };
     case 'xray':
       return {
@@ -372,6 +378,12 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
           ...(values.hyMasqueradeUrl ? { masqueradeUrl: values.hyMasqueradeUrl } : {}),
           ...(values.hyBrutalUp ? { brutalUpMbps: Number(values.hyBrutalUp) } : {}),
           ...(values.hyBrutalDown ? { brutalDownMbps: Number(values.hyBrutalDown) } : {}),
+          ...(values.hyPortHopStart && values.hyPortHopEnd
+            ? {
+                portHoppingStart: Number(values.hyPortHopStart),
+                portHoppingEnd: Number(values.hyPortHopEnd),
+              }
+            : {}),
         };
         break;
       case 'xray':
@@ -601,6 +613,24 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
               <Group grow>
                 <NumberInput label="Brutal CC up Mbps" min={1} {...form.getInputProps('hyBrutalUp')} />
                 <NumberInput label="Brutal CC down Mbps" min={1} {...form.getInputProps('hyBrutalDown')} />
+              </Group>
+              <Group grow align="flex-end">
+                <NumberInput
+                  label="Port range start"
+                  description="Slice 31.5 — UDP port-hopping for RU TSPU. Empty = single port."
+                  placeholder="20000"
+                  min={1024}
+                  max={65535}
+                  {...form.getInputProps('hyPortHopStart')}
+                />
+                <NumberInput
+                  label="Port range end"
+                  description="Must be > start. Install-node iptables range must cover this."
+                  placeholder="50000"
+                  min={1024}
+                  max={65535}
+                  {...form.getInputProps('hyPortHopEnd')}
+                />
               </Group>
             </Stack>
           )}

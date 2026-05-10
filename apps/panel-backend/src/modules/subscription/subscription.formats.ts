@@ -97,6 +97,12 @@ export interface HysteriaSubscriptionEndpoint extends SubscriptionEndpointBase {
    *  HysteriaUriOpts.upMbps for the gory detail. */
   upMbps?: number;
   downMbps?: number;
+  /** Port-hopping range (slice 31.5). When set, URI emits `mport=`, sing-box
+   *  emits `server_ports`, and Clash Meta emits `ports`. The server-side
+   *  iptables redirect (configured at install-node time) must cover at
+   *  least this range for the rotating ports to actually reach hysteria. */
+  portHoppingStart?: number;
+  portHoppingEnd?: number;
 }
 
 export interface XraySubscriptionEndpoint extends SubscriptionEndpointBase {

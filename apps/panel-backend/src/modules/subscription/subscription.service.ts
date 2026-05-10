@@ -221,7 +221,15 @@ export async function generateSubscription(
     };
 
     if (ib.protocol === 'hysteria') {
-      const hyCfg = ib.config as { obfsPassword?: string } | null;
+      const hyCfg = ib.config as
+        | {
+            obfsPassword?: string;
+            brutalUpMbps?: number;
+            brutalDownMbps?: number;
+            portHoppingStart?: number;
+            portHoppingEnd?: number;
+          }
+        | null;
       endpoints.push({
         protocol: 'hysteria',
         nodeName,
@@ -230,12 +238,20 @@ export async function generateSubscription(
         ...hostMeta,
         password: user.hysteriaPassword,
         obfsPassword: hyCfg?.obfsPassword,
+        upMbps: hyCfg?.brutalUpMbps,
+        downMbps: hyCfg?.brutalDownMbps,
+        portHoppingStart: hyCfg?.portHoppingStart,
+        portHoppingEnd: hyCfg?.portHoppingEnd,
         uri: buildHysteriaUri({
           password: user.hysteriaPassword,
           host,
           port,
           name: nodeName,
           obfsPassword: hyCfg?.obfsPassword,
+          upMbps: hyCfg?.brutalUpMbps,
+          downMbps: hyCfg?.brutalDownMbps,
+          portHoppingStart: hyCfg?.portHoppingStart,
+          portHoppingEnd: hyCfg?.portHoppingEnd,
         }),
       });
     } else if (ib.protocol === 'xray' && user.xrayUuid) {

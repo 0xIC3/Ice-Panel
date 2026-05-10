@@ -28,6 +28,13 @@ export interface HysteriaUriOpts {
    *  override per binding when the node is on a faster/slower link. */
   upMbps?: number;
   downMbps?: number;
+  /** Port-hopping range (slice 31.5). When set, emits `mport=START-END` so
+   *  clients rotate destination UDP port within the range. Server-side
+   *  must have iptables UDP REDIRECT in place over the same range pointing
+   *  at the actual listen port — install-node.sh handles that. Defeats
+   *  fixed-port UDP throttle on RU TSPU / IR / CN ISPs. */
+  portHoppingStart?: number;
+  portHoppingEnd?: number;
 }
 
 export function buildHysteriaUri(opts: HysteriaUriOpts): string {
@@ -45,5 +52,14 @@ export function buildHysteriaUri(opts: HysteriaUriOpts): string {
   // 50/100 if caller didn't specify so we never emit a 0-window URI.
   params.set('upmbps', String(opts.upMbps ?? 50));
   params.set('downmbps', String(opts.downMbps ?? 100));
+  // Slice 31.5 — port-hopping. `mport` is the parameter Hiddify / sing-box /
+  // NekoBox honour (mihomo accepts the same form via a `ports:` field
+  // emitted separately by the Clash formatter). Wire form is `START-END`.
+  if (
+    typeof opts.portHoppingStart === 'number' &&
+    typeof opts.portHoppingEnd === 'number'
+  ) {
+    params.set('mport', `${opts.portHoppingStart}-${opts.portHoppingEnd}`);
+  }
   return `hysteria2://${encodeURIComponent(opts.password)}@${opts.host}:${opts.port}/?${params.toString()}#${encodeURIComponent(opts.name)}`;
 }

@@ -49,6 +49,16 @@ export function buildClashYaml(endpoints: SubscriptionEndpoint[]): string {
           `    obfs-password: ${yamlString(e.obfsPassword)}`,
         );
       }
+      // Slice 31.5 — Clash Meta (mihomo) port-hopping. The `ports` key
+      // accepts a `START-END` (hyphen) or comma-list form; we emit the
+      // hyphen form to match the URI's `mport`. Server-side iptables
+      // REDIRECT range must cover this.
+      if (
+        typeof e.portHoppingStart === 'number' &&
+        typeof e.portHoppingEnd === 'number'
+      ) {
+        lines.push(`    ports: ${e.portHoppingStart}-${e.portHoppingEnd}`);
+      }
       proxies.push(lines.join('\n'));
     } else if (e.protocol === 'xray') {
       proxyNames.push(name);

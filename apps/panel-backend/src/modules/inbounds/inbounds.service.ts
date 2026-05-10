@@ -56,6 +56,36 @@ export class ProtocolMismatchError extends Error {
   }
 }
 
+export class InvalidPortHoppingRangeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidPortHoppingRangeError';
+  }
+}
+
+/**
+ * Slice 31.5 — cross-field validation for Hysteria port-hopping. Kept out of
+ * the Zod schema so HysteriaConfigSchema stays a plain ZodObject (required
+ * for the discriminated union). Throws with a user-friendly message when
+ * one bound is set without the other, or when end <= start.
+ */
+function validateHysteriaPortHopping(cfg: Record<string, unknown>): void {
+  const start = cfg.portHoppingStart as number | undefined;
+  const end = cfg.portHoppingEnd as number | undefined;
+  const sSet = typeof start === 'number';
+  const eSet = typeof end === 'number';
+  if (sSet !== eSet) {
+    throw new InvalidPortHoppingRangeError(
+      'portHoppingStart and portHoppingEnd must both be set or both empty',
+    );
+  }
+  if (sSet && eSet && end <= start) {
+    throw new InvalidPortHoppingRangeError(
+      'portHoppingEnd must be greater than portHoppingStart',
+    );
+  }
+}
+
 export async function createInbound(input: CreateInboundInput): Promise<Inbound> {
   const node = await prisma.node.findFirst({
     where: { id: input.nodeId, deletedAt: null },
@@ -67,6 +97,9 @@ export async function createInbound(input: CreateInboundInput): Promise<Inbound>
   // didn't supply one. xray-core requires it for multi-user mode; nothing
   // useful comes from making the admin paste random bytes.
   let configToStore = input.config as Record<string, unknown>;
+  if (input.protocol === 'hysteria') {
+    validateHysteriaPortHopping(configToStore);
+  }
   if (input.protocol === 'shadowsocks') {
     const ssCfg = configToStore as { method: string; serverPsk?: string };
     if (!ssCfg.serverPsk) {
@@ -149,6 +182,9 @@ export async function updateInbound(
       throw new z.ZodError(parsed.error.issues);
     }
     validatedConfig = parsed.data;
+    if (existing.protocol === 'hysteria') {
+      validateHysteriaPortHopping(validatedConfig as Record<string, unknown>);
+    }
   }
 
   let updated: Inbound;

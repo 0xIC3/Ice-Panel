@@ -19,6 +19,22 @@ export const HysteriaConfigSchema = z.object({
   brutalUpMbps: z.number().int().positive().max(10000).optional(),
   /** Brutal CC down bandwidth in Mbps. */
   brutalDownMbps: z.number().int().positive().max(10000).optional(),
+  /**
+   * Port-hopping range (slice 31.5). When set, clients rotate destination
+   * UDP port within `[start, end]` on each connection. Defeats RU TSPU /
+   * IR / CN UDP/443 throttle that targets a single fixed port. Server still
+   * listens on a single port (typically :443/udp); install-node.sh sets up
+   * iptables to REDIRECT the configured range → listen port. The range in
+   * the profile MUST be a subset of the range install-node.sh applied —
+   * otherwise the redirect won't catch the rotating ports.
+   *
+   * Both fields must be set together (or both empty) and `end > start`.
+   * Cross-field validation lives in `inbounds.service.ts` rather than as
+   * a schema-level `.refine()` so this stays a plain `ZodObject` and can
+   * participate in the InboundConfigByProtocol discriminated union.
+   */
+  portHoppingStart: z.number().int().min(1024).max(65535).optional(),
+  portHoppingEnd: z.number().int().min(1024).max(65535).optional(),
 });
 
 export const XrayConfigSchema = z.object({

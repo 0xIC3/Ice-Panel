@@ -45,6 +45,8 @@
 #     --hysteria-email admin@example.com
 #   # Optional: --hysteria-masquerade-url https://en.wikipedia.org/
 #   #           --hysteria-obfs-password <salamander-pwd>
+#   #           --hysteria-port-range 20000-50000   (slice 31.5 port-hopping;
+#   #             defeats RU TSPU UDP/443 throttle. Pass "" to disable.)
 #
 # Xray — pre-fill REALITY env so adapter starts immediately. Get keypair
 # from the inbound creation form (panel UI → Inbounds → Create → Generate):
@@ -129,6 +131,15 @@ HY_DOMAIN=""
 HY_EMAIL=""
 HY_MASQUERADE_URL="https://www.bing.com/"
 HY_OBFS_PASSWORD=""
+# Slice 31.5 — port-hopping. iptables NAT-REDIRECT for a UDP port range so
+# clients can rotate destination ports per connection (mport=START-END in
+# the URI). Defeats RU TSPU / IR / CN fixed-port UDP/443 throttle. The
+# default range is wide enough to give clients lots of room without
+# colliding with common service ports. Admin can narrow / widen via flag.
+# The range here must be a SUPERSET of any per-profile range emitted in
+# the panel — otherwise the panel-emitted ports rotate outside the
+# iptables redirect and never reach hysteria.
+HY_PORT_RANGE="20000-50000"
 
 # Xray REALITY inbound params (only used with --protocol xray). When all the
 # required ones are passed, they're written into /etc/ice-panel-node/env so
@@ -173,6 +184,14 @@ do_uninstall() {
   rm -rf /etc/systemd/system/hysteria.service.d
   rm -f /etc/hysteria/config.yaml
   rm -f /etc/xray/config.json
+
+  # Slice 31.5 — port-hopping cleanup. Stopping the systemd unit fires
+  # its ExecStop= which calls `ice-panel-hyhop down` to remove the
+  # iptables rule. After that we can safely remove the script + unit.
+  systemctl stop ice-panel-hyhop 2>/dev/null || true
+  systemctl disable ice-panel-hyhop 2>/dev/null || true
+  rm -f /etc/systemd/system/ice-panel-hyhop.service
+  rm -f /usr/local/bin/ice-panel-hyhop
   systemctl daemon-reload || true
 
   log "Removing binary"
@@ -215,6 +234,10 @@ while [[ $# -gt 0 ]]; do
     --hysteria-email)          HY_EMAIL="$2"; shift 2 ;;
     --hysteria-masquerade-url) HY_MASQUERADE_URL="$2"; shift 2 ;;
     --hysteria-obfs-password)  HY_OBFS_PASSWORD="$2"; shift 2 ;;
+    # Slice 31.5 — port-hopping iptables redirect range. Accepts
+    # `START-END` (hyphen). Pass empty string to disable port-hopping
+    # on this node (then iptables stays untouched).
+    --hysteria-port-range)     HY_PORT_RANGE="$2"; shift 2 ;;
     # Xray REALITY — pre-fill env so the adapter starts immediately
     --xray-reality-private-key)  XR_PRIVATE_KEY="$2"; shift 2 ;;
     --xray-reality-public-key)   XR_PUBLIC_KEY="$2"; shift 2 ;;
@@ -857,6 +880,84 @@ EOF
   systemctl enable hysteria.service >/dev/null 2>&1 || true
   systemctl restart hysteria.service
   log "Hysteria 2 started — first run will obtain the LE certificate via HTTP-01"
+
+  # ───── Slice 31.5 — Hysteria port-hopping (iptables REDIRECT) ─────
+  # We install a tiny up/down helper + systemd unit that owns a single
+  # NAT-PREROUTING rule redirecting `udp --dport START:END → :443`. The
+  # unit is `Type=oneshot RemainAfterExit=yes` with ExecStart=up and
+  # ExecStop=down so `systemctl stop` cleanly tears the rule down. The
+  # rule is also restored on every boot (WantedBy=multi-user.target).
+  #
+  # We only install when:
+  #   1. PROTOCOL=hysteria   (port-hopping is hysteria-specific)
+  #   2. HY_PORT_RANGE is non-empty (admin can pass "" to opt out)
+  #   3. iptables is present on the system
+  if [[ -n "$HY_PORT_RANGE" ]] && command -v iptables >/dev/null 2>&1; then
+    # iptables takes the range as `START:END` (colon). The flag we accept
+    # is `START-END` (hyphen) so it matches the URI form admins see.
+    HY_RANGE_IPT="${HY_PORT_RANGE/-/:}"
+    HY_LISTEN_PORT=443
+    HYHOP_BIN=/usr/local/bin/ice-panel-hyhop
+    HYHOP_UNIT=/etc/systemd/system/ice-panel-hyhop.service
+
+    log "Installing port-hopping iptables redirect: udp ${HY_PORT_RANGE} → ${HY_LISTEN_PORT}"
+
+    cat > "$HYHOP_BIN" <<EOF
+#!/usr/bin/env bash
+# Ice-Panel Hysteria 2 port-hopping helper. Managed by systemd unit
+# ice-panel-hyhop.service — do not edit by hand. To change the range,
+# re-run install-node.sh with --hysteria-port-range START-END.
+set -euo pipefail
+RANGE_IPT='${HY_RANGE_IPT}'
+LISTEN_PORT=${HY_LISTEN_PORT}
+case "\${1:-}" in
+  up)
+    iptables -t nat -C PREROUTING -p udp --dport "\$RANGE_IPT" -j REDIRECT --to-ports "\$LISTEN_PORT" 2>/dev/null \\
+      || iptables -t nat -A PREROUTING -p udp --dport "\$RANGE_IPT" -j REDIRECT --to-ports "\$LISTEN_PORT"
+    if command -v ip6tables >/dev/null 2>&1; then
+      ip6tables -t nat -C PREROUTING -p udp --dport "\$RANGE_IPT" -j REDIRECT --to-ports "\$LISTEN_PORT" 2>/dev/null \\
+        || ip6tables -t nat -A PREROUTING -p udp --dport "\$RANGE_IPT" -j REDIRECT --to-ports "\$LISTEN_PORT" \\
+        || true
+    fi
+    ;;
+  down)
+    iptables -t nat -D PREROUTING -p udp --dport "\$RANGE_IPT" -j REDIRECT --to-ports "\$LISTEN_PORT" 2>/dev/null || true
+    if command -v ip6tables >/dev/null 2>&1; then
+      ip6tables -t nat -D PREROUTING -p udp --dport "\$RANGE_IPT" -j REDIRECT --to-ports "\$LISTEN_PORT" 2>/dev/null || true
+    fi
+    ;;
+  *)
+    echo "usage: \$0 up|down" >&2
+    exit 64
+    ;;
+esac
+EOF
+    chmod 755 "$HYHOP_BIN"
+
+    cat > "$HYHOP_UNIT" <<EOF
+[Unit]
+Description=Ice-Panel Hysteria 2 port-hopping (UDP ${HY_PORT_RANGE} → :${HY_LISTEN_PORT})
+After=network-online.target hysteria.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=${HYHOP_BIN} up
+ExecStop=${HYHOP_BIN} down
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable ice-panel-hyhop.service >/dev/null 2>&1 || true
+    systemctl restart ice-panel-hyhop.service
+    log "Port-hopping active. Profile-side range MUST be a subset of ${HY_PORT_RANGE}."
+  else
+    [[ -z "$HY_PORT_RANGE" ]] && log "Port-hopping disabled by --hysteria-port-range ''"
+    command -v iptables >/dev/null 2>&1 || warn "iptables not installed — skipping port-hopping setup"
+  fi
 elif [[ "$PROTOCOL" == "hysteria" ]]; then
   warn "Hysteria server NOT auto-configured — pass --hysteria-domain <fqdn> --hysteria-email <addr> next time"
   warn "Or manually write /etc/hysteria/config.yaml + systemd unit as documented in docs/deploy/install.md"

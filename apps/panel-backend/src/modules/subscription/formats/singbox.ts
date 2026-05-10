@@ -38,11 +38,23 @@ export function buildSingboxJson(endpoints: SubscriptionEndpoint[]): string {
       // without it the parser fails with "TLS required" (caught in Hiddify
       // 4.1.1 on 2026-05-06). Hysteria2 always uses TLS by design, so this
       // is purely a parser-satisfaction quirk.
+      // Slice 31.5 — sing-box accepts `server_ports: ["START:END"]` (colon
+      // separator, NOT hyphen — Hiddify URI uses hyphen, sing-box JSON uses
+      // colon). When the field is present, sing-box's hysteria2 outbound
+      // picks a random port from the range for each connection and rotates
+      // it. The `server_port` field is still required as a fallback / initial
+      // connect target.
+      const portHopRange =
+        typeof e.portHoppingStart === 'number' &&
+        typeof e.portHoppingEnd === 'number'
+          ? [`${e.portHoppingStart}:${e.portHoppingEnd}`]
+          : undefined;
       outbounds.push({
         type: 'hysteria2',
         tag,
         server: e.host,
         server_port: e.port,
+        ...(portHopRange ? { server_ports: portHopRange } : {}),
         password: e.password,
         // Brutal CC bandwidth declaration. Without these the client
         // negotiates a 0-byte send window — handshake succeeds but every
