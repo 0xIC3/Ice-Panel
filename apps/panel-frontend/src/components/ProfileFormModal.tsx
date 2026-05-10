@@ -282,6 +282,19 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opened, profile?.id]);
 
+  // Auto-fill the gRPC serviceName placeholder when the admin switches
+  // transport=grpc — the field is `required`, so without a default the
+  // form refuses to save with a misleading "fill this field" prompt
+  // even though we've shown a placeholder hinting at the canonical
+  // value. `GunService` is the xtls/xray default; admins who want a
+  // less-fingerprintable name can edit it.
+  useEffect(() => {
+    if (form.values.xrayNetwork === 'grpc' && !form.values.xrayServiceName) {
+      form.setFieldValue('xrayServiceName', 'GunService');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.values.xrayNetwork]);
+
   const keypairMutation = useMutation({
     mutationFn: (protocol: 'xray' | 'amneziawg') => generateInboundKeypair(protocol),
     onError: (err) =>
