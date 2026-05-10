@@ -117,7 +117,18 @@ export class NodeTransport {
   ) {}
 
   private buildUrl(path: string): string {
-    return `https://${this.node.address}${path}`;
+    // node.address is admin-supplied — accept either `host` or `host:port`.
+    // When the port is missing we default to the mTLS port the agent
+    // listens on (8443, hard-coded in install-node.sh). Without this,
+    // a fresh-out-of-the-box DNS name like `node1.example.com` would hit
+    // 443 (since browsers default that for `https://`), which is either
+    // closed (UFW only allows 8443) or a different service entirely
+    // (Caddy on the panel host can be on the same domain). Result: cron
+    // healthcheck "unreachable" with no clue why.
+    const host = this.node.address.includes(':')
+      ? this.node.address
+      : `${this.node.address}:8443`;
+    return `https://${host}${path}`;
   }
 
   private async request<TRes>(
