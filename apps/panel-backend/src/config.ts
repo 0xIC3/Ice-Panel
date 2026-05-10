@@ -55,6 +55,21 @@ const ConfigSchema = z.object({
   RATE_LIMIT_SUB_PER_MIN: z.coerce.number().int().min(1).default(30),
   RATE_LIMIT_BOOTSTRAP_PER_MIN: z.coerce.number().int().min(1).default(10),
   RATE_LIMIT_HEARTBEAT_PER_MIN: z.coerce.number().int().min(1).default(120),
+
+  // Slice S7 — public IP of the panel, baked into the node-install
+  // command as `--panel-ip`. Causes the agent's UFW to allow :8443/tcp
+  // ONLY from this IP. CRITICAL: must be the panel's *origin* IP, not
+  // a Cloudflare edge IP. Optional — without it the install command
+  // shows a `--panel-ip <YOUR_IP>` placeholder and admin fills manually.
+  PANEL_PUBLIC_IP: z.string().ip().optional(),
+
+  // Slice S7 — login bruteforce defence. After this many failed logins
+  // for the same username (case-insensitive) within the window, lock the
+  // account for LOCKOUT_DURATION_MIN minutes regardless of source IP.
+  // Per-IP rate limit is separate (faster, lower threshold).
+  LOGIN_LOCKOUT_FAILURES: z.coerce.number().int().min(1).default(5),
+  LOGIN_LOCKOUT_DURATION_MIN: z.coerce.number().int().min(1).default(15),
+  LOGIN_LOCKOUT_WINDOW_MIN: z.coerce.number().int().min(1).default(15),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

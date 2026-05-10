@@ -30,6 +30,27 @@ function publicUrlFromRequest(request: FastifyRequest): string {
 const BootstrapTokenParam = z.object({ token: z.string().regex(/^bs_[A-Za-z0-9_-]+$/).max(64) });
 const auth = { onRequest: [requireAuth] };
 
+// Mirror of nodes.service.ts:renderBootstrapCommand — kept here because the
+// /api/nodes/:id/bootstrap endpoint generates the command without going
+// through the service path. Should produce byte-identical output.
+function renderRefreshBootstrapCommand(panelUrl: string, token: string, protocol: string): string {
+  const panelIp = (process.env.PANEL_PUBLIC_IP ?? '').trim();
+  const lines = [
+    'bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \\',
+    `  --panel-url ${panelUrl} \\`,
+    `  --bootstrap ${token} \\`,
+    `  --protocol ${protocol}`,
+  ];
+  if (panelIp) {
+    lines[lines.length - 1] += ' \\';
+    lines.push(`  --panel-ip ${panelIp}`);
+  } else {
+    lines[lines.length - 1] += ' \\';
+    lines.push('  --panel-ip <YOUR_PANEL_PUBLIC_IP>  # set PANEL_PUBLIC_IP env to inject this automatically');
+  }
+  return lines.join('\n');
+}
+
 export async function nodesRoutes(app: FastifyInstance): Promise<void> {
   // Public bootstrap-redeem route — the token IS the credential (single-use,
   // 15-min TTL). Per-route auth opt-in pattern matches auth.routes.ts and
@@ -94,12 +115,11 @@ export async function nodesRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(201).send({
         token: tokenInfo.token,
         expiresAt: tokenInfo.expiresAt.toISOString(),
-        command: [
-          'bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \\',
-          `  --panel-url ${publicUrlFromRequest(request)} \\`,
-          `  --bootstrap ${tokenInfo.token} \\`,
-          `  --protocol ${node.protocol}`,
-        ].join('\n'),
+        command: renderRefreshBootstrapCommand(
+          publicUrlFromRequest(request),
+          tokenInfo.token,
+          node.protocol,
+        ),
       });
     } catch (err) {
       if (err instanceof nodesService.NodeNotFoundError) {

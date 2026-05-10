@@ -113,12 +113,25 @@ export async function createNode(
 }
 
 function renderBootstrapCommand(panelUrl: string, token: string, protocol: string): string {
-  return [
+  // Slice S7 — embed --panel-ip if PANEL_PUBLIC_IP is configured so the
+  // agent's UFW locks :8443/tcp to the panel's origin. When unset we
+  // emit a literal placeholder; the admin must fill it in by hand or
+  // accept world-open mTLS port (with a loud warn from install-node.sh).
+  const panelIp = (process.env.PANEL_PUBLIC_IP ?? '').trim();
+  const lines = [
     'bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) \\',
     `  --panel-url ${panelUrl} \\`,
     `  --bootstrap ${token} \\`,
     `  --protocol ${protocol}`,
-  ].join('\n');
+  ];
+  if (panelIp) {
+    lines[lines.length - 1] += ' \\';
+    lines.push(`  --panel-ip ${panelIp}`);
+  } else {
+    lines[lines.length - 1] += ' \\';
+    lines.push('  --panel-ip <YOUR_PANEL_PUBLIC_IP>  # set PANEL_PUBLIC_IP env to inject this automatically');
+  }
+  return lines.join('\n');
 }
 
 function isUniqueViolation(err: unknown): boolean {

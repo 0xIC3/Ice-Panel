@@ -115,6 +115,11 @@ PANEL_URL=""
 BOOTSTRAP_TOKEN=""
 RESET=0
 UNINSTALL=0
+# Slice S7 — UFW lock-down. When set, only this IP/CIDR (or comma-list)
+# is allowed to reach :NODE_PORT. Without it the mTLS port is open to the
+# whole internet — mTLS rejects everyone, but bots still spend our CPU on
+# TLS handshakes and our agent leaks "I'm Ice-Panel" via the cert SAN.
+PANEL_IP=""
 
 # Hysteria 2 server config (only used with --protocol hysteria). When DOMAIN
 # is given, the script writes /etc/hysteria/config.yaml + a hysteria systemd
@@ -212,6 +217,7 @@ while [[ $# -gt 0 ]]; do
     # "overwrite? [y/N]" prompt; non-interactive runs (no tty) abort.
     --reset)         RESET=1; shift ;;
     --uninstall)     UNINSTALL=1; shift ;;
+    --panel-ip)      PANEL_IP="$2"; shift 2 ;;
     -h|--help)
       grep '^#' "$0" | sed 's/^# \?//'
       exit 0
@@ -611,7 +617,26 @@ fi
 if [[ "${SKIP_FIREWALL:-0}" != "1" ]]; then
   log "Configuring firewall (ufw): SSH + panel-mTLS:$NODE_PORT + protocol-specific"
   ufw allow 22/tcp                       >/dev/null 2>&1 || true
-  ufw allow "${NODE_PORT}/tcp"           >/dev/null 2>&1 || true
+  # Slice S7 — restrict mTLS port to the panel's IP if --panel-ip given,
+  # otherwise (--panel-ip not set) fall back to world-open with a loud warn.
+  # Resolving --panel-url's host into a candidate IP would help, but DNS
+  # changes (CF rotations, panel migrations) would silently break the
+  # control plane — we'd rather make the operator type it explicitly.
+  if [[ -n "$PANEL_IP" ]]; then
+    log "Restricting :${NODE_PORT}/tcp to PANEL_IP=$PANEL_IP (use comma-list for multiple)"
+    IFS=',' read -ra _PANEL_IPS <<< "$PANEL_IP"
+    for ip in "${_PANEL_IPS[@]}"; do
+      ufw allow from "${ip// /}" to any port "$NODE_PORT" proto tcp >/dev/null 2>&1 || true
+    done
+    unset _PANEL_IPS
+  else
+    warn "no --panel-ip given — mTLS port :${NODE_PORT}/tcp opened to the WORLD."
+    warn "mTLS still rejects unknown clients, but you waste CPU on bot handshakes"
+    warn "and leak 'this is Ice-Panel' via the server cert SAN. Pass --panel-ip <ip>"
+    warn "next time (panel public IP) to lock it down. You can also fix it now:"
+    warn "  ufw delete allow ${NODE_PORT}/tcp; ufw allow from <panel-ip> to any port ${NODE_PORT} proto tcp"
+    ufw allow "${NODE_PORT}/tcp"           >/dev/null 2>&1 || true
+  fi
   case "$PROTOCOL" in
     hysteria)
       ufw allow 443/udp                  >/dev/null 2>&1 || true

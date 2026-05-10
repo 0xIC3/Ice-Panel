@@ -58,6 +58,18 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
           token,
         });
       } catch (err) {
+        if (err instanceof authService.AccountLockedError) {
+          // 429 + Retry-After is the canonical lockout response. Body
+          // discloses retryAfter so a friendly UI can countdown, but the
+          // 401 vs 429 distinction also tells legit users they aren't
+          // typing the wrong password — they're racing a stale lockout.
+          reply.header('Retry-After', err.retryAfterSeconds.toString());
+          return reply.code(429).send({
+            error: 'ACCOUNT_LOCKED',
+            message: err.message,
+            retryAfterSeconds: err.retryAfterSeconds,
+          });
+        }
         if (err instanceof authService.InvalidCredentialsError) {
           return reply.code(401).send({
             error: 'INVALID_CREDENTIALS',
