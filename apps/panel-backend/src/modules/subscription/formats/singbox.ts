@@ -26,7 +26,24 @@ import type { SubscriptionEndpoint } from '../subscription.formats.js';
  * No `inbounds`, no `dns`, no `experimental` — the client app fills them in.
  * That keeps the body short and avoids drift across sing-box versions.
  */
-export function buildSingboxJson(endpoints: SubscriptionEndpoint[]): string {
+/**
+ * Slice 29 — when `bundle === 'url-test'`, the formatter wraps proxy tags in
+ * a `url-test` group named `Auto-URLTest` that probes each outbound every
+ * `urltestIntervalSec` seconds and routes through the lowest-latency one.
+ * Otherwise (default), we emit the legacy `selector` group that lets the
+ * client UI pick manually. Both forms still emit a `direct` outbound and a
+ * `route.final` pointer at the chosen group.
+ */
+export interface SingboxBuildOpts {
+  bundle?: 'selector' | 'url-test';
+  urltestIntervalSec?: number;
+  urltestProbeUrl?: string;
+}
+
+export function buildSingboxJson(
+  endpoints: SubscriptionEndpoint[],
+  opts: SingboxBuildOpts = {},
+): string {
   const outbounds: Record<string, unknown>[] = [];
   const proxyTags: string[] = [];
 
@@ -151,13 +168,31 @@ export function buildSingboxJson(endpoints: SubscriptionEndpoint[]): string {
     }
   }
 
+  // Slice 29 — `url-test` group (auto-failover by latency). Default still
+  // emits the legacy `selector` so manual-pick UIs (Hiddify "Connect to:")
+  // keep working; admins flip to url-test via `?bundle=url-test`.
+  const bundle = opts.bundle ?? 'selector';
+  let primaryTag = 'direct';
   if (proxyTags.length > 0) {
-    outbounds.push({
-      type: 'selector',
-      tag: 'Auto',
-      outbounds: [...proxyTags, 'direct'],
-      default: proxyTags[0],
-    });
+    if (bundle === 'url-test') {
+      outbounds.push({
+        type: 'urltest',
+        tag: 'Auto-URLTest',
+        outbounds: proxyTags,
+        url: opts.urltestProbeUrl ?? 'https://www.gstatic.com/generate_204',
+        interval: `${opts.urltestIntervalSec ?? 300}s`,
+        tolerance: 50,
+      });
+      primaryTag = 'Auto-URLTest';
+    } else {
+      outbounds.push({
+        type: 'selector',
+        tag: 'Auto',
+        outbounds: [...proxyTags, 'direct'],
+        default: proxyTags[0],
+      });
+      primaryTag = 'Auto';
+    }
   }
   outbounds.push({ type: 'direct', tag: 'direct' });
 
@@ -165,7 +200,7 @@ export function buildSingboxJson(endpoints: SubscriptionEndpoint[]): string {
     log: { level: 'info', timestamp: true },
     outbounds,
     route: {
-      final: proxyTags.length > 0 ? 'Auto' : 'direct',
+      final: primaryTag,
       auto_detect_interface: true,
     },
   };

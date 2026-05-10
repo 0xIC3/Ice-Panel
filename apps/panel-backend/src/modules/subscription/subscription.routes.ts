@@ -25,6 +25,11 @@ type Format = z.infer<typeof FormatEnum>;
 
 const QuerySchema = z.object({
   format: FormatEnum.optional(),
+  // Slice 29 — sing-box outbound group flavour. `selector` (default) emits a
+  // manual-pick group; `url-test` emits an auto-failover group that probes
+  // each outbound every interval. Clash already emits `url-test` by default
+  // so this query param only affects the sing-box formatter.
+  bundle: z.enum(['selector', 'url-test']).optional(),
 });
 
 const FORMAT_VALUES: ReadonlySet<Format> = new Set(FormatEnum.options);
@@ -249,7 +254,7 @@ export async function subscriptionRoutes(app: FastifyInstance): Promise<void> {
         case 'singbox':
           return reply
             .type('application/json')
-            .send(buildSingboxJson(filtered));
+            .send(buildSingboxJson(filtered, { bundle: query.bundle }));
         case 'wgconf':
           return reply
             .type('text/plain; charset=utf-8')
