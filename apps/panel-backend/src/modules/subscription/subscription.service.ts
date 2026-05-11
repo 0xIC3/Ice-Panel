@@ -1,4 +1,9 @@
 import { prisma } from '../../prisma.js';
+import {
+  lookupClientCountry,
+  rankNodesForUser,
+  type NodeForRanking,
+} from './node-selection.js';
 // Slice 27 follow-up: enabledProtocols is no longer consulted — squad ACL is
 // the single source of truth for which protocols a user sees. The column is
 // kept on the User row for backwards-compat but never filters subscription
@@ -41,6 +46,15 @@ export class SubscriptionForbiddenError extends Error {
 export interface RequestContext {
   ip?: string | null;
   userAgent?: string | null;
+  /** Slice 28 — when set, limit subscription to top-N nodes ranked by
+   *  region match (against `cfCountry`) and current utilization. <1 means
+   *  "no filter" (default behaviour: return every eligible endpoint). */
+  topN?: number;
+  /** `CF-IPCountry` header value, passed through from the route handler.
+   *  Used by `lookupClientCountry` for the geo-aware ranker. Empty / `XX`
+   *  is treated as "country unknown" and the ranker falls back to
+   *  utilization-only ordering. */
+  cfCountry?: string;
 }
 
 export interface SubscriptionResult {
@@ -151,7 +165,18 @@ export async function generateSubscription(
     },
     include: {
       profile: { select: { id: true, protocol: true, config: true } },
-      node: { select: { name: true, address: true, createdAt: true } },
+      node: {
+        select: {
+          id: true,
+          name: true,
+          address: true,
+          createdAt: true,
+          // Slice 28 — region.code drives the "same-region bonus" in the
+          // smart-selection ranker. Null when admin hasn't tagged a region;
+          // ranker still works (utilization-only score for that node).
+          region: { select: { code: true } },
+        },
+      },
       // Slice 30 — one binding fans out into N enabled hosts. Order them
       // by `priority` so subscription URL ordering is admin-controlled.
       hosts: {
@@ -166,6 +191,34 @@ export async function generateSubscription(
     const t = a.node.createdAt.getTime() - b.node.createdAt.getTime();
     return t !== 0 ? t : a.port - b.port;
   });
+
+  // Slice 28 — smart node selection. When the route passed topN+cfCountry,
+  // we rank distinct nodes by region match + utilization, take the top-N,
+  // and filter bindings down to those. Falls through cleanly when topN<1
+  // or cfCountry empty: ranker just orders by utilization, and the topN
+  // slice is a no-op when N >= node count.
+  if (typeof ctx.topN === 'number' && ctx.topN > 0 && bindings.length > 0 && ctx.ip) {
+    const country = await lookupClientCountry(ctx.ip, { cfCountry: ctx.cfCountry });
+    // Dedupe nodes (one binding per row → many per node) and collect
+    // current load. currentUsers comes from a cheap groupBy query.
+    const seen = new Map<string, NodeForRanking>();
+    for (const b of bindings) {
+      if (!seen.has(b.node.id)) {
+        seen.set(b.node.id, {
+          id: b.node.id,
+          name: b.node.name,
+          regionCode: b.node.region?.code ?? null,
+          currentUsers: null,
+        });
+      }
+    }
+    const ranked = rankNodesForUser([...seen.values()], country, ctx.topN);
+    const keep = new Set(ranked.map((n) => n.id));
+    const filtered = bindings.filter((b) => keep.has(b.node.id));
+    // Preserve original order within the kept set so format output is stable.
+    bindings.length = 0;
+    bindings.push(...filtered);
+  }
 
   const endpoints: SubscriptionEndpoint[] = [];
   for (const b of bindings) {

@@ -22,9 +22,26 @@ import type { SubscriptionEndpoint } from '../subscription.formats.js';
  *   - `routing`: catch-all → first proxy. The client UI lets the user pick
  *     a different outbound by tag.
  */
-export function buildXrayJson(endpoints: SubscriptionEndpoint[]): string {
+/**
+ * Slice 29 follow-up — Xray `observatory + balancer` for auto-failover.
+ * When `bundle === 'balancer'`, we emit an `observatory` block that periodically
+ * probes every proxy outbound, and route through a balancer-tagged tag that
+ * picks the lowest-latency one. Default ('flat') keeps the legacy "first
+ * outbound wins" routing rule for back-compat.
+ */
+export interface XrayJsonBuildOpts {
+  bundle?: 'flat' | 'balancer';
+  probeUrl?: string;
+  probeIntervalSec?: number;
+}
+
+export function buildXrayJson(
+  endpoints: SubscriptionEndpoint[],
+  opts: XrayJsonBuildOpts = {},
+): string {
   const xrayEps = endpoints.filter((e) => e.protocol === 'xray');
   const proxyTags: string[] = [];
+  const bundle = opts.bundle ?? 'flat';
 
   const proxyOutbounds = xrayEps.map((e) => {
     if (e.protocol !== 'xray') throw new Error('unreachable'); // narrowing
@@ -63,7 +80,23 @@ export function buildXrayJson(endpoints: SubscriptionEndpoint[]): string {
     };
   });
 
-  const config = {
+  // Slice 29 follow-up — when balancer is on AND we have ≥2 proxies, wrap
+  // the proxy tags in an `observatory` probe + `balancer` selector. With
+  // <2 proxies it's pointless (and the balancer block would still work but
+  // probe one outbound, wasting bandwidth) so we fall through to flat mode.
+  const balancerActive = bundle === 'balancer' && proxyTags.length >= 2;
+  const observatory = balancerActive
+    ? {
+        subjectSelector: proxyTags,
+        probeURL: opts.probeUrl ?? 'https://www.gstatic.com/generate_204',
+        probeInterval: `${opts.probeIntervalSec ?? 300}s`,
+      }
+    : undefined;
+  const balancers = balancerActive
+    ? [{ tag: 'balancer-auto', selector: proxyTags, strategy: { type: 'leastPing' } }]
+    : undefined;
+
+  const config: Record<string, unknown> = {
     log: { loglevel: 'warning' },
     inbounds: [
       {
@@ -81,12 +114,16 @@ export function buildXrayJson(endpoints: SubscriptionEndpoint[]): string {
     ],
     routing: {
       domainStrategy: 'AsIs',
+      ...(balancers ? { balancers } : {}),
       rules: [
-        proxyTags.length > 0
+        balancerActive
+          ? { type: 'field', network: 'tcp,udp', balancerTag: 'balancer-auto' }
+          : proxyTags.length > 0
           ? { type: 'field', network: 'tcp,udp', outboundTag: proxyTags[0] }
           : { type: 'field', network: 'tcp,udp', outboundTag: 'direct' },
       ],
     },
   };
+  if (observatory) config.observatory = observatory;
   return JSON.stringify(config, null, 2) + '\n';
 }

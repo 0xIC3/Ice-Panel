@@ -86,6 +86,17 @@ export function buildClashYaml(endpoints: SubscriptionEndpoint[]): string {
       if (!isTrojan && e.flow) {
         block.push(`    flow: ${yamlString(e.flow)}`);
       }
+      // Slice 30.1 follow-up — per-host alpn (`['h2','http/1.1']`) +
+      // skip-cert-verify. Clash Meta uses `alpn:` as a flow-style YAML list
+      // and `skip-cert-verify: true` for the CDN-fronted host case. Mihomo
+      // also accepts `tls: false` to disable client TLS when the host fronts
+      // via a CDN that terminates TLS itself (`securityLayer: 'none'`).
+      if (e.alpn && e.alpn.length > 0) {
+        block.push(`    alpn: [${e.alpn.map((a) => yamlString(a)).join(', ')}]`);
+      }
+      if (e.allowInsecure) {
+        block.push(`    skip-cert-verify: true`);
+      }
       block.push(
         `    client-fingerprint: ${yamlString(e.fingerprint)}`,
         `    reality-opts:`,

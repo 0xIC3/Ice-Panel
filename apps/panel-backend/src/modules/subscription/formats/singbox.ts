@@ -129,6 +129,21 @@ export function buildSingboxJson(
                 }
               : {};
 
+      // Slice 30.1 follow-up — per-host alpn + insecure flag on the xray
+      // outbound's tls block. sing-box honours `tls.alpn` as a list and
+      // `tls.insecure` for the CDN-fronted self-signed scenario.
+      const xrayTls: Record<string, unknown> = {
+        enabled: true,
+        server_name: e.sni,
+        utls: { enabled: true, fingerprint: e.fingerprint },
+        reality: {
+          enabled: true,
+          public_key: e.publicKey,
+          short_id: e.shortId,
+        },
+      };
+      if (e.alpn && e.alpn.length > 0) xrayTls.alpn = e.alpn;
+      if (e.allowInsecure) xrayTls.insecure = true;
       outbounds.push({
         type: isTrojan ? 'trojan' : 'vless',
         tag,
@@ -137,16 +152,7 @@ export function buildSingboxJson(
         ...(isTrojan
           ? { password: e.uuid }                      // Trojan: UUID is the password
           : { uuid: e.uuid, ...(e.flow ? { flow: e.flow } : {}) }), // VLESS
-        tls: {
-          enabled: true,
-          server_name: e.sni,
-          utls: { enabled: true, fingerprint: e.fingerprint },
-          reality: {
-            enabled: true,
-            public_key: e.publicKey,
-            short_id: e.shortId,
-          },
-        },
+        tls: xrayTls,
         ...transport,
       });
     } else if (e.protocol === 'shadowsocks') {
