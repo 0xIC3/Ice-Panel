@@ -1,4 +1,5 @@
 import { prisma } from '../../prisma.js';
+import { notifyTelegramAsync } from '../../lib/telegram-notify.js';
 import {
   generateCa,
   generateNodeCert,
@@ -65,6 +66,13 @@ export async function bootstrapCa(): Promise<CertBundle> {
       panelClientKeyPem: panelClient.privateKeyPem,
     },
   });
+  // CA generation only happens on first-ever panel boot OR after a manual
+  // `keygen_ca` wipe — both are events admins want to know about. (A surprise
+  // CA bootstrap = panel DB got wiped without anyone meaning to, every node
+  // will fail mTLS until re-bootstrapped.)
+  notifyTelegramAsync(
+    `🔑 *Panel CA bootstrapped*\nEvery existing node must be re-installed with the new bootstrap token.`,
+  );
   return ca;
 }
 

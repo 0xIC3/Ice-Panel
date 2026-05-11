@@ -15,6 +15,8 @@ import { enforceHwid } from '../hwid/hwid.service.js';
 import { prisma } from '../../prisma.js';
 import { config } from '../../config.js';
 import { subscriptionRequests } from '../../lib/metrics.js';
+import { notifyTelegramAsync, escapeMarkdown } from '../../lib/telegram-notify.js';
+import { redis } from '../../lib/redis.js';
 
 const TokenParamSchema = z.object({
   token: z.string().min(8).max(128),
@@ -25,11 +27,19 @@ type Format = z.infer<typeof FormatEnum>;
 
 const QuerySchema = z.object({
   format: FormatEnum.optional(),
-  // Slice 29 — sing-box outbound group flavour. `selector` (default) emits a
-  // manual-pick group; `url-test` emits an auto-failover group that probes
-  // each outbound every interval. Clash already emits `url-test` by default
-  // so this query param only affects the sing-box formatter.
-  bundle: z.enum(['selector', 'url-test']).optional(),
+  // Slice 29 — outbound group flavour. Per-format semantics:
+  //   sing-box   : 'selector' (default) | 'url-test'   (auto-failover)
+  //   xray-json  : 'flat'     (default) | 'balancer'   (observatory+leastPing)
+  //   clash      : already always emits url-test in its proxy-groups
+  // We share one query param across formats because admins picking the
+  // "smart auto-failover" form usually want it everywhere their clients
+  // see it, not per-format.
+  bundle: z.enum(['selector', 'url-test', 'flat', 'balancer']).optional(),
+  // Slice 28 — when set, cap subscription to top-N nodes ranked by region
+  // match (CF-IPCountry) + current utilization. Default (omitted) keeps
+  // legacy "return everything" behaviour so existing clients don't regress.
+  // Capped at 32 to avoid pathological "give me 9999" requests.
+  topN: z.coerce.number().int().min(1).max(32).optional(),
 });
 
 const FORMAT_VALUES: ReadonlySet<Format> = new Set(FormatEnum.options);
@@ -174,6 +184,26 @@ export async function subscriptionRoutes(app: FastifyInstance): Promise<void> {
     );
     subscriptionRequests.inc({ format });
 
+    // Tier-1 honey-user tripwire. If the requested token is on the admin's
+    // canary list, the token by definition was leaked from where it was
+    // planted (pastebin, screenshot, dropped USB, …). Alert immediately,
+    // blacklist the source IP (same Redis key as the path-honeypot), and
+    // return a plausible-empty 200 — making the attacker believe their
+    // exfiltrated token is "just empty subscription" instead of "this is
+    // a panel that knows it was leaked."
+    if (config.HONEY_USER_TOKENS.includes(params.token)) {
+      const ip = request.ip;
+      const ttl = config.HONEYPOT_BLACKLIST_TTL_SEC;
+      await redis.set(`sec:blacklist:${ip}`, '1', 'EX', ttl, 'NX').catch(() => null);
+      notifyTelegramAsync(
+        `🪤 *Honey-user token used*\nip: \`${escapeMarkdown(ip)}\`\nua: \`${escapeMarkdown(userAgent ?? '?')}\`\nformat: \`${format}\`\ntoken: \`${escapeMarkdown(params.token.slice(0, 6))}...\``,
+      );
+      // Plausible empty subscription. Mirror the same content-type the
+      // legit path would use for `?format=plain`.
+      reply.type('text/plain; charset=utf-8');
+      return reply.send('');
+    }
+
     try {
       // Slice S2 — HWID enforcement runs BEFORE generateSubscription so
       // a denied client doesn't burn a subscription_request_history row
@@ -220,9 +250,18 @@ export async function subscriptionRoutes(app: FastifyInstance): Promise<void> {
         }
       }
 
+      // CF-IPCountry forwarded into the service so the smart-selection
+      // ranker (slice 28) can score nodes by region match. Falls back to
+      // `X-Country-Code` for non-Cloudflare deployments where the edge
+      // sets its own header.
+      const cfCountryRaw = (request.headers['cf-ipcountry'] ??
+        request.headers['x-country-code']) as string | string[] | undefined;
+      const cfCountry = Array.isArray(cfCountryRaw) ? cfCountryRaw[0] : cfCountryRaw;
       const result = await service.generateSubscription(params.token, {
         ip: request.ip,
         userAgent,
+        topN: query.topN,
+        cfCountry,
       });
 
       // Slice 30 — host-level format gating. Each endpoint carries an
@@ -251,18 +290,31 @@ export async function subscriptionRoutes(app: FastifyInstance): Promise<void> {
           return reply
             .type('text/yaml; charset=utf-8')
             .send(buildClashYaml(filtered));
-        case 'singbox':
+        case 'singbox': {
+          // Map shared bundle param to singbox values. 'flat' / 'balancer'
+          // are xray-specific; in sing-box context they mean the default
+          // selector form.
+          const sbBundle: 'selector' | 'url-test' | undefined =
+            query.bundle === 'url-test' || query.bundle === 'selector'
+              ? query.bundle
+              : undefined;
           return reply
             .type('application/json')
-            .send(buildSingboxJson(filtered, { bundle: query.bundle }));
+            .send(buildSingboxJson(filtered, { bundle: sbBundle }));
+        }
         case 'wgconf':
           return reply
             .type('text/plain; charset=utf-8')
             .send(buildWgQuickConf(filtered));
-        case 'xrayjson':
+        case 'xrayjson': {
+          const xjBundle: 'flat' | 'balancer' | undefined =
+            query.bundle === 'balancer' || query.bundle === 'flat'
+              ? query.bundle
+              : undefined;
           return reply
             .type('application/json')
-            .send(buildXrayJson(filtered));
+            .send(buildXrayJson(filtered, { bundle: xjBundle }));
+        }
         case 'plain':
         default:
           return reply

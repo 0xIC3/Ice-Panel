@@ -5,6 +5,7 @@ import { prisma } from '../../prisma.js';
 import * as repo from './nodes.repository.js';
 import { getPanelPublicIp } from './panel-ip.js';
 import { issueBootstrapToken } from './bootstrap.service.js';
+import { notifyTelegramAsync, escapeMarkdown } from '../../lib/telegram-notify.js';
 import {
   mapNodeToPublic,
   mapNodeWithPayload,
@@ -229,8 +230,11 @@ export async function updateNode(id: string, input: UpdateNodeInput): Promise<Pu
 }
 
 export async function deleteNode(id: string): Promise<void> {
-  const exists = await repo.existsActive(id);
-  if (!exists) throw new NodeNotFoundError(id);
+  const node = await prisma.node.findFirst({
+    where: { id, deletedAt: null },
+    select: { id: true, name: true, address: true },
+  });
+  if (!node) throw new NodeNotFoundError(id);
   // Hard-cascade profile bindings (and their hosts via FK cascade) — leaving
   // them around made re-installs look like the profile was bound twice (one
   // to the soft-deleted node, one to the freshly-created replacement). The
@@ -238,4 +242,7 @@ export async function deleteNode(id: string): Promise<void> {
   // history isn't lost.
   await prisma.profileNodeBinding.deleteMany({ where: { nodeId: id } });
   await repo.softDelete(id);
+  notifyTelegramAsync(
+    `🗑 *Node deleted*\nname: \`${escapeMarkdown(node.name)}\`\naddress: \`${escapeMarkdown(node.address)}\``,
+  );
 }

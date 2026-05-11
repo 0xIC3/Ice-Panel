@@ -126,6 +126,25 @@ const ConfigSchema = z.object({
   // default — long enough to wear a scanner down, short enough that a
   // legit user on a shared-NAT egress isn't permanently shut out.
   HONEYPOT_BLACKLIST_TTL_SEC: z.coerce.number().int().min(60).default(3600),
+
+  // Tier-1 security — honey subscription tokens. CSV of tokens admin
+  // deliberately places in suspicious channels (pastebins, screenshots,
+  // semi-public Telegram chats) as a leak tripwire. ANY hit on
+  // `/sub/<honey>` fires a Telegram alert with source IP + UA + path,
+  // returns a plausible empty subscription, and blacklists the source
+  // IP for HONEYPOT_BLACKLIST_TTL_SEC. The token never matches a real
+  // user. Empty list → feature disabled.
+  HONEY_USER_TOKENS: z
+    .string()
+    .optional()
+    .transform((v) =>
+      v
+        ? v
+            .split(',')
+            .map((s) => s.trim())
+            .filter((s) => s.length >= 8 && s.length <= 128)
+        : [],
+    ),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
