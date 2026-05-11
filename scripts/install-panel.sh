@@ -189,6 +189,39 @@ LOG_LEVEL=info
 CORS_ORIGIN=${CORS_ORIGIN_VAL}
 PUBLIC_URL=${PUBLIC_URL_VAL}
 FRONTEND_PORT=${FRONTEND_PORT}
+
+# ───── Cycle #5/6 — security & alerts ─────
+# TRUST_PROXY_HOPS: 2 = Cloudflare + Caddy (default deploy). Lower if
+# you don't run CF in front. Higher = attackers can spoof X-Forwarded-For.
+TRUST_PROXY_HOPS=2
+
+# Per-route rate limits + login lockout (defaults are fine for small panel).
+RATE_LIMIT_SUB_PER_MIN=30
+RATE_LIMIT_BOOTSTRAP_PER_MIN=10
+RATE_LIMIT_HEARTBEAT_PER_MIN=120
+LOGIN_LOCKOUT_FAILURES=5
+LOGIN_LOCKOUT_DURATION_MIN=15
+LOGIN_LOCKOUT_WINDOW_MIN=15
+
+# ACME contact email auto-injected into Hysteria/Naive install commands.
+# Leave empty to make the UI emit a placeholder admin fills manually.
+ACME_DEFAULT_EMAIL=
+
+# Telegram alerts (Tier-1). Empty = disabled, set both to enable. See
+# .env.production.example for what fires.
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+
+# Geo-block /api/* by CF-IPCountry. Empty = disabled. Requires Cloudflare
+# orange-cloud + CF-IPCountry header.
+ADMIN_ALLOWED_COUNTRIES=
+
+# Honeypot scanner-trap blacklist TTL (seconds).
+HONEYPOT_BLACKLIST_TTL_SEC=3600
+
+# Honey-user tripwire: tokens admin plants in suspicious places. Any hit
+# on /sub/<honey> fires Telegram alert + IP blacklist. CSV. Empty = disabled.
+HONEY_USER_TOKENS=
 EOF
   chmod 600 "$ENV_FILE"
 fi
