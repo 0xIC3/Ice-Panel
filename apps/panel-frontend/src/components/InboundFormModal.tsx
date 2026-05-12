@@ -132,7 +132,7 @@ function defaults(rule: Inbound | null, defaultNodeId: string): FormValues {
     xrayServiceName: '',
     xraySubprotocol: 'vless',
 
-    awgSubnet: '10.0.0.0/24',
+    awgSubnet: '10.66.66.0/24',
     awgServerPriv: '',
     awgServerPub: '',
     awgPreset: 'tspu',
@@ -621,7 +621,7 @@ export function InboundFormModal({ opened, onClose, inbound, nodes, onSubmit, lo
             <Stack>
               <TextInput
                 label="Subnet (CIDR)"
-                placeholder="10.0.0.0/24"
+                placeholder="10.66.66.0/24"
                 description="IPs handed to peers. /24 = 253 peers."
                 required
                 {...form.getInputProps('awgSubnet')}

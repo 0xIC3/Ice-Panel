@@ -151,7 +151,7 @@ function defaults(profile: Profile | null): FormValues {
     xrayServiceName: '',
     xraySubprotocol: 'vless',
 
-    awgSubnet: '10.0.0.0/24',
+    awgSubnet: '10.66.66.0/24',
     awgServerPriv: '',
     awgServerPub: '',
     awgPreset: 'tspu',
@@ -767,7 +767,7 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
             <Stack>
               <TextInput
                 label="Subnet (CIDR)"
-                placeholder="10.0.0.0/24"
+                placeholder="10.66.66.0/24"
                 required
                 {...form.getInputProps('awgSubnet')}
               />

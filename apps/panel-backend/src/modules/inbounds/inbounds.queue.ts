@@ -203,7 +203,7 @@ export async function applyInboundsForNode(nodeId: string): Promise<void> {
     if (binding) {
       awgProfileId = binding.profileId;
       const pcfg = (binding.profile.config ?? {}) as { subnet?: string };
-      awgSubnet = pcfg.subnet ?? '10.0.0.0/24';
+      awgSubnet = pcfg.subnet ?? '10.66.66.0/24';
     }
   }
 

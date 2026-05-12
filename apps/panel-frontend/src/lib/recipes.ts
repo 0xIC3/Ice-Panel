@@ -214,7 +214,7 @@ export const RECIPES: Recipe[] = [
     speed: 5,
     apply: {
       awgPreset: 'tspu',
-      awgSubnet: '10.0.0.0/24',
+      awgSubnet: '10.66.66.0/24',
     },
   },
   {
@@ -237,7 +237,7 @@ export const RECIPES: Recipe[] = [
       awgS3: 32,
       awgS4: 16,
       ...randAwgHeaders(),
-      awgSubnet: '10.0.0.0/24',
+      awgSubnet: '10.66.66.0/24',
     }),
   },
 

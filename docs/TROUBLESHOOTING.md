@@ -36,6 +36,11 @@ script + Go agent — exactly the seams unit tests don't span):
 10. Honeypot paths never reached backend (frontend nginx ate them)
 11. HONEY_USER_TOKENS not passthrough'd in docker-compose.prod.yml
 12. @fastify/rate-limit error{statusCode:429} returned 500 instead of 429
+13. AmneziaWG adapter not registered in main.go (slice 19 code shipped but unwired)
+14. AmneziaWG Start() crashloop when panel hasn't pushed config yet (PrivateKey="")
+15. AmneziaWG configs written to /etc/amneziawg/ but upstream awg-quick expects /etc/amnezia/amneziawg/
+16. inbound-sync worker pushed amneziawgPublicKey but never the allocated peer IP — silent peer-skip on node
+17. AmneziaWG default subnet 10.0.0.0/24 collides with Aeza's internal gateway 10.0.0.1 — VPS loses connectivity minutes after awg0 comes up, no kernel panic, no oops. Reported by Aeza support on ticket #604280 after 4 burned VPS attempts. Default changed to 10.66.66.0/24.
 
 ## Panel side
 
