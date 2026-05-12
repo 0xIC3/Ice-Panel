@@ -4,11 +4,11 @@
 
 Self-hosted proxy management panel with **native multi-core architecture**.
 
-Where competitors (Marzban, Remnawave, x-ui) wrap everything through Xray-core, Ice-Panel runs the **real upstream binary** for each protocol — Hysteria2 server, Xray-core, AmneziaWG kernel module, NaiveProxy fork of Caddy — under a unified `CoreAdapter` abstraction.
+Where competitors (Marzban, Remnawave, x-ui) wrap everything through Xray-core, Ice-Panel runs the **real upstream binary** for each protocol — Hysteria 2 server, Xray-core, AmneziaWG kernel module, NaiveProxy (Caddy fork), Shadowsocks 2022, MTProto (`mtg`), Mieru — under a unified `CoreAdapter` abstraction.
 
 ## 🚀 One-command install
 
-> Both scripts target Ubuntu 22.04+ / Debian 12+. Require root. Idempotent (safe to re-run). Validated end-to-end on real VPS for Xray (REALITY+Vision) and Hysteria 2 on 2026-05-06.
+> Both scripts target Ubuntu 22.04+ / Debian 12+. Require root. Idempotent (safe to re-run). Cycle #6 reality-checked end-to-end on fresh Aeza fleet 2026-05-12 — full deploy → connect for Xray (REALITY+Vision) and Hysteria 2; AmneziaWG server-side pipeline verified live (client handshake retest pending).
 
 ### 1. Panel — install on the admin's VPS
 
@@ -69,14 +69,24 @@ bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts
 
 The script writes `/etc/hysteria/config.yaml` with ACME / masquerade / auth-callback, drops a `hysteria.service` systemd unit, and Hysteria's first run obtains the LE cert via HTTP-01 — no manual SSH editing.
 
-#### AmneziaWG / NaiveProxy
+#### AmneziaWG
 
 ```bash
 bash <(curl -fsSL .../install-node.sh) --panel-url ... --bootstrap ... --protocol amneziawg
-bash <(curl -fsSL .../install-node.sh) --panel-url ... --bootstrap ... --protocol naive
 ```
 
-Both install the binaries (kernel module + tools for AWG; xcaddy fork for Naive — 2 GB RAM minimum) but currently require manual config-file editing post-install. Auto-config flags land in slice 24.
+Installs the upstream amnezia-vpn DKMS kernel module + `awg` / `awg-quick` tools. **Subnet warning:** the default AWG profile uses `10.66.66.0/24` because `10.0.0.0/24` collides with internal infrastructure gateways on some VPS providers (notably Aeza — server tunnel-IP `10.0.0.1` matches the host's default route, VPS loses connectivity minutes after the tunnel comes up with no kernel logs). Pick any non-conflicting `/24` if your provider uses something else; check `ip route show` on the VPS before. Verified working on Debian 12 (kernel 6.1) and Ubuntu 26.04 (kernel 7.0) under the new default.
+
+#### NaiveProxy / Shadowsocks 2022 / MTProto / Mieru
+
+```bash
+bash <(curl -fsSL .../install-node.sh) --panel-url ... --bootstrap ... --protocol naive
+bash <(curl -fsSL .../install-node.sh) --panel-url ... --bootstrap ... --protocol shadowsocks
+bash <(curl -fsSL .../install-node.sh) --panel-url ... --bootstrap ... --protocol mtproto
+bash <(curl -fsSL .../install-node.sh) --panel-url ... --bootstrap ... --protocol mieru
+```
+
+Bootstrap installs the upstream binary (xcaddy fork for Naive — 2 GB RAM minimum; xray-core for SS2022; `9seconds/mtg` for MTProto; `enfein/mieru` for Mieru). Inbound config flows over mTLS from the panel via `applyInbounds`.
 
 > ⚠️ **`node.address` is BOTH the mTLS endpoint AND the public host in client URIs** until slice 25. So set it correctly at create time: domain for Hysteria/Naive (`hy2-01.example.com:8443`), IP for Xray/AmneziaWG (`<ip>:8443`). Changing it later requires `Refresh bootstrap` (key icon on node row) to re-issue the cert with the matching SAN.
 
@@ -86,29 +96,43 @@ Full deploy guide (per-protocol details, troubleshooting, update workflow): **[d
 
 ## Status
 
-🎉 **Phase 2 complete + multi-node multi-protocol VPS-validated** (2026-05-06). Two real VPS (Sweden Xray REALITY + Germany Hysteria 2) under one panel, one subscription URL emits both endpoints, Hiddify connects to both. Phase 3 in progress:
+🎯 **Phase 3 ≈ 92%** — all 7 protocol adapters in code, panel + nodes deployable via one-command installers, CI green with auto-published container images.
 
-- ✅ **Slice 23.1** — panel-ops harden: node-status poller, `node.created` user backfill, Refresh-bootstrap UI button, install-node.sh per-protocol auto-config flags.
-- ✅ **Slice 24a** — auto-push inbound config wire pipeline (panel→node mTLS), atomic `inbounds.json` persistence on the node side.
-- ✅ **Slice 24b1** — `CoreAdapter.ApplyInbound` interface + Xray real impl (idempotent regen + restart). Hysteria/AWG/Naive stubbed.
-- ✅ **Slice 25** — `publicHost` / `publicPort` separation on Inbound (closes the cert-SAN-mismatch gotcha at the architecture level).
-- ⏭️ **Slice 24b2/3/4** next — Hysteria / AmneziaWG / Naive ApplyInbound real impls.
-- ⏭️ **Slice 24c** — Xray defaults uplift + transports/subprotocols + per-user traffic stats.
+**Verified live on real VPS** (cycle #6, 2026-05-12):
+- ✅ Xray REALITY + Vision (raw / xhttp / gRPC / Trojan transports) — end-to-end on Aeza Sweden node
+- ✅ Hysteria 2 + Salamander obfuscation + port-hopping — RU iOS works via Hiddify Next on Hetzner Germany node
+- ✅ AmneziaWG server-side pipeline (Debian 12 / kernel 6.1.0-47) — adapter registered, panel pushes config, `awg0` UP with peer allocated, wgconf subscription correct
+- ✅ Tier-1 security: honeypot trap, honey-user tripwire, per-IP rate-limit, username lockout (5 fails → 15 min lock)
+- ✅ Slice 38 self-destruct: node-agent exits 42 on `/healthz` 410-Gone, `RestartPreventExitStatus` blocks systemd from reviving
+- ✅ CI: panel typecheck + tests, node-agent Go tests, multi-arch docker images published to `ghcr.io/0xic3/ice-panel-{backend,frontend,node}:main` on every push
 
-Full plan: [docs/ROADMAP.md](./docs/ROADMAP.md) (v3.2, 2026-05-06).
+**Pipeline-only, real-traffic pending** — code paths exist but client-side verification not yet completed:
+- 🟡 AmneziaWG client handshake — AmneziaVPN desktop client disconnects mid-handshake, retest scheduled
+- 🟡 NaiveProxy, Shadowsocks 2022, MTProto, Mieru — never run on a real VPS yet
+
+**Cycle #6 reality-check** caught and fixed 21 live-only bugs that no unit test had reached (each cross-cuts panel + nginx + docker-compose + agent + install script). Notable ones:
+- AmneziaWG default subnet `10.0.0.0/24` collided with VPS provider infrastructure gateway — caused VPS to lose connectivity minutes after tunnel up, **no kernel logs**. Diagnosed via Aeza support ticket #604280, default changed to `10.66.66.0/24`.
+- `@fastify/rate-limit` Error{statusCode:429} was getting converted to 500 by the global error handler — broken protective signal, fixed.
+- Honeypot scanner paths (`/.env`, `/wp-admin`, ...) never reached the backend because the SPA-fallback in frontend nginx ate them. Added regex location to forward to backend.
+- See `docs/TROUBLESHOOTING.md` for the full numbered list.
+
+Full plan: [docs/ROADMAP.md](./docs/ROADMAP.md) (v3.6, 2026-05-12).
+Authoritative protocol-validation status: [docs/PROTOCOL_STATUS.md](./docs/PROTOCOL_STATUS.md).
 Per-slice testing checklists: [docs/TESTING.md](./docs/TESTING.md).
-
-See [docs/ROADMAP.md](./docs/ROADMAP.md) for the slice-by-slice progress plan and Phase 3 priorities.
+Operational debugging knowledge: [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md).
 
 ## What's working
 
 ### Protocols
 | Protocol | What runs on the node | Native or Xray-emulated |
 |---|---|---|
-| Hysteria2 | Real `hysteria server` (apernet/hysteria) with auth-callback + Brutal CC | native |
-| Xray-core | Real `xray run` with VLESS + REALITY + Vision; transports: raw / xhttp / ws / gRPC | native |
-| AmneziaWG | Real kernel module `amneziawg` + `awg syncconf` hot-reload (no restart on user mutation) | native |
+| Hysteria 2 | Real `hysteria server` (apernet/hysteria) with auth-callback + Brutal CC + Salamander obfs + port-hopping | native |
+| Xray-core | Real `xray run` with VLESS + REALITY + Vision; transports: raw / xhttp / ws / gRPC / httpupgrade / kcp; Trojan subprotocol over REALITY | native |
+| AmneziaWG | Real kernel module `amneziawg` (amnezia-vpn DKMS) + `awg-quick` from upstream tools; smart-diff classifier (syncconf vs full restart) | native |
 | NaiveProxy | Real Caddy fork (`klzgrad/forwardproxy@naive` via xcaddy) | native |
+| Shadowsocks 2022 | xray-core inbound with `2022-blake3-*` ciphers (auto-generated server PSK) | reuses xray binary |
+| MTProto | `9seconds/mtg` Fake-TLS, derives per-inbound secret from (id, domain) | native |
+| Mieru | `enfein/mieru` (`mita apply config` + reload) | native |
 
 ### Subscription generator
 - 6 wire formats: `plain` (base64 URI list), `json` (Ice-Panel structured), `clash` (Clash Meta YAML), `singbox` (Sing-box JSON), `wgconf` (wg-quick `.conf`), `xrayjson` (Xray client JSON)
@@ -116,15 +140,25 @@ See [docs/ROADMAP.md](./docs/ROADMAP.md) for the slice-by-slice progress plan an
 - Stable per-user IP allocation for AmneziaWG (separate `amneziawg_peers` table)
 
 ### Admin UI
-- **Users** — CRUD, traffic limits + reset strategies (no_reset / day / week / month / rolling), per-user `enabledProtocols` MultiSelect, soft-delete
-- **Nodes** — CRUD with one-time mTLS payload modal at create
-- **Inbounds** — per-protocol form (Hysteria / Xray REALITY / AmneziaWG with TSPU/Mobile/Custom obfuscation presets / Naive). x25519 keypair generator button — one click, no SSH to VPS
-- **SRR** — UA-rule manager + "Test against UA" preview
+- **Users** — CRUD, traffic limits + reset strategies (no_reset / day / week / month / rolling), per-user `enabledProtocols` MultiSelect, soft-delete, HWID device binding (slice S2)
+- **Nodes** — CRUD with one-time mTLS payload modal at create, capacity bar, regions for smart-selection, sticky-affinity (slice 27.5)
+- **Profiles + Bindings** — slice 27 split: a `Profile` is a logical inbound (protocol + config), `Binding` attaches it to a node with a specific port; many-to-many fan-out
+- **Hosts** (slice 30) — per-binding hostname variants for Xray VLESS (multi-FQDN fronting)
+- **Squads / Groups** (slice 26) — ACL: which profile is visible to which user-group, default "All" auto-membership
+- **SRR** — Subscription Response Rules manager (regex UA → format), 7 default rules cover Hiddify / Clash / NekoBox / sing-box / v2rayN / AmneziaVPN
+- **Settings** — brand name, admin-allowed-countries (geo-block), Telegram bot notifications, honey-user tokens
+- **Dashboard** — overview cards + 24h traffic chart + recent events
+- **Bull-board** at `/admin/queues` for queue introspection
 
 ### Operations
 - One-command installers for both panel and node — see [docs/deploy/install.md](./docs/deploy/install.md)
 - Production `docker-compose.prod.yml` with Postgres + Redis + backend + frontend
-- 193 backend integration tests, 60+ Go tests, all green
+- Multi-arch container images auto-published to GHCR on every `main` push (`ghcr.io/0xic3/ice-panel-{backend,frontend,node}:main` + `:sha-<7c>`)
+- Tier-1 security gate: honeypot trap (`/.env` / `/wp-admin` / etc) + honey-user subscription tokens (leak tripwire) + per-IP rate-limit + username lockout + admin geo-block via `CF-IPCountry`
+- Slice 38 heartbeat self-destruct: node panel-side delete → 410 Gone on heartbeat poll → agent exits 42 → systemd refuses to revive
+- Prometheus metrics endpoint + Grafana dashboards (slice 33); Bull-board at `/admin/queues` (slice 37)
+- Telegram alerts on admin login / lockout / node flip / honey-user trip / user expired (slice 32)
+- 220+ backend integration tests, 80+ Go tests, all green in CI
 
 ## Architecture
 
