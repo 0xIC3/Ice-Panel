@@ -87,6 +87,13 @@ type InboundConfig struct {
 	// distinct from one another and from WireGuard's defaults (1..4).
 	H1, H2, H3, H4 uint32
 
+	// I1-I5: optional v2.0 mimicry signature packets (hex strings).
+	// When set, the kernel module emits these before the real handshake
+	// to disguise the flow as QUIC / DNS / etc. Empty disables that
+	// slot. Set via panel UI; flow through wire JSON to here, then
+	// rendered into the awg-quick `[Interface]` block.
+	I1, I2, I3, I4, I5 string
+
 	// Optional NAT setup. If empty, defaults to the standard MASQUERADE rule
 	// over the host's primary egress interface. Operators on tightly-firewalled
 	// hosts may want to set these explicitly.
@@ -180,6 +187,13 @@ func renderConfig(inbound InboundConfig, peers []Peer) (string, error) {
 	fmt.Fprintf(&b, "H2 = %d\n", cfg.H2)
 	fmt.Fprintf(&b, "H3 = %d\n", cfg.H3)
 	fmt.Fprintf(&b, "H4 = %d\n", cfg.H4)
+	// I1-I5 are emitted only when non-empty — empty strings mean "no
+	// mimicry packet for this slot", and awg-quick rejects empty hex.
+	for i, val := range []string{cfg.I1, cfg.I2, cfg.I3, cfg.I4, cfg.I5} {
+		if val != "" {
+			fmt.Fprintf(&b, "I%d = %s\n", i+1, val)
+		}
+	}
 	// awg-quick evaluates PostUp/PostDown as a shell command, so anything
 	// we render here runs as root on every interface bounce. PostUp/Down
 	// are NOT accepted on the panel→node wire (see adapter.go ApplyInbound)

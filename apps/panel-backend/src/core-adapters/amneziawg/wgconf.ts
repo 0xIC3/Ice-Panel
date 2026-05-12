@@ -46,6 +46,16 @@ export interface AmneziawgClientConfigOpts {
   h2: number;
   h3: number;
   h4: number;
+  /**
+   * I1-I5 — optional v2.0 mimicry packets (hex strings, empty = disabled).
+   * MUST match the server inbound's values verbatim; the AmneziaWG
+   * handshake hashes them in, so any mismatch silently breaks decryption.
+   */
+  i1?: string;
+  i2?: string;
+  i3?: string;
+  i4?: string;
+  i5?: string;
 
   /**
    * Routes the client tunnels through the VPN. Default `0.0.0.0/0,::/0`
@@ -84,6 +94,13 @@ export function buildAmneziawgClientConfig(opts: AmneziawgClientConfigOpts): str
   lines.push(`H2 = ${opts.h2}`);
   lines.push(`H3 = ${opts.h3}`);
   lines.push(`H4 = ${opts.h4}`);
+  // Emit I1-I5 only when set — empty values mean "no mimicry packet
+  // for that slot" and the awg client rejects empty hex.
+  for (const [idx, val] of [opts.i1, opts.i2, opts.i3, opts.i4, opts.i5].entries()) {
+    if (val && val.length > 0) {
+      lines.push(`I${idx + 1} = ${val}`);
+    }
+  }
   lines.push('');
   lines.push('[Peer]');
   lines.push(`PublicKey = ${opts.serverPublicKey}`);

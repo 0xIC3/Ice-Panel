@@ -143,6 +143,12 @@ export interface AmneziawgSubscriptionEndpoint extends SubscriptionEndpointBase 
   h2: number;
   h3: number;
   h4: number;
+  /** I1-I5 mimicry packets (hex, v2.0). Empty = disabled for that slot. */
+  i1: string;
+  i2: string;
+  i3: string;
+  i4: string;
+  i5: string;
 }
 
 export interface NaiveSubscriptionEndpoint extends SubscriptionEndpointBase {

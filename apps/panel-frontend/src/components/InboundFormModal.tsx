@@ -100,8 +100,11 @@ interface FormValues {
   mieruMtu: number | '';
 }
 
-const TSPU_PRESET = { jc: 4, jmin: 40, jmax: 89, s1: 72, s2: 56, s3: 32, s4: 16 };
-const MOBILE_PRESET = { jc: 3, jmin: 40, jmax: 70, s1: 72, s2: 56, s3: 32, s4: 16 };
+// Bounded by upstream AmneziaWG v2.0 (docs.amnezia.org); see
+// ProfileFormModal.tsx for full notes. Old values rejected by v2.0
+// DKMS module — silent handshake fail.
+const TSPU_PRESET = { jc: 4, jmin: 64, jmax: 128, s1: 32, s2: 56, s3: 32, s4: 16 };
+const MOBILE_PRESET = { jc: 3, jmin: 64, jmax: 100, s1: 32, s2: 56, s3: 32, s4: 16 };
 
 function defaults(rule: Inbound | null, defaultNodeId: string): FormValues {
   const base: FormValues = {

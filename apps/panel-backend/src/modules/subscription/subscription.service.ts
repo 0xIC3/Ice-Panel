@@ -412,6 +412,11 @@ export async function generateSubscription(
         h2: cfg.obfuscation.h2,
         h3: cfg.obfuscation.h3,
         h4: cfg.obfuscation.h4,
+        i1: cfg.obfuscation.i1 ?? '',
+        i2: cfg.obfuscation.i2 ?? '',
+        i3: cfg.obfuscation.i3 ?? '',
+        i4: cfg.obfuscation.i4 ?? '',
+        i5: cfg.obfuscation.i5 ?? '',
         // No standardised URI format for AmneziaWG; clients fetch ?format=wgconf.
         uri: '',
       });

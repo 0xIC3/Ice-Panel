@@ -43,5 +43,10 @@ export function buildWgQuickConf(endpoints: SubscriptionEndpoint[]): string {
     h2: awg.h2,
     h3: awg.h3,
     h4: awg.h4,
+    i1: awg.i1,
+    i2: awg.i2,
+    i3: awg.i3,
+    i4: awg.i4,
+    i5: awg.i5,
   });
 }

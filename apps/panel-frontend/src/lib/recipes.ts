@@ -228,14 +228,17 @@ export const RECIPES: Recipe[] = [
     dpiResistance: 5,
     speed: 4,
     apply: () => ({
+      // Values within upstream v2.0 bounds (Jmin/Jmax 64..1024, S1-S3 0..64).
+      // Iran-tuned variant: more junk packets (Jc=6) + larger Jmax for
+      // bigger size variance vs default TSPU.
       awgPreset: 'custom',
-      awgJc: 4,
-      awgJmin: 40,
-      awgJmax: 70,
-      awgS1: 72,
-      awgS2: 56,
-      awgS3: 32,
-      awgS4: 16,
+      awgJc: 6,
+      awgJmin: 64,
+      awgJmax: 256,
+      awgS1: 48,
+      awgS2: 64,
+      awgS3: 48,
+      awgS4: 24,
       ...randAwgHeaders(),
       awgSubnet: '10.66.66.0/24',
     }),

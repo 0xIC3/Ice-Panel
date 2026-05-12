@@ -98,8 +98,13 @@ interface FormValues {
   mieruMtu: number | '';
 }
 
-const TSPU_PRESET = { jc: 4, jmin: 40, jmax: 89, s1: 72, s2: 56, s3: 32, s4: 16 };
-const MOBILE_PRESET = { jc: 3, jmin: 40, jmax: 70, s1: 72, s2: 56, s3: 32, s4: 16 };
+// Values bounded by upstream AmneziaWG v2.0 spec (docs.amnezia.org):
+//   - Jc 0..10, Jmin/Jmax 64..1024, S1-S3 0..64, S4 0..32
+// The old TSPU preset (Jmin=40, S1=72) was based on v1.5 era guidance
+// and silently breaks v2.0 handshake on current DKMS modules. Updated
+// 2026-05-13 after reading upstream docs.
+const TSPU_PRESET = { jc: 4, jmin: 64, jmax: 128, s1: 32, s2: 56, s3: 32, s4: 16 };
+const MOBILE_PRESET = { jc: 3, jmin: 64, jmax: 100, s1: 32, s2: 56, s3: 32, s4: 16 };
 
 /**
  * AmneziaWG H1-H4 magic-header bytes. Spec says they must be:
@@ -166,6 +171,11 @@ function defaults(profile: Profile | null): FormValues {
     awgH2: '',
     awgH3: '',
     awgH4: '',
+    awgI1: '',
+    awgI2: '',
+    awgI3: '',
+    awgI4: '',
+    awgI5: '',
 
     naiveHostname: '',
     naiveTlsEmail: '',
@@ -207,24 +217,29 @@ function defaults(profile: Profile | null): FormValues {
         xraySubprotocol: ((cfg.subprotocol as 'vless' | 'trojan') ?? 'vless'),
       };
     case 'amneziawg': {
-      const obf = (cfg.obfuscation as Record<string, number> | undefined) ?? {};
+      const obf = (cfg.obfuscation as Record<string, number | string> | undefined) ?? {};
       return {
         ...base,
         awgSubnet: (cfg.subnet as string) ?? base.awgSubnet,
         awgServerPriv: (cfg.serverPrivateKey as string) ?? '',
         awgServerPub: (cfg.serverPublicKey as string) ?? '',
         awgPreset: 'custom',
-        awgJc: obf.jc ?? '',
-        awgJmin: obf.jmin ?? '',
-        awgJmax: obf.jmax ?? '',
-        awgS1: obf.s1 ?? '',
-        awgS2: obf.s2 ?? '',
-        awgS3: obf.s3 ?? '',
-        awgS4: obf.s4 ?? '',
-        awgH1: obf.h1 ?? '',
-        awgH2: obf.h2 ?? '',
-        awgH3: obf.h3 ?? '',
-        awgH4: obf.h4 ?? '',
+        awgJc: (obf.jc as number) ?? '',
+        awgJmin: (obf.jmin as number) ?? '',
+        awgJmax: (obf.jmax as number) ?? '',
+        awgS1: (obf.s1 as number) ?? '',
+        awgS2: (obf.s2 as number) ?? '',
+        awgS3: (obf.s3 as number) ?? '',
+        awgS4: (obf.s4 as number) ?? '',
+        awgH1: (obf.h1 as number) ?? '',
+        awgH2: (obf.h2 as number) ?? '',
+        awgH3: (obf.h3 as number) ?? '',
+        awgH4: (obf.h4 as number) ?? '',
+        awgI1: ((obf.i1 as string) ?? '') as string,
+        awgI2: ((obf.i2 as string) ?? '') as string,
+        awgI3: ((obf.i3 as string) ?? '') as string,
+        awgI4: ((obf.i4 as string) ?? '') as string,
+        awgI5: ((obf.i5 as string) ?? '') as string,
       };
     }
     case 'naive':
@@ -409,9 +424,9 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
           serverPublicKey: values.awgServerPub,
           obfuscation: {
             jc: numOr(values.awgJc, 4),
-            jmin: numOr(values.awgJmin, 40),
-            jmax: numOr(values.awgJmax, 70),
-            s1: numOr(values.awgS1, 72),
+            jmin: numOr(values.awgJmin, 64),
+            jmax: numOr(values.awgJmax, 128),
+            s1: numOr(values.awgS1, 32),
             s2: numOr(values.awgS2, 56),
             s3: numOr(values.awgS3, 32),
             s4: numOr(values.awgS4, 16),
@@ -419,6 +434,14 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
             h2: numOr(values.awgH2, 0),
             h3: numOr(values.awgH3, 0),
             h4: numOr(values.awgH4, 0),
+            // I1-I5: optional v2.0 mimicry signature packets (hex).
+            // Empty disables that slot. Trimmed defensively to avoid
+            // accidental whitespace breaking awg-quick parser.
+            i1: (values.awgI1 ?? '').trim(),
+            i2: (values.awgI2 ?? '').trim(),
+            i3: (values.awgI3 ?? '').trim(),
+            i4: (values.awgI4 ?? '').trim(),
+            i5: (values.awgI5 ?? '').trim(),
           },
         };
         break;
@@ -865,6 +888,27 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
                   Re-roll
                 </Button>
               </Group>
+              {/* I1-I5: optional v2.0 mimicry packets (hex). Most ISPs
+                  don't need these — TSPU/Mobile presets work without.
+                  Set when impersonating a specific protocol (QUIC/DNS/...)
+                  is required to pass particularly aggressive DPI. */}
+              <Stack gap={4}>
+                <Text size="sm" fw={500}>
+                  I1-I5 mimicry packets (optional, hex)
+                </Text>
+                <Text size="xs" c="dimmed">
+                  Per amnezia v2.0 spec — disguise the handshake as another protocol. Leave empty for default behavior. Each up to 256 hex chars.
+                </Text>
+                <Group grow>
+                  <TextInput label="I1" placeholder="hex" {...form.getInputProps('awgI1')} />
+                  <TextInput label="I2" placeholder="hex" {...form.getInputProps('awgI2')} />
+                  <TextInput label="I3" placeholder="hex" {...form.getInputProps('awgI3')} />
+                </Group>
+                <Group grow>
+                  <TextInput label="I4" placeholder="hex" {...form.getInputProps('awgI4')} />
+                  <TextInput label="I5" placeholder="hex" {...form.getInputProps('awgI5')} />
+                </Group>
+              </Stack>
               {(() => {
                 // Live H-uniqueness validator. Empty values pass — let the
                 // `required` semantics fire on submit instead.

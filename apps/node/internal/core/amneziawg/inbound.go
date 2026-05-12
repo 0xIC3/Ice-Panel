@@ -39,6 +39,14 @@ type obfuscationCfg struct {
 	H2   uint32 `json:"h2"`
 	H3   uint32 `json:"h3"`
 	H4   uint32 `json:"h4"`
+	// I1-I5: optional v2.0 mimicry signature packets (hex string).
+	// Empty disables that slot. Pass through to awg-quick which writes
+	// them into the [Interface] block as `I1 = <hex>` etc.
+	I1 string `json:"i1,omitempty"`
+	I2 string `json:"i2,omitempty"`
+	I3 string `json:"i3,omitempty"`
+	I4 string `json:"i4,omitempty"`
+	I5 string `json:"i5,omitempty"`
 }
 
 // toInboundConfig maps wire onto the existing config.go InboundConfig.
@@ -71,6 +79,11 @@ func (w inboundCfgWire) toInboundConfig(iface string, listenPort int) (InboundCo
 		H2:         w.Obfuscation.H2,
 		H3:         w.Obfuscation.H3,
 		H4:         w.Obfuscation.H4,
+		I1:         w.Obfuscation.I1,
+		I2:         w.Obfuscation.I2,
+		I3:         w.Obfuscation.I3,
+		I4:         w.Obfuscation.I4,
+		I5:         w.Obfuscation.I5,
 	}, nil
 }
 
@@ -129,7 +142,8 @@ func classifyDiff(old, new InboundConfig) diffKind {
 		old.Interface != new.Interface ||
 		old.H1 != new.H1 || old.H2 != new.H2 || old.H3 != new.H3 || old.H4 != new.H4 ||
 		old.S1 != new.S1 || old.S2 != new.S2 || old.S3 != new.S3 || old.S4 != new.S4 ||
-		old.Jc != new.Jc || old.Jmin != new.Jmin || old.Jmax != new.Jmax {
+		old.Jc != new.Jc || old.Jmin != new.Jmin || old.Jmax != new.Jmax ||
+		old.I1 != new.I1 || old.I2 != new.I2 || old.I3 != new.I3 || old.I4 != new.I4 || old.I5 != new.I5 {
 		return diffRestart
 	}
 	return diffNone

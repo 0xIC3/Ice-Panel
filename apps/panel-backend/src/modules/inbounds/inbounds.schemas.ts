@@ -97,18 +97,40 @@ export const XrayConfigSchema = z.object({
   subprotocol: z.enum(['vless', 'trojan']).default('vless'),
 });
 
+// Bounds and defaults match upstream amnezia-vpn AmneziaWG v2.0 spec
+// (docs.amnezia.org/documentation/amnezia-wg). Old TSPU presets from
+// v1.5 era (Jmin=40, S1=72) are out of v2.0's accepted ranges and
+// caused silent handshake failures with the current DKMS module
+// (1.0.20251009 — already v2.0-capable). Caught live cycle #6
+// 2026-05-13 after reading upstream docs.
+//   - Jc: junk-packet count before handshake init     (0..10)
+//   - Jmin/Jmax: junk-packet size range               (64..1024)
+//   - S1/S2/S3: init/response/cookie padding bytes    (0..64)
+//   - S4: data packet padding bytes                    (0..32)
+//   - H1-H4: dynamic header bytes replacing WG type marker 1..4
+//   - I1-I5: optional "mimicry" signature packets sent ahead of
+//     handshake to disguise the flow as QUIC/DNS/etc. Hex strings;
+//     empty disables the I-channel for that slot.
 const ObfuscationSchema = z.object({
-  jc: z.number().int().min(0).max(50).default(4),
-  jmin: z.number().int().min(0).max(1280).default(40),
-  jmax: z.number().int().min(0).max(1280).default(70),
-  s1: z.number().int().min(0).max(1280).default(72),
-  s2: z.number().int().min(0).max(1280).default(56),
-  s3: z.number().int().min(0).max(1280).default(32),
-  s4: z.number().int().min(0).max(1280).default(16),
+  jc: z.number().int().min(0).max(10).default(4),
+  jmin: z.number().int().min(64).max(1024).default(64),
+  jmax: z.number().int().min(64).max(1024).default(128),
+  s1: z.number().int().min(0).max(64).default(32),
+  s2: z.number().int().min(0).max(64).default(56),
+  s3: z.number().int().min(0).max(64).default(32),
+  s4: z.number().int().min(0).max(32).default(16),
   h1: z.number().int().min(5).default(100),
   h2: z.number().int().min(5).default(200),
   h3: z.number().int().min(5).default(300),
   h4: z.number().int().min(5).default(400),
+  // Hex-encoded mimicry packets — optional, v2.0 feature. When empty,
+  // the kernel module skips that slot. Each up to 256 hex chars
+  // (128 bytes) per upstream guidance.
+  i1: z.string().regex(/^[0-9a-fA-F]*$/).max(256).default(''),
+  i2: z.string().regex(/^[0-9a-fA-F]*$/).max(256).default(''),
+  i3: z.string().regex(/^[0-9a-fA-F]*$/).max(256).default(''),
+  i4: z.string().regex(/^[0-9a-fA-F]*$/).max(256).default(''),
+  i5: z.string().regex(/^[0-9a-fA-F]*$/).max(256).default(''),
 });
 
 export const AmneziawgConfigSchema = z.object({

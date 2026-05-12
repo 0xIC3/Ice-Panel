@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActionIcon,
@@ -27,6 +27,7 @@ import { notifications } from '@mantine/notifications';
 import {
   IconActivity,
   IconBolt,
+  IconCheck,
   IconCpu,
   IconDatabase,
   IconDeviceFloppy,
@@ -44,6 +45,7 @@ import {
   listProfiles,
   listRegions,
   listSquads,
+  updateBinding,
   type Node as PanelNode,
   type NodeProtocol,
   type UpdateNodeInput,
@@ -219,6 +221,29 @@ export function NodeEditModal({
         message: err instanceof Error ? err.message : String(err),
       }),
   });
+
+  // Update binding port — saves the new port via PUT /api/bindings/:id,
+  // panel auto-re-pushes applyInbound to the node (worker fires on
+  // binding change events). Avoids the "SQL UPDATE" dance admins
+  // resorted to before this inline edit existed (cycle #6 2026-05-13).
+  const updatePortMutation = useMutation({
+    mutationFn: ({ id, port }: { id: string; port: number }) =>
+      updateBinding(id, { port }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['bindings'] });
+      notifications.show({ color: 'green', message: t('nodes.edit.bindingPortUpdated') });
+    },
+    onError: (err) =>
+      notifications.show({
+        color: 'red',
+        title: t('nodes.edit.bindingPortUpdateFailed'),
+        message: err instanceof Error ? err.message : String(err),
+      }),
+  });
+
+  // Local draft state for per-binding port input — keyed on binding.id.
+  // Initialized lazily on first edit; cleared after save.
+  const [portDrafts, setPortDrafts] = useState<Record<string, number>>({});
 
   // Quick-deploy: auto-create binding for any selected available profile.
   const availableProfiles = (profilesQuery.data?.profiles ?? []).filter(
@@ -562,9 +587,58 @@ export function NodeEditModal({
                           <Badge variant="light" color="cyan" size="xs" tt="uppercase">
                             {profile?.protocol ?? '?'}
                           </Badge>
-                          <Badge variant="light" color="gray" size="xs" ff="monospace">
-                            :{binding.port}
-                          </Badge>
+                          {/* Inline port edit — admin types new port and clicks save.
+                              Was the #1 UX pain point pre-cycle-6 (admins SQL'd the
+                              port directly because UI had no edit affordance). */}
+                          <Group gap={2} wrap="nowrap">
+                            <Text size="xs" c="dimmed" ff="monospace">:</Text>
+                            <NumberInput
+                              size="xs"
+                              w={72}
+                              min={1}
+                              max={65535}
+                              hideControls
+                              value={portDrafts[binding.id] ?? binding.port}
+                              onChange={(v) =>
+                                setPortDrafts((d) => ({
+                                  ...d,
+                                  [binding.id]: typeof v === 'number' ? v : Number(v) || binding.port,
+                                }))
+                              }
+                              styles={{ input: { fontFamily: 'monospace', textAlign: 'center' } }}
+                            />
+                            {portDrafts[binding.id] !== undefined &&
+                              portDrafts[binding.id] !== binding.port && (
+                                <Tooltip label={t('nodes.edit.bindingPortSave')}>
+                                  <ActionIcon
+                                    size="sm"
+                                    variant="light"
+                                    color="green"
+                                    loading={
+                                      updatePortMutation.isPending &&
+                                      updatePortMutation.variables?.id === binding.id
+                                    }
+                                    onClick={() => {
+                                      const next = portDrafts[binding.id];
+                                      if (next && next !== binding.port) {
+                                        updatePortMutation.mutate(
+                                          { id: binding.id, port: next },
+                                          {
+                                            onSuccess: () =>
+                                              setPortDrafts((d) => {
+                                                const { [binding.id]: _, ...rest } = d;
+                                                return rest;
+                                              }),
+                                          },
+                                        );
+                                      }
+                                    }}
+                                  >
+                                    <IconCheck size={12} />
+                                  </ActionIcon>
+                                </Tooltip>
+                              )}
+                          </Group>
                         </Group>
                         {binding.publicHost && (
                           <Text size="xs" c="dimmed" ff="monospace">
