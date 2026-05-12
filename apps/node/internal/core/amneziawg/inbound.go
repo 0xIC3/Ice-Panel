@@ -17,6 +17,14 @@ type inboundCfgWire struct {
 	ServerPrivateKey string         `json:"serverPrivateKey"`
 	ServerPublicKey  string         `json:"serverPublicKey"` // unused on agent
 	Obfuscation      obfuscationCfg `json:"obfuscation"`
+	// ListenPort is the UDP port the awg-quick interface should bind to.
+	// Injected by panel-backend from inbound.port (binding-level field
+	// above the protocol config) — see apps/panel-backend/src/modules/
+	// inbounds/inbounds.queue.ts. When zero on the wire, we fall back to
+	// the caller-supplied listenPort (install-time default). Caught live
+	// cycle #6 2026-05-12: client wgconf advertised Endpoint=:443 but
+	// the server bound 51820, all UDP packets fell on the floor.
+	ListenPort int `json:"listenPort,omitempty"`
 }
 
 type obfuscationCfg struct {
@@ -41,9 +49,15 @@ func (w inboundCfgWire) toInboundConfig(iface string, listenPort int) (InboundCo
 	if err != nil {
 		return InboundConfig{}, err
 	}
+	// Prefer the port declared on the wire (per-inbound, set in panel UI);
+	// fall back to the install-time default the caller passes in.
+	port := listenPort
+	if w.ListenPort > 0 {
+		port = w.ListenPort
+	}
 	return InboundConfig{
 		Interface:  iface,
-		ListenPort: listenPort,
+		ListenPort: port,
 		PrivateKey: w.ServerPrivateKey,
 		Address:    addr,
 		Jc:         w.Obfuscation.Jc,

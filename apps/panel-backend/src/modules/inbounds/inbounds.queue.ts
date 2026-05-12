@@ -126,6 +126,19 @@ async function fetchEnabledInbounds(nodeId: string): Promise<InboundDto[]> {
       }
     }
 
+    // AmneziaWG: inject the binding-level port into the protocol config so
+    // the agent binds the awg-quick interface to the port the admin set
+    // (typical 443 for stealth) instead of WireGuard's default 51820.
+    // Without this, the wgconf subscription advertises Endpoint=:443 but
+    // the server actually listens on 51820 — handshake never completes.
+    // Caught live awg-VPS cycle #6 2026-05-12.
+    if (b.profile.protocol === 'amneziawg') {
+      config = {
+        ...(config as Record<string, unknown>),
+        listenPort: b.port,
+      } as InboundDto['config'];
+    }
+
     return {
       id: b.id,
       name: b.profile.name,
