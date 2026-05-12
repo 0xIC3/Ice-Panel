@@ -421,6 +421,21 @@ case "$PROTOCOL" in
   *)  fail "Unknown protocol: $PROTOCOL (valid: hysteria|xray|amneziawg|naive|shadowsocks|mtproto|mieru)" ;;
 esac
 
+# AmneziaWG ships as an out-of-tree DKMS kernel module. The upstream
+# amnezia-vpn/amneziawg-linux-kernel-module fork lags behind the kernel
+# tree by 1-2 minor versions. Caught live cycle #6 2026-05-12: on
+# Ubuntu 26.04 LTS / kernel 7.0.0-15-generic the module compiled
+# (with config.c warnings) but the host hung within ~5-10 min of
+# `awg-quick up awg0` — twice in a row, on two separate fresh VPS.
+# Refuse to install rather than crashloop the operator later. When
+# upstream supports 7.x, lift the >=7 check.
+if [[ "$PROTOCOL" == "amneziawg" ]]; then
+  kver=$(uname -r | cut -d. -f1)
+  if [[ "$kver" -ge 7 ]]; then
+    fail "AmneziaWG DKMS module is incompatible with kernel $(uname -r) (>=7.x). Use Ubuntu 24.04 LTS (kernel 6.8) for AWG nodes. Other protocols (Xray / Hysteria 2 / NaiveProxy / SS2022 / MTProto / Mieru) are userspace and run fine on this kernel."
+  fi
+fi
+
 # ───── 1. Distro ─────
 . /etc/os-release
 case "${ID:-}" in
