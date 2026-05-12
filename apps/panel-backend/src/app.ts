@@ -69,6 +69,28 @@ export async function buildApp(): Promise<FastifyInstance> {
       });
     }
 
+    // Honor explicit statusCode set by Fastify plugins — most importantly
+    // @fastify/rate-limit, which throws Error{statusCode:429} when a route
+    // exceeds its per-route or global budget. Before this branch existed,
+    // every rate-limit hit fell through to the generic 500 path below: the
+    // client saw HTTP 500 *with* Retry-After / X-RateLimit-* headers (the
+    // plugin sets those on `reply` before throwing), which is bizarre and
+    // useless for an attacker, AND triggered noisy "Unhandled error" logs
+    // for what is normal protection. Caught live 2026-05-12 on cycle #6
+    // reality-check while testing the login per-IP rate-limit (max=5/min).
+    //
+    // We only special-case 4xx — 5xx-flagged plugin errors should still
+    // surface as our generic 500 because something IS broken and the log
+    // entry has diagnostic value.
+    const errWithCode = error as { statusCode?: number; message?: string };
+    const statusCode = errWithCode.statusCode;
+    if (typeof statusCode === 'number' && statusCode >= 400 && statusCode < 500) {
+      return reply.code(statusCode).send({
+        error: statusCode === 429 ? 'RATE_LIMITED' : 'REQUEST_REJECTED',
+        message: errWithCode.message ?? 'Request rejected',
+      });
+    }
+
     request.log.error({ err: error }, 'Unhandled error');
     return reply.code(500).send({
       error: 'INTERNAL_ERROR',
