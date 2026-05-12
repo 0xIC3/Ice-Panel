@@ -89,9 +89,25 @@ func (a *Adapter) Name() string { return Name }
 
 // Start writes the initial (no-peer) config and brings the awg interface up.
 // In config-only mode (AwgQuickBin == "") it just writes the config.
+//
+// Special case: on a freshly-bootstrapped node, main.go can only fill in the
+// interface name and bin paths — every other field (PrivateKey, Address,
+// H1-H4, S1-S4, Jc/Jmin/Jmax) lives in panel-side `Profile.config` and only
+// arrives via the first `ApplyInbound` over mTLS. Calling `renderConfig`
+// here would fail validation with "PrivateKey is required" and crash the
+// agent in a loop. Detect that empty-config state and *defer* the bring-up
+// until ApplyInbound supplies real values — that handler already calls
+// restartInterfaceLocked which writes the config + awg-quick up and flips
+// `started` to true. Caught live cycle #6 2026-05-12 on awg-VPS.
 func (a *Adapter) Start(ctx context.Context) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
+	if a.cfg.Inbound.PrivateKey == "" {
+		a.logger.Info("amneziawg adapter deferred — awaiting first ApplyInbound from panel",
+			"interface", a.cfg.Inbound.Interface)
+		return nil
+	}
 
 	if err := a.writeCurrentConfigLocked(); err != nil {
 		return err
@@ -268,6 +284,7 @@ func (a *Adapter) restartInterfaceLocked(parent context.Context) error {
 	}
 	if a.cfg.AwgQuickBin == "" {
 		a.logger.Info("amneziawg restart skipped (config-only mode)")
+		a.started = true
 		return nil
 	}
 	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
@@ -281,6 +298,10 @@ func (a *Adapter) restartInterfaceLocked(parent context.Context) error {
 	if out, err := a.cfg.runCmd(ctx, a.cfg.AwgQuickBin, "up", a.cfg.Inbound.Interface); err != nil {
 		return fmt.Errorf("awg-quick up %s: %w (%s)", a.cfg.Inbound.Interface, err, strings.TrimSpace(string(out)))
 	}
+	// Mark started so Healthy() returns true and main.go's heartbeat sees
+	// a ready adapter after the first ApplyInbound on a freshly-bootstrapped
+	// node (Start() returned early because PrivateKey was empty).
+	a.started = true
 	a.logger.Info("amneziawg interface bounced", "iface", a.cfg.Inbound.Interface)
 	return nil
 }
