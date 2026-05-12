@@ -5,7 +5,7 @@ fix is here — don't re-debug it from scratch.
 
 ## Cycle marker
 
-Last updated: 2026-05-10 (after cycle #5 — Hysteria 2 onboarding to ice-hys2-test).
+Last updated: 2026-05-12 (cycle #6 reality-check on fresh Aeza fleet).
 
 ## Panel side
 
@@ -114,16 +114,32 @@ agent if it's pre-cycle-5 source.
 **Symptom:** `journalctl -u hysteria` shows ACME failing for `your.domain.net`
 or `your@email.com` even though you passed `--hysteria-domain`/`--hysteria-email`.
 
-**Why:** install-node.sh `--reset` (pre-cycle-5) didn't wipe
-`/etc/hysteria/config.yaml`. Re-install saw "config already exists, keeping"
-and used the placeholder values from the first failed install.
+**Why (two distinct historical bugs):**
+1. **Pre-cycle-5**: install-node.sh `--reset` didn't wipe
+   `/etc/hysteria/config.yaml`. Re-install saw "config already exists, keeping"
+   and used the placeholder values from the first failed install.
+2. **Pre-cycle-6** (caught on Aeza fresh install 2026-05-12): The official
+   `get.hy2.sh` script that runs BEFORE our config-writer creates
+   `/etc/hysteria/config.yaml` with placeholder `your.domain.net`. Our
+   "skip if file exists" check then kept the placeholder and silently
+   ignored the admin's `--hysteria-domain`. Symptom was hysteria crashlooping
+   on `failed to obtain certificate for your.domain.net`.
 
-**Permanent fix shipped:** `do_uninstall()` now removes
-`/etc/hysteria/config.yaml`, `/etc/xray/config.json`, and the related
-systemd unit drop-ins.
+**Permanent fixes shipped:**
+- `do_uninstall()` removes `/etc/hysteria/config.yaml`, `/etc/xray/config.json`,
+  and the related systemd unit drop-ins (closes #1).
+- install-node.sh now grep's the existing config for `${HY_DOMAIN}` — only
+  preserves it when our domain is already there; otherwise overwrites the
+  placeholder (closes #2). Also disables `hysteria-server.service` (the unit
+  get.hy2.sh installs) so its placeholder config can't race ours.
 
-If you hit it on an older install: `rm /etc/hysteria/config.yaml` and re-run
-install with `--reset`.
+If you hit either on an older install:
+```
+rm /etc/hysteria/config.yaml
+systemctl disable --now hysteria-server.service
+# rewrite config manually with real domain/email, or re-run install-node.sh --reset
+systemctl restart hysteria
+```
 
 ### Test-Connect shows TCP timeout for Hysteria / AmneziaWG
 
@@ -159,13 +175,31 @@ no actual traffic — iOS Hiddify / Happ / Streisand show "Timeout" or
    - **Different hosting / route** — Hetzner DE / OVH FR routes from RU
      are usually cleaner than Beget SE. Last-resort.
 
-2. **Salamander obfs mismatch between sing-box client and hysteria server.**
-   sing-box (which iOS Hiddify / Streisand / Happ all use under the hood)
-   may negotiate Salamander differently from upstream `hysteria` CLI. If
+2. **Happ (iOS) ≠ Hiddify (iOS).** Happ uses Xray-core's `hysteria2`
+   outbound implementation; Hiddify uses sing-box's. Verified on 2026-05-12
+   cycle #6 reality-check: with the SAME server, SAME subscription URL,
+   on the SAME iPhone on RU mobile carrier:
+   - **Happ**: tunnel auth passes, streams to Fastly/Cloudflare/Apple/
+     Telegram open then get `canceled by remote with error code 0` — pages
+     never load. Xray-core's hysteria2 outbound appears to mis-negotiate
+     Brutal CC with our `ignoreClientBandwidth: true` + `mport=` combo.
+   - **Hiddify Next (desktop and iOS)**: 9 MB+ traffic flows cleanly,
+     YouTube streams, ifconfig.me returns the server IP, no stream-cancel
+     errors in server logs.
+   - **CLI hysteria client** (server-side smoke): identical setup —
+     ifconfig.me returns server IP in 50ms via SOCKS5.
+
+   **Recommendation:** prefer Hiddify Next for Hysteria 2 on iOS. Happ
+   is fine for Xray (VLESS/Trojan REALITY) — the divergence is specifically
+   in Xray-core's hysteria2 outbound. Track as a Happ-side bug, not ours.
+
+3. **Salamander obfs mismatch between sing-box client and hysteria server.**
+   sing-box (which iOS Hiddify / Streisand all use under the hood) may
+   negotiate Salamander differently from upstream `hysteria` CLI. If
    panel CLI works but iOS clients don't, try removing obfs from the
    profile temporarily to confirm.
 
-3. **`ignoreClientBandwidth` missing on server.** Brutal CC requires the
+4. **`ignoreClientBandwidth` missing on server.** Brutal CC requires the
    client to declare its own bandwidth. Some clients send 0 → tunnel
    establishes but `tx=0`. Fix shipped: agent renders
    `ignoreClientBandwidth: true` by default; URI builder also emits

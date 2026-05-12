@@ -789,7 +789,26 @@ systemctl restart ice-panel-node.service
 # isn't hysteria.
 if [[ "$PROTOCOL" == "hysteria" && -n "$HY_DOMAIN" && -n "$HY_EMAIL" ]]; then
   HY_CONFIG=/etc/hysteria/config.yaml
-  if [[ ! -f "$HY_CONFIG" ]]; then
+
+  # Cycle #6 reality-check (2026-05-12): the official get.hy2.sh script
+  # that runs earlier in this installer writes a placeholder config.yaml
+  # with `your.domain.net` / `your@email.com` BEFORE we get here. The
+  # previous "skip if file exists" behaviour then kept that placeholder
+  # and silently ignored the admin's --hysteria-domain / --hysteria-email
+  # flags — hysteria came up trying to obtain a cert for `your.domain.net`
+  # and crashlooped. Detect the placeholder pattern and overwrite when
+  # we have real values to write; only skip when the existing config
+  # already mentions OUR domain (genuine admin-customized state).
+  SHOULD_WRITE_CFG=1
+  if [[ -f "$HY_CONFIG" ]]; then
+    if grep -q "${HY_DOMAIN}" "$HY_CONFIG"; then
+      SHOULD_WRITE_CFG=0
+      log "Hysteria config already mentions ${HY_DOMAIN} — keeping admin-customized state"
+    else
+      log "Hysteria config at $HY_CONFIG exists but doesn't reference ${HY_DOMAIN} (likely placeholder from get.hy2.sh) — overwriting"
+    fi
+  fi
+  if [[ $SHOULD_WRITE_CFG -eq 1 ]]; then
     log "Writing Hysteria 2 server config at $HY_CONFIG (domain=$HY_DOMAIN)"
     {
       cat <<EOF
@@ -836,9 +855,13 @@ EOF
       fi
     } > "$HY_CONFIG"
     chmod 600 "$HY_CONFIG"
-  else
-    log "Hysteria config already exists at $HY_CONFIG — keeping (delete to regenerate)"
   fi
+
+  # Also disable get.hy2.sh's own systemd unit so its placeholder config
+  # never gets picked up by a parallel service. Our hysteria.service
+  # below owns the runtime.
+  systemctl disable --now hysteria-server.service 2>/dev/null || true
+  systemctl disable --now hysteria-server@.service 2>/dev/null || true
 
   HY_UNIT=/etc/systemd/system/hysteria.service
   if [[ ! -f "$HY_UNIT" ]]; then
