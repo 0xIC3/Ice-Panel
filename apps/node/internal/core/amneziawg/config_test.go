@@ -10,7 +10,10 @@ import (
 func validInbound() InboundConfig {
 	return InboundConfig{
 		PrivateKey: "fake-server-priv-base64",
-		H1:         100, H2: 200, H3: 300, H4: 400,
+		Address:    "10.66.66.1/24",
+		Jc:         4, Jmin: 40, Jmax: 70,
+		S1: 72, S2: 56, S3: 32, S4: 16,
+		H1: 100, H2: 200, H3: 300, H4: 400,
 	}
 }
 
@@ -23,14 +26,13 @@ func TestInboundDefaults(t *testing.T) {
 	if cfg.ListenPort != 51820 {
 		t.Errorf("ListenPort default: got %d", cfg.ListenPort)
 	}
-	if cfg.Address != "10.0.0.1/24" {
-		t.Errorf("Address default: got %q", cfg.Address)
-	}
-	if cfg.Jc != 4 || cfg.Jmin != 40 || cfg.Jmax != 70 {
-		t.Errorf("Jc/Jmin/Jmax defaults: got %d/%d/%d", cfg.Jc, cfg.Jmin, cfg.Jmax)
-	}
-	if cfg.S1 != 72 || cfg.S2 != 56 || cfg.S3 != 32 || cfg.S4 != 16 {
-		t.Errorf("S1-S4 defaults: got %d/%d/%d/%d", cfg.S1, cfg.S2, cfg.S3, cfg.S4)
+	// Junk / magic-size fields and Address no longer carry hardcoded
+	// defaults — panel always sends explicit values (zero = legitimately
+	// "off"). Only PostUp / PostDown / Interface / ListenPort retain
+	// install-time defaults for cases where env-time init doesn't fill
+	// them.
+	if cfg.Jc != 0 || cfg.S1 != 0 {
+		t.Errorf("Jc/S1 should not be defaulted, got Jc=%d S1=%d", cfg.Jc, cfg.S1)
 	}
 	if !strings.Contains(cfg.PostUp, "MASQUERADE") {
 		t.Errorf("PostUp default missing MASQUERADE: %q", cfg.PostUp)
@@ -70,7 +72,7 @@ func TestRenderConfigInterfaceBlock(t *testing.T) {
 		"[Interface]",
 		"PrivateKey = fake-server-priv-base64",
 		"ListenPort = 51820",
-		"Address = 10.0.0.1/24",
+		"Address = 10.66.66.1/24",
 		"Jc = 4",
 		"S1 = 72",
 		"H1 = 100",

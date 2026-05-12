@@ -109,30 +109,15 @@ func (c *InboundConfig) withDefaults() InboundConfig {
 	if out.ListenPort == 0 {
 		out.ListenPort = 51820
 	}
-	if out.Address == "" {
-		out.Address = "10.0.0.1/24"
-	}
-	if out.Jc == 0 {
-		out.Jc = 4
-	}
-	if out.Jmin == 0 {
-		out.Jmin = 40
-	}
-	if out.Jmax == 0 {
-		out.Jmax = 70
-	}
-	if out.S1 == 0 {
-		out.S1 = 72
-	}
-	if out.S2 == 0 {
-		out.S2 = 56
-	}
-	if out.S3 == 0 {
-		out.S3 = 32
-	}
-	if out.S4 == 0 {
-		out.S4 = 16
-	}
+	// Address / Jc / Jmin / Jmax / S1-S4 used to have hardcoded defaults
+	// here (10.0.0.1/24, 4, 40, 70, 72, 56, 32, 16) — the TSPU-preset
+	// values. That was wrong: zero is a legitimate value (operator wants
+	// junk-obfuscation disabled), and the old subnet default collided
+	// with Aeza's host gateway. The panel UI now always sends explicit
+	// values (per AmneziawgConfigSchema), so zero on the wire means
+	// zero — not "use the default". Caught live cycle #6 2026-05-12:
+	// admin set Jc=0 in UI to debug, server kept rendering Jc=4 because
+	// of these defaults, handshake silently failed.
 	if out.PostUp == "" {
 		out.PostUp = "iptables -t nat -A POSTROUTING -o %i -j MASQUERADE"
 	}
