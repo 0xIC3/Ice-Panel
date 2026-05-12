@@ -27,7 +27,7 @@ type Config struct {
 	Inbound InboundConfig
 
 	// ConfigPath is where awg-quick / awg syncconf read the interface config
-	// from. Default "/etc/amneziawg/<iface>.conf".
+	// from. Default "/etc/amnezia/amneziawg/<iface>.conf".
 	ConfigPath string
 
 	// AwgBin / AwgQuickBin / SystemctlBin are CLI paths. When AwgQuickBin is
@@ -61,9 +61,9 @@ type Adapter struct {
 
 func New(cfg Config, logger *slog.Logger) *Adapter {
 	if cfg.ConfigPath == "" {
-		cfg.ConfigPath = fmt.Sprintf("/etc/amneziawg/%s.conf", cfg.Inbound.Interface)
+		cfg.ConfigPath = fmt.Sprintf("/etc/amnezia/amneziawg/%s.conf", cfg.Inbound.Interface)
 		if cfg.Inbound.Interface == "" {
-			cfg.ConfigPath = "/etc/amneziawg/awg0.conf"
+			cfg.ConfigPath = "/etc/amnezia/amneziawg/awg0.conf"
 		}
 	}
 	if cfg.SyncTimeout == 0 {

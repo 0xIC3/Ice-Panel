@@ -571,7 +571,7 @@ mkdir -p "$ENV_DIR"
 # explicit ReadWritePaths. ReadWritePaths can't *create* directories, only
 # permit writes inside existing ones — so we pre-create every per-protocol
 # config dir here, even if the protocol isn't installed on this node.
-mkdir -p /etc/xray /etc/hysteria /etc/amneziawg /etc/caddy /etc/mtg /etc/mita
+mkdir -p /etc/xray /etc/hysteria /etc/amnezia/amneziawg /etc/caddy /etc/mtg /etc/mita
 ENV_FILE="$ENV_DIR/env"
 
 # Honour --payload only if the env file doesn't exist OR the user passed one.
@@ -777,7 +777,7 @@ LimitNOFILE=1048576
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=-/var/log -/etc/ice-panel-node -/etc/hysteria -/etc/xray -/usr/local/etc/xray -/etc/amneziawg -/etc/caddy -/etc/mtg -/etc/mita -/var/lib/mita
+ReadWritePaths=-/var/log -/etc/ice-panel-node -/etc/hysteria -/etc/xray -/usr/local/etc/xray -/etc/amnezia/amneziawg -/etc/caddy -/etc/mtg -/etc/mita -/var/lib/mita
 PrivateTmp=true
 
 # Journald log limits — without these a node running for months can balloon
