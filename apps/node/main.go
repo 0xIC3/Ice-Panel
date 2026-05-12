@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core"
+	"github.com/0xIC3/Ice-Panel/apps/node/internal/core/amneziawg"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core/hysteria"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core/mieru"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core/mtproto"
@@ -202,6 +203,33 @@ func buildAdapters(logger *slog.Logger) []core.CoreAdapter {
 		}
 		adapters = append(adapters, mieru.New(mieruCfg, logger))
 		logger.Info("mieru adapter registered")
+	}
+
+	// Slice 19 — AmneziaWG (DPI-resistant WireGuard fork). Registered
+	// unconditionally when the `amneziawg` CLI exists on $PATH — that's
+	// our "is this an AWG-capable node" probe. bootstrap-amneziawg.sh
+	// (called by install-node.sh when --protocol amneziawg) installs the
+	// kernel module via DKMS and builds awg / awg-quick into /usr/bin.
+	// On non-AWG nodes the binary is absent and we skip registration
+	// (config-only mode would be useless without the CLI).
+	//
+	// Caught live cycle #6 reality-check 2026-05-12: adapter code shipped
+	// with slice 19 but was never wired into the registry, so applyInbound
+	// for amneziawg landed with `no adapter for protocol — config persisted
+	// but not applied live`. Hence the explicit registration here.
+	awgBinPath := getenv("AMNEZIAWG_BIN", "/usr/bin/awg")
+	awgQuickBinPath := getenv("AMNEZIAWG_QUICK_BIN", "/usr/bin/awg-quick")
+	if _, err := os.Stat(awgBinPath); err == nil {
+		awgCfg := amneziawg.Config{
+			AwgBin:       awgBinPath,
+			AwgQuickBin:  awgQuickBinPath,
+			SystemctlBin: getenv("SYSTEMCTL_BIN", "/usr/bin/systemctl"),
+			Inbound: amneziawg.InboundConfig{
+				Interface: getenv("AMNEZIAWG_INTERFACE", "awg0"),
+			},
+		}
+		adapters = append(adapters, amneziawg.New(awgCfg, logger))
+		logger.Info("amneziawg adapter registered", "bin", awgBinPath)
 	}
 
 	return adapters
