@@ -100,6 +100,14 @@ services:
       # empty → geo-block disabled. Requires Cloudflare orange-cloud (CF-IPCountry).
       ADMIN_ALLOWED_COUNTRIES: ${ADMIN_ALLOWED_COUNTRIES:-}
       HONEYPOT_BLACKLIST_TTL_SEC: ${HONEYPOT_BLACKLIST_TTL_SEC:-3600}
+      # Tier-1 — honey-user tripwire tokens (CSV). Caught live during cycle #6
+      # reality-check 2026-05-12: was in config.ts schema + .env.production
+      # template + subscription.routes.ts check, but the passthrough line in
+      # this compose file was missing. Result: backend container had empty
+      # HONEY_USER_TOKENS env var → empty array → .includes() always false →
+      # honey-token requests fell through to the regular subscription handler
+      # and returned 404 instead of the plausible-empty 200 + IP blacklist.
+      HONEY_USER_TOKENS: ${HONEY_USER_TOKENS:-}
     depends_on:
       postgres:
         condition: service_healthy
