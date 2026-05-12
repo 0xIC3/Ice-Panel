@@ -79,7 +79,14 @@ const ConfigSchema = z.object({
   // ACME contact email used by node-installers that need a Let's Encrypt
   // cert (Hysteria 2 / NaiveProxy / Caddy). Optional — install command
   // emits a placeholder when unset, admin fills manually.
-  ACME_DEFAULT_EMAIL: z.email().optional(),
+  //
+  // We coerce empty-string → undefined BEFORE the .email() check because
+  // install-panel.sh emits `ACME_DEFAULT_EMAIL=` (no value) into the
+  // generated .env.production as a "fill me in later" hint, and Zod's
+  // bare `.email().optional()` rejects "" as an invalid email rather than
+  // treating it as absent. Same pattern as PANEL_PUBLIC_IP / TELEGRAM_*.
+  ACME_DEFAULT_EMAIL: z
+    .preprocess((v) => (v === '' ? undefined : v), z.email().optional()),
 
   // Tier-1 security — Telegram alert webhook (cycle #5 SECURITY.md).
   // When BOT_TOKEN + CHAT_ID are both set, the panel pushes notifications
