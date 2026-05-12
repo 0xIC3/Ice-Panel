@@ -1428,9 +1428,56 @@ Per-user-bucket branding (custom Profile-Title, host-overrides for VIPs, sub-pag
 
 Раздел closed-в-коде но требующих ещё одной валидации в проде или дофикса:
 
-- ~~**31.5 Hysteria 2 port-hopping**~~ ✅ **закрыто 2026-05-11** — hysteria остаётся на одном `listen: :443`, install-node.sh ставит iptables UDP REDIRECT `20000-50000 → :443` (managed systemd-юнитом `ice-panel-hyhop.service`, `--hysteria-port-range START-END` для оверрайда). URI builder emits `mport=START-END`, sing-box outbound — `server_ports`, Clash Meta — `ports`. UI: Port range start/end в Hysteria профиле (опционально). Профильный range ДОЛЖЕН быть subset'ом install-time iptables-range. RU/iOS валидация — следующая сессия.
-- ~~**38 Heartbeat agent-resync**~~ ✅ **закрыто 2026-05-11** — агент эмитит `X-Agent-Start-Time` header (unix-nano process-start) в heartbeat, панель хранит last-seen в Redis (`node:<id>:agentStartTime`, TTL 7d); при mismatch enqueue `applyNodeInbounds` job — re-push inbounds + addUser fan-out без admin toggle. First-seen (Redis miss) НЕ триггерит (защита от panel-cold-start false positive).
+- ~~**31.5 Hysteria 2 port-hopping**~~ ✅ **закрыто 2026-05-11** — hysteria остаётся на одном `listen: :443`, install-node.sh ставит iptables UDP REDIRECT `20000-50000 → :443` (managed systemd-юнитом `ice-panel-hyhop.service`, `--hysteria-port-range START-END` для оверрайда). URI builder emits `mport=START-END`, sing-box outbound — `server_ports`, Clash Meta — `ports`. UI: Port range start/end в Hysteria профиле (опционально). Профильный range ДОЛЖЕН быть subset'ом install-time iptables-range. **Reality-checked 2026-05-12 на Aeza London — RU iOS Hiddify Next тоннелит 9 MB+ traffic чисто.**
+- ~~**38 Heartbeat agent-resync**~~ ✅ **закрыто 2026-05-11, reality-checked 2026-05-12** — агент эмитит `X-Agent-Start-Time` header (unix-nano process-start) в heartbeat, панель хранит last-seen в Redis (`node:<id>:agentStartTime`, TTL 7d); при mismatch enqueue `applyNodeInbounds` job — re-push inbounds + addUser fan-out без admin toggle. `time.NewTimer(0)` в heartbeat loop fires immediately on agent start → **T+1 sec от systemctl restart до полного user re-push**.
 - **AmneziaWG / NaiveProxy / SS2022 / MTProto / Mieru** — code-готовы, real-traffic не валидированы. Требуют отдельных VPS под каждый core (rule: 1 нода = 1 core).
+
+---
+
+### Cycle #6 EOD (2026-05-12) — full reality-check on fresh Aeza fleet
+
+После того как code-side cycle #6 закрылся 2026-05-11, **2026-05-12** была полноценная reality-check сессия на трёх свежевыданных Aeza VPS (panel + xray-Helsinki + hysteria-London). 5+ часов работы, 12 live-only bugs пойманы и зафиксены прямо в процессе. Все critical-path фичи прогнаны end-to-end из RU мобильного клиента.
+
+**Что reality-checked:**
+
+| Фича | Verified |
+|---|---|
+| Panel install через single `bash <(curl ...) install-panel.sh` с интерактивными prompts (domain + ACME email) | ✅ |
+| Caddy auto-TLS через LE http-01 fallback (tls-alpn-01 timeout не блокирует) | ✅ |
+| Bootstrap-token install-node + Refresh bootstrap + `--reset` + `--uninstall` | ✅ |
+| Xray REALITY all 4 transports (raw / xhttp / gRPC / Trojan) через Hiddify desktop из RU | ✅ |
+| Hysteria 2 clean (без obfs) — 73ms ping, реальный трафик | ✅ |
+| Hysteria 2 + Salamander obfs recipe — реальный трафик | ✅ |
+| Hysteria 2 port-hopping (slice 31.5) — iptables NAT auto-apply на install | ✅ |
+| **Slice 38 self-destruct** — UI Delete → агент exit 42 ровно через 3 мин (3×60s heartbeat 410 Gone), `RestartPreventExitStatus=42` blocks systemd reanimation, forensic state on disk preserved | ✅ |
+| **Slice 38 auto-resync** — `systemctl restart ice-panel-node` → `time.NewTimer(0)` fires immediately → panel detect mismatch → enqueue applyInbounds → re-push completes за **1 секунду** | ✅ |
+| Node revival flow — `--reset` после self-destruct → clean re-install с новым bootstrap | ✅ |
+| Hysteria per-user traffic counters (`/traffic` HTTP API endpoint, secret-protected на loopback) | ✅ |
+| Tier-1 honeypot trap (`/.env`, `/wp-admin` → 404 fake + IP blacklist + Telegram alert) | ✅ |
+| Tier-1 honey-user tripwire (`HONEY_USER_TOKENS=tok_canary` → 200 plausible-empty + blacklist) | ✅ |
+| Username lockout (5 wrong logins → 15-min lockout, key `auth:fail:<username>` в Redis) | ✅ |
+| Per-IP rate-limit на `/api/auth/login` (5/min) → правильный 429 RATE_LIMITED | ✅ |
+
+**12 live-only bugs пойманы и зафиксены mid-cycle (каждый — cross-cuts layers где unit-тесты не достают):**
+
+| # | Bug | Fix |
+|---|---|---|
+| 1 | pgcrypto migration crashloop (`DO $$ IF EXISTS pg_extension` pattern) | unconditional `CREATE EXTENSION IF NOT EXISTS pgcrypto` (commit 28977e8) |
+| 2 | Backend crashloops с `ACME_DEFAULT_EMAIL: Invalid email` когда env=`''` | Zod `.preprocess(v => v === '' ? undefined : v)` (commit ff6af48) |
+| 3 | `get.hy2.sh` placeholder config race — install-node.sh skip'ал свой config write если файл уже есть | grep'аем existing config на наш `${HY_DOMAIN}`, overwrite если placeholder (commit c44550d) |
+| 4 | `install-node.sh` self-check `/healthz` curl без client cert после S6 hardening | `systemctl is-active ice-panel-node` вместо curl (commit f262927) |
+| 5 | Shadowsocks `GetStats: statsquery failed` спам на non-SS нодах | Skip stats query когда `len(users)==0`, demote error path to Debug (commit f262927) |
+| 6 | `install-node.sh` HTTP_CODE concat `410000` — `curl -f` + `\|\| echo "000"` дописывало 000 к existing valid code | Drop `-f` flag, fallback на 000 только при network failure (cycle #6) |
+| 7 | Interactive `read -rp ... </dev/tty` swallowing Cyrillic+backspace input | Split `printf` + `read` for cleaner stdin handling (cycle #6) |
+| 8 | Recipe `Math.random()` evaluating once at module-load → same password на каждый клик в session | `apply` field accepts `Record<>` OR `() => Record<>` thunk; wrap 3 randomness-needing recipes (cycle #6) |
+| 9 | Hysteria `GetStats()` TODO-stubbed → UI показывал `0 B today` для всех Hysteria нод | Adapter polls hysteria's `/traffic?clear=1` API с per-install random `HYSTERIA_STATS_SECRET`; install-node.sh generates secret + initial config block (cycle #6) |
+| 10 | Honeypot paths (`/.env`, `/wp-admin`) **никогда не доходили до backend** — frontend nginx SPA fallback ел запросы | Добавил regex location в nginx.conf для proxy known scanner paths to backend (cycle #6) |
+| 11 | `HONEY_USER_TOKENS` set в `.env.production`, но `printenv` в контейнере пусто — docker-compose НЕ пробрасывал | Added `HONEY_USER_TOKENS: ${HONEY_USER_TOKENS:-}` to backend env block in docker-compose.prod.yml (cycle #6) |
+| 12 | `/api/auth/login` 6-я попытка → HTTP **500** с rate-limit headers (должно быть 429) | `setErrorHandler` now honors plugin `error.statusCode` for 4xx — returns proper 429 RATE_LIMITED (cycle #6) |
+
+**Pattern observed:** все 12 — cross-cuts layers. Каждый раз unit-тест прошёл, а end-to-end в проде нет. Будущая защита — добавлять smoke tests которые проходят сквозь nginx + docker-compose + Bash + agent + панель в одной цепочке.
+
+**Total Aeza бюджет:** ~€0.50 за весь reality-check cycle (per-hour billing — VPS жили 4-5 часов потом destroy'нулись).
 
 ---
 

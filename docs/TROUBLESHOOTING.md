@@ -5,7 +5,37 @@ fix is here — don't re-debug it from scratch.
 
 ## Cycle marker
 
-Last updated: 2026-05-12 (cycle #6 reality-check on fresh Aeza fleet).
+Last updated: 2026-05-12 (cycle #6 reality-check on fresh Aeza fleet — 12
+live bugs caught + fixed end-to-end on London Hysteria + Helsinki Xray nodes).
+
+## Cycle #6 EOD summary
+
+Reality-checked from-scratch install end-to-end on freshly-imaged Aeza VPS:
+- panel install via single `bash <(curl ...)` command
+- Xray REALITY all 4 transports (raw / xhttp / gRPC / Trojan)
+- Hysteria 2 clean + Salamander obfs + port-hopping (slice 31.5)
+- Slice 38 self-destruct (T+3 min exit 42, RestartPreventExitStatus stops
+  systemd from reviving)
+- Slice 38 auto-resync (T+1 sec applyInbounds re-issue after agent restart)
+- Hysteria traffic counters via /traffic API
+- Tier-1 honeypot trap + honey-user tripwire + per-IP rate-limit +
+  username lockout
+
+12 live-only bugs found that no unit test had caught (each cross-cuts
+layers — backend code + nginx + docker-compose env passthrough + Bash
+script + Go agent — exactly the seams unit tests don't span):
+1. pgcrypto migration crashloop (DO $$ pattern)
+2. ACME_DEFAULT_EMAIL='' rejected by Zod
+3. get.hy2.sh placeholder config race
+4. install-node.sh /healthz self-check (curl without client cert after S6)
+5. Shadowsocks GetStats noise on non-SS nodes
+6. HTTP_CODE concat "410000" in bootstrap fetch
+7. Interactive `read -rp` swallowing Cyrillic+backspace input
+8. Recipe Math.random() evaluating once at module-load
+9. Hysteria traffic stats TODO returning zero bytes
+10. Honeypot paths never reached backend (frontend nginx ate them)
+11. HONEY_USER_TOKENS not passthrough'd in docker-compose.prod.yml
+12. @fastify/rate-limit error{statusCode:429} returned 500 instead of 429
 
 ## Panel side
 
@@ -86,6 +116,133 @@ hit on a stale dist/.
 **Fix:** Deploy scripts default to `--no-cache` since cycle #5. If you opt
 out via `--cache` and hit this, run `bash scripts/deploy-frontend.sh`
 (no flag = no-cache).
+
+### Backend crashloops with `Invalid environment configuration: ACME_DEFAULT_EMAIL`
+
+**Symptom:** Backend container restarts every few seconds, log shows
+`❌ Invalid environment configuration: ACME_DEFAULT_EMAIL: Invalid email address`
+even though `.env.production` has the line present.
+
+**Why:** `install-panel.sh` (pre-cycle-6) emitted a literal `ACME_DEFAULT_EMAIL=`
+empty-string line into the generated env file as a "fill me in later" hint.
+Zod's `.email().optional()` rejected `''` as invalid because empty-string ≠
+absent. Same pattern other env vars dodged via `.transform(v => v === '' ? undefined : v)`.
+
+**Permanent fix shipped (commit ff6af48):** config.ts now preprocesses `''` →
+`undefined` before the `.email()` check.
+
+**One-shot recovery on older deploys:**
+```bash
+# Replace empty with a real address
+sed -i 's|^ACME_DEFAULT_EMAIL=$|ACME_DEFAULT_EMAIL=admin@example.com|' /opt/ice-panel/.env.production
+# OR remove the line entirely
+sed -i '/^ACME_DEFAULT_EMAIL=$/d' /opt/ice-panel/.env.production
+# Re-create backend (recreate, not restart — restart doesn't reload env-file)
+cd /opt/ice-panel && docker compose -f docker-compose.prod.yml \
+  --env-file .env.production up -d --force-recreate backend
+```
+
+### Honeypot trap `/.env` returns 200 + SPA HTML instead of 404 fake
+
+**Symptom:** `curl https://panel.example.com/.env` returns HTTP 200 with the
+SPA's `index.html` body instead of the honeypot's fake `<html>Not Found</html>`.
+IP doesn't get blacklisted, no Telegram alert, no `ice_panel_honeypot_hits_total`
+increment.
+
+**Why:** Backend's `security-gate` middleware (Tier-1 honeypot) only runs on
+requests that REACH the backend. Frontend nginx (`apps/panel-frontend/nginx.conf`)
+proxies `/api/`, `/sub/`, `/health`, `/admin/` to backend but **everything
+else falls through to the SPA `try_files` rule** — including `/.env`,
+`/wp-admin`, `/xmlrpc.php`. Scanner sees a perfectly normal SPA shell.
+
+**Permanent fix shipped (cycle #6):** frontend nginx now has an explicit
+regex location matching known scanner paths and proxies them to backend so
+the trap can fire:
+```nginx
+location ~* ^/(\.env(\b|$)|\.git/|\.aws/|wp-admin|wp-login|wp-config\.php|xmlrpc\.php|phpinfo\.php|server-status|phpmyadmin|wordpress) {
+    proxy_pass http://$backend;
+    ...
+}
+```
+
+**Recovery on older deploys:** `bash scripts/deploy-frontend.sh` after
+`git pull`. The pattern is in `nginx.conf`; rebuilt frontend image picks it up.
+
+### `HONEY_USER_TOKENS` set in `.env` but `printenv` inside backend container shows empty
+
+**Symptom:** Honey-user tripwire never fires. `/sub/<canary>` returns 404
+NOT_FOUND from regular subscription handler instead of plausible-empty 200 +
+IP blacklist. `grep HONEY_USER_TOKENS /opt/ice-panel/.env.production` shows
+the value present.
+
+**Why:** Every new env var added to `config.ts` ALSO needs an entry in
+`docker-compose.prod.yml` under `backend.environment:`. Docker Compose
+doesn't auto-forward arbitrary keys from `.env-file` into containers — only
+those explicitly declared. Caught live cycle #6 on cross-layer sync gap:
+config schema ✅, .env template ✅, route handler ✅, but compose
+passthrough was missing for `HONEY_USER_TOKENS`.
+
+**Permanent fix shipped:** `HONEY_USER_TOKENS: ${HONEY_USER_TOKENS:-}` added
+to `docker-compose.prod.yml`.
+
+**Verify env reaches container:**
+```bash
+docker compose -f /opt/ice-panel/docker-compose.prod.yml \
+  --env-file /opt/ice-panel/.env.production exec backend printenv HONEY_USER_TOKENS
+```
+Empty output = compose passthrough is missing → add line, `up -d backend`.
+
+### `/api/auth/login` returns HTTP 500 with Retry-After + X-RateLimit headers
+
+**Symptom:** Sixth or higher login attempt within a minute returns HTTP 500
+but the response carries `retry-after: 59` + `x-ratelimit-limit: 5` + similar
+plugin headers. Backend logs show `"msg":"Unhandled error","err":{"type":
+"Error","message":"Rate limit exceeded, retry in 59 seconds","statusCode":429}`.
+
+**Why:** `@fastify/rate-limit` v10 throws `Error{statusCode:429}` instead of
+calling `reply.code(429).send(...)` directly. The thrown error bubbles up to
+`app.setErrorHandler`, which (pre-cycle-6) didn't check `error.statusCode`
+and treated it as a generic "Unhandled error" → returned 500. The rate-limit
+plugin had already set its headers on the reply object before throwing, so
+the client saw the headers but the wrong status.
+
+**Permanent fix shipped (cycle #6):** `setErrorHandler` now honors any 4xx
+`statusCode` on the error object, returning the correct status with a
+clean JSON body (`{"error":"RATE_LIMITED","message":"..."}` for 429).
+
+### Hysteria node shows `0 B today` in panel UI despite active traffic
+
+**Symptom:** UI Nodes page shows `0 B` traffic for a Hysteria node even when
+clients are actively tunneling MB+ through it. Other protocol nodes (Xray)
+show real bytes on the same panel.
+
+**Why:** `apps/node/internal/core/hysteria/adapter.go` `GetStats()` was a
+TODO stub (slice 13 placeholder) returning the user-id list with zero
+counters. Unlike Xray (which exposes stats via `xray api statsquery` gRPC),
+Hysteria-server keeps per-user uplink/downlink behind a separate
+`trafficStats:` HTTP API that the adapter never polled.
+
+**Permanent fix shipped (cycle #6):**
+- `install-node.sh` generates `HYSTERIA_STATS_SECRET=$(openssl rand -hex 24)`
+  at install time and writes it to `/etc/ice-panel-node/env`.
+- Initial `/etc/hysteria/config.yaml` includes the `trafficStats:` block
+  bound to `127.0.0.1:9999` (loopback-only, secret-protected).
+- `GetStats()` now polls `http://127.0.0.1:9999/traffic?clear=1` with the
+  matching secret as Authorization bearer, parses the JSON map keyed by
+  user-id (the one we returned from `/auth` callback), and fills
+  `core.UserStats{BytesIn, BytesOut}`.
+- Soft-fails on every error: temporary stats outage doesn't break the cron
+  poller for other adapters on the same node.
+
+**Verify on older nodes:**
+```bash
+# Hysteria binding the endpoint?
+ss -ltnp | grep 9999
+# Endpoint responds with the matching secret?
+SECRET=$(grep ^HYSTERIA_STATS_SECRET /etc/ice-panel-node/env | cut -d= -f2)
+curl -sH "Authorization: $SECRET" http://127.0.0.1:9999/traffic | head
+```
+Missing 9999 listener → `--reset` reinstall with current install-node.sh.
 
 ## Node side
 
@@ -300,6 +457,62 @@ This preserves /etc/ice-panel-node/env, mTLS payload, and any per-protocol
 configs already on disk — only the agent binary is replaced. After
 restart, panel should resume normal applyInbounds / heartbeat without
 any further intervention.
+
+### `install-node.sh` fails with `Unexpected HTTP 410000 from panel`
+
+**Symptom:** Running install-node.sh with a bootstrap token aborts with:
+```
+[fail] Unexpected HTTP 410000 from panel — see panel logs
+```
+Token was actually a clean `410 Gone` (already consumed).
+
+**Why:** Pre-cycle-6 script used `curl -fsSL ... -w '%{http_code}' || echo "000"`.
+The `-f` flag makes curl exit non-zero on HTTP 4xx/5xx (returns 22), which
+triggered the `|| echo "000"` branch and **appended** `"000"` to whatever
+`-w` had already written. Result: `"410" + "000" = "410000"`, which missed
+the `case 410)` branch and fell through to the catch-all `*` with the
+misleading concat'd code.
+
+**Permanent fix shipped (cycle #6):** drop `-f`, fallback only on network
+error (curl exits non-zero before writing any code):
+```bash
+HTTP_CODE=$(curl -sSL -o "$TMP_PAYLOAD" -w '%{http_code}' \
+  "$PANEL_URL/api/internal/bootstrap/$BOOTSTRAP_TOKEN" 2>/dev/null) \
+  || HTTP_CODE="000"
+```
+
+**Recovery:** bootstrap token is single-use. Hit `Refresh bootstrap` in the
+panel UI to mint a new one. Re-run install-node.sh with the new token.
+
+### `install-node.sh` interactive prompt rejects `y` even when typed
+
+**Symptom:** Running install-node.sh on a node with previous install:
+```
+[warn] Detected previous ice-panel-node install on this VPS.
+Wipe previous installation and continue? [y/N]: y
+[fail] Aborted by user. Pass --reset to skip this prompt, or --uninstall to remove without re-installing.
+```
+You typed `y` and pressed Enter, script claims you aborted.
+
+**Why (two causes):**
+1. **Process substitution edge case.** `bash <(curl ...)` runs the script
+   from a `<(...)` process-sub. `read -rp "..." ans </dev/tty` occasionally
+   loses keypresses in that flow even though the prompt printed correctly.
+2. **Mixed Cyrillic/Latin + backspace.** If you typed a Cyrillic letter
+   first (e.g. `Н`, visually similar to `H`), realized the keyboard layout
+   issue, backspaced, then typed `y` — `read` saw the raw byte sequence
+   including the backspace control character and didn't end up with a
+   clean `y` in `$ans`.
+
+**Permanent fix shipped (cycle #6):** split the combined `read -rp` into
+separate `printf` + `read` — the read then has `/dev/tty` as a proper
+terminal handle, decoupled from the prompt-print side. Still recommend
+passing `--reset` explicitly for non-interactive automation.
+
+**Workaround on older script:** pass `--reset` flag to skip the prompt:
+```bash
+bash <(curl -fsSL .../install-node.sh) --reset --panel-url ... --bootstrap ...
+```
 
 ## Reset / nuke from orbit
 

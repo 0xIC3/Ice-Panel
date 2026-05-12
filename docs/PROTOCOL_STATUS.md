@@ -4,7 +4,7 @@ What's actually validated by real traffic vs what's scaffolded. **Updated after 
 
 > **Companion docs:** [ROADMAP.md](./ROADMAP.md) tracks slices; [TESTING.md](./TESTING.md) carries per-slice checklists; **this file** answers "what can I sell to a paying user today, vs what's still a science experiment".
 
-> **Last updated:** 2026-05-10 (VPS cycle #5 — full Phase 3 closure + multi-protocol multi-node validated). Confirmed in prod: VLESS+REALITY (raw / xhttp / gRPC / Trojan) + Hysteria 2 with Salamander obfs. Heartbeat self-destruct, mTLS panel-client cert pinning, UFW lock-down, Hiddify import — all green. Two install-script footguns caught and patched mid-cycle: hysteria adapter spawning subprocess in parallel with systemd-managed unit (now respects `HYSTERIA_SERVICE_UNIT`); install-node.sh `--reset` not wiping `/etc/hysteria/config.yaml` (now wipes per-protocol generated configs).
+> **Last updated:** 2026-05-12 (**VPS cycle #6** — fresh Aeza fleet, full reality-check after cycle #6 code-side closure). Re-confirmed end-to-end on freshly-imaged London (Hysteria) + Helsinki (Xray) VPS via single-command install. All 4 Xray transports (raw/xhttp/gRPC/Trojan) ✅. **Hysteria 2 + port-hopping** (slice 31.5) — **9 MB+ tunneled from RU client via Hiddify Next**, fixing the cycle #5 RU iOS gap. Slice 38 self-destruct + auto-resync both reality-checked. Hysteria per-user traffic counters via `/traffic` API (was TODO). Tier-1 security (honeypot, honey-user tripwire, username lockout, per-IP rate-limit) all fire correctly with proper status codes. 12 live install-time + cross-layer bugs caught + fixed mid-cycle (see TROUBLESHOOTING.md cycle #6 summary at top).
 
 ## ✅ Confirmed by real traffic
 
@@ -38,18 +38,24 @@ The only one. Anything else listed below is some shade of "tested locally / loop
 - **Verified:** **VPS cycle #5 (2026-05-10)** via Hiddify
 - **Status:** safe (password-auth instead of UUID, anti-probe parity with VLESS)
 
-### Hysteria 2 + Salamander obfuscation
+### Hysteria 2 + Salamander obfuscation + Port-hopping (slice 31.5)
 
-- **Slice:** 11 (core), 24b2 (ApplyInbound)
-- **Pipeline verified:** **VPS cycle #5 (2026-05-10)** — server up, ACME cert, agent ApplyInbound + addUser, panel→node→panel CLI client got `ifconfig.me = 147.45.76.143` end-to-end through tunnel
-- **Real RU iOS client:** ❌ NOT working (cycle #2 also failed, same symptom). iOS Hiddify / Happ / Streisand all fail to establish meaningful traffic — handshake either doesn't happen or `tx=0` after auth. Same RU-DPI-throttle-UDP/443 pattern that hit cycle #2.
-- **What we proved:** entire panel↔node pipeline correct (config render, ApplyInbound, addUser, auth callback), `ignoreClientBandwidth: true` shipped as default, IPv4-prefer for outbound resolver, separate `panelClient` cert for mTLS, port:8443 UFW lockdown.
-- **What blocks `safe to ship to RU users on iOS`:** UDP/443 from RU-mobile/home ISPs to Beget SE (147.45.76.143) is selectively dropped. Server side is healthy; client→server packets either don't arrive or are rate-throttled at TSPU level.
-- **Lifecycle model:** systemd-managed `hysteria.service` (install-node.sh wrote the unit). Agent's adapter respects `HYSTERIA_SERVICE_UNIT=hysteria` and only writes config + reloads via `systemctl restart` on ApplyInbound — NEVER spawns its own subprocess (would compete for :443/udp).
-- **Test-Connect caveat:** Probe is TCP-only — for UDP protocols Test-Connect always shows ⚠ "TCP timeout / UDP-based protocol — tested TCP port reachability only". This is **expected**, not a bug.
+- **Slice:** 11 (core), 24b2 (ApplyInbound), 31.5 (port-hopping shipped cycle #6)
+- **Pipeline verified:** cycle #5 (2026-05-10) on Beget SE 147.45.76.143
+- **RU client end-to-end:** ✅ **CONFIRMED CYCLE #6 (2026-05-12)** on Aeza London (85.192.38.176) via **Hiddify Next** (sing-box) — 9 MB+ traffic flowed cleanly through tunnel, ifconfig.me returned server IP, YouTube streamed.
+- **Per-user traffic counters:** ✅ **shipped cycle #6** — Hysteria's `/traffic` API endpoint (loopback :9999, secret-protected) polled every 30s, parsed JSON → `core.UserStats{BytesIn,BytesOut}`. UI Nodes page shows real bytes (was stuck on `0 B today` pre-cycle-6 because `GetStats()` was a TODO).
+- **Port-hopping (slice 31.5):** URI emits `mport=20000-50000`, sing-box outbound `server_ports`, Clash `ports`; install-node.sh applies `iptables -t nat -A PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports 443` via dedicated `ice-panel-hyhop.service` systemd unit (oneshot+RemainAfterExit, ExecStop removes the rule, auto-restore on boot).
+- **Client compatibility (cycle #6 findings):**
+  - **Hiddify Next** (desktop + iOS, sing-box-based): ✅ works flawlessly with our `obfs=salamander&mport=20000-50000&upmbps=100&downmbps=100` URI shape
+  - **Happ iOS** (Xray-core hysteria2 outbound): ❌ auth passes, streams open then get `canceled by remote with error code 0`. Xray-core's hysteria2 outbound mis-negotiates Brutal CC + port-hopping combo. **Not our bug** — track as Happ-side. Recommendation: prefer Hiddify Next for Hysteria 2 on iOS.
+- **What we proved cycle #6:** panel↔node pipeline correct (config render, ApplyInbound, addUser, auth callback), `ignoreClientBandwidth: true` defaults, per-install random `HYSTERIA_STATS_SECRET`, separate `panelClient` mTLS cert, port:8443 UFW lockdown, port-hopping iptables NAT applies cleanly, real `/traffic` API gives per-user bytes back to panel UI.
+- **Hosting note (cycle #6):** Aeza London ↔ RU mobile carrier route is clean for QUIC UDP/443 in both directions (proven by 73ms ping + multi-MB traffic). Cycle #5's "RU iOS not working" was specifically about Beget SE route — different hosting, different result. Pick your hosting carefully.
+- **Lifecycle model:** systemd-managed `hysteria.service` (install-node.sh wrote the unit). Agent's adapter respects `HYSTERIA_SERVICE_UNIT=hysteria` and only writes config + reloads via `systemctl restart` on ApplyInbound — NEVER spawns its own subprocess (would compete for :443/udp). `hysteria-server.service` (the unit `get.hy2.sh` ships) is auto-disabled by install-node.sh to prevent config races.
 - **Status when shipping a paying user today:**
-  - **Desktop / non-RU clients**: safe (ground truth: panel CLI client tunneling works perfectly)
-  - **RU iOS clients**: not safe yet — needs port-hopping (slice 31.5, see roadmap) or non-RU hosting
+  - **Desktop (any OS) via Hiddify Next:** ✅ safe — verified end-to-end cycle #6
+  - **iOS via Hiddify Next:** ✅ safe — sing-box implementation handles our config
+  - **iOS via Happ:** ⚠ broken (Happ's Xray-core hysteria2 incompat) — document this in user-facing onboarding
+  - **CLI hysteria client:** ✅ safe (server-side smoke proven)
 
 ### Multi-protocol multi-node fan-out
 
