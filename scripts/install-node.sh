@@ -282,8 +282,16 @@ fi
 if [[ -n "$BOOTSTRAP_TOKEN" && -n "$PANEL_URL" ]]; then
   log "Redeeming bootstrap token at $PANEL_URL"
   TMP_PAYLOAD=$(mktemp)
-  HTTP_CODE=$(curl -fsSL -o "$TMP_PAYLOAD" -w '%{http_code}' \
-    "$PANEL_URL/api/internal/bootstrap/$BOOTSTRAP_TOKEN" || echo "000")
+  # Cycle #6 fix 2026-05-12 — was `curl -f ... || echo 000`. `-f` makes curl
+  # exit non-zero on HTTP 4xx/5xx, which triggered the `|| echo 000` and
+  # appended "000" to whatever http_code -w already wrote → "410" became
+  # "410000" and missed the case-410 branch, falling through to "*" with
+  # the misleading "Unexpected HTTP 410000" message. Drop -f so curl exits 0
+  # on every reply where the response was actually parsed (we use http_code
+  # to distinguish); separate || fallback covers only the network-down
+  # case where curl couldn't connect at all.
+  HTTP_CODE=$(curl -sSL -o "$TMP_PAYLOAD" -w '%{http_code}' \
+    "$PANEL_URL/api/internal/bootstrap/$BOOTSTRAP_TOKEN" 2>/dev/null) || HTTP_CODE="000"
   case "$HTTP_CODE" in
     200) PAYLOAD=$(tr -d '\n\r \t' < "$TMP_PAYLOAD"); rm -f "$TMP_PAYLOAD" ;;
     404) rm -f "$TMP_PAYLOAD"; fail "Bootstrap token not found at $PANEL_URL — typo or expired+purged" ;;
@@ -382,7 +390,16 @@ if [[ $EXISTING_INSTALL -eq 1 ]]; then
     warn "Detected previous ice-panel-node install on this VPS."
     warn "Re-installing against a different panel without wiping state will"
     warn "cause mTLS verification to fail (old server cert vs new panel CA)."
-    read -rp "Wipe previous installation and continue? [y/N]: " ans </dev/tty || ans=""
+    # Cycle #6 reality-check 2026-05-12 — `read -rp "..." ans </dev/tty`
+    # silently lost the keypress in the `bash <(curl ...)` process-substitution
+    # flow (the prompt printed but the subsequent read returned empty, hitting
+    # the `*` branch with "Aborted by user" even though `y` was typed). Splitting
+    # the prompt print and the read fixes it — `read` then has /dev/tty as a
+    # proper terminal handle without the prompt-print racing the input side.
+    printf '\033[1;33mWipe previous installation and continue? [y/N]:\033[0m '
+    if ! read -r ans </dev/tty; then
+      ans=""
+    fi
     case "${ans,,}" in
       y|yes) do_uninstall ;;
       *)     fail "Aborted by user. Pass --reset to skip this prompt, or --uninstall to remove without re-installing." ;;
