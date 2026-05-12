@@ -5,8 +5,9 @@ fix is here — don't re-debug it from scratch.
 
 ## Cycle marker
 
-Last updated: 2026-05-12 (cycle #6 reality-check on fresh Aeza fleet — 12
-live bugs caught + fixed end-to-end on London Hysteria + Helsinki Xray nodes).
+Last updated: 2026-05-12 EOD (cycle #6 reality-check on fresh Aeza fleet — 21
+live bugs caught + fixed end-to-end: London Hysteria, Helsinki Xray, AmneziaWG
+node-side fully working, AmneziaWG client-side handshake still pending).
 
 ## Cycle #6 EOD summary
 
@@ -41,6 +42,10 @@ script + Go agent — exactly the seams unit tests don't span):
 15. AmneziaWG configs written to /etc/amneziawg/ but upstream awg-quick expects /etc/amnezia/amneziawg/
 16. inbound-sync worker pushed amneziawgPublicKey but never the allocated peer IP — silent peer-skip on node
 17. AmneziaWG default subnet 10.0.0.0/24 collides with Aeza's internal gateway 10.0.0.1 — VPS loses connectivity minutes after awg0 comes up, no kernel panic, no oops. Reported by Aeza support on ticket #604280 after 4 burned VPS attempts. Default changed to 10.66.66.0/24.
+18. AmneziaWG inbound port not propagated through wire — agent always bound to install-time fallback (51820) while wgconf advertised whatever the admin set in UI (typically :443). Handshake init dropped on closed socket. Fix: panel-backend now injects `listenPort` into wire config, agent's `inboundCfgWire.ListenPort` field reads it.
+19. AmneziaWG Jc/Jmin/Jmax/S1-S4 changes via `awg syncconf` silently no-op on the upstream fork — junk/magic-size fields are interface-init-time-only. classifyDiff used to return diffSyncconf for those; now they fall into diffRestart (awg-quick down/up) and actually take effect.
+20. AmneziaWG `renderConfig.withDefaults()` overwrote legitimate zero values with TSPU presets (Jc=4, Jmin=40, Jmax=70, S1=72, S2=56, S3=32, S4=16) AND Address=10.0.0.1/24. Made it impossible to disable obfuscation from the panel UI for debugging, AND silently re-introduced the Aeza-subnet collision when admin left Address unset. Removed those defaults — panel always sends explicit values via AmneziawgConfigSchema.
+21. UFW only opened UDP/51820 (WireGuard default) at install time for `--protocol amneziawg`; operators picking the more common :443 stealth port in UI got handshake timeouts because the firewall dropped every packet. install-node.sh now opens both.
 
 ## Panel side
 

@@ -3,9 +3,9 @@
 > Этот документ — план развития проекта и справочник по используемым технологиям.
 > Обновляется по мере прохождения срезов. Если в коде ушло вперёд — значит документ устарел, обнови его.
 >
-> **Версия:** 3.5 (2026-05-07) — slice 24b2 (Hysteria ApplyInbound), 24b3 (AmneziaWG ApplyInbound со smart-diff classifier), 26 (Squad ACL backend + frontend) закрыты по коду. ROADMAP свёрнут от дубликатов; добавлен раздел «Phase 2 extensions» с slice 40 (Mieru) и 41 (MTProto/mtg) — proof-of-concept что CoreAdapter тривиализует добавление новых ядер. VPS-валидация всех трёх done-срезов отложена до следующего test cycle.
+> **Версия:** 3.6 (2026-05-12 EOD) — cycle #6 AmneziaWG marathon: serverside pipeline fully wired and verified live на свежей Debian 12 / kernel 6.1.0-47 VPS. 9 cycle-#6 багов закрыто в slice 19 (см. TROUBLESHOOTING #13-21): adapter-not-registered, deferred-Start, /etc/amnezia/amneziawg path, peer-IP-not-pushed, subnet collision с Aeza gateway (10.0.0.0/24 → 10.66.66.0/24), inbound-port wire propagation, junk-params syncconf workaround → diffRestart, renderConfig TSPU defaults overriding zeros, UFW UDP/443 не открывался для AWG. Серверная часть end-to-end ✅ — awg0 UP, peer добавлен, wgconf subscription корректный. AmneziaVPN-desktop client handshake — pending (моментальный disconnect, не дотестировано).
 >
-> **Changelog:** v3.4 (2026-05-07) дедуп таблиц + 24b2/24b3/26 done. v3.3 (2026-05-07) VPS-тест #2 — обфускация Salamander добавлена в subscription pipeline. v3.2 (2026-05-06) slice 24b разбит на 24b1+24b2+24b3+24b4; появился TESTING.md.
+> **Changelog:** v3.5 (2026-05-07) — slice 24b2 (Hysteria ApplyInbound), 24b3 (AmneziaWG ApplyInbound со smart-diff classifier), 26 (Squad ACL) закрыты по коду. v3.4 (2026-05-07) дедуп таблиц + 24b2/24b3/26 done. v3.3 (2026-05-07) VPS-тест #2 — обфускация Salamander. v3.2 (2026-05-06) slice 24b разбит на 24b1+24b2+24b3+24b4; появился TESTING.md.
 
 > **Companion docs:**
 > - [TESTING.md](./TESTING.md) — per-slice чек-листы (local / VPS / edge cases / done criteria). Обновляется при закрытии slice + при поимке новых багов.

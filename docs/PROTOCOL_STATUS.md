@@ -70,7 +70,7 @@ Code is honest but unverified end-to-end against a real client. Don't promise to
 
 | Protocol | What's proven | Gap before sellable |
 |---|---|---|
-| **AmneziaWG** | Adapter registered; `applyInbounds` reaches the node; kernel module installs; `awg syncconf` smart-diff classifier landed | No real awg-client connect ever. AmneziaVPN client install + verify on next VPS cycle. |
+| **AmneziaWG** | Full server-side pipeline ✅ verified live 2026-05-12 on Debian 12 / kernel 6.1.0-47: adapter registered, panel pushes config with per-binding port, agent renders `/etc/amnezia/amneziawg/awg0.conf` with correct keys + subnet + obfuscation, `awg-quick up` brings interface UP, peer auto-allocated and added with IP from `allocatePeer` (10.66.66.2/32), `awg show` reports peer + obfuscation params matching wgconf subscription. 9 cycle-#6 bugs closed here (see TROUBLESHOOTING #13-21). | AmneziaVPN-desktop client handshake fails — connects then immediately disconnects with Jc=0; not yet retested with TSPU preset after the renderConfig defaults fix landed. Real `awg show transfer` >0 + `curl ifconfig.me`-via-tunnel pending next session. |
 | **NaiveProxy** | Caddyfile render + `caddy reload` plumbing | Never run live. Need xcaddy build + real naive-client connect. |
 | **Shadowsocks 2022** | Render config (with server PSK), URI builder, adapter wired through xray-core; SS2022/legacy AEAD ciphers in schema | Never run live. Outline / Shadowrocket / sing-box connect verify pending. |
 | **MTProto** (`9seconds/mtg`) | Single-secret architecture verified against upstream; TOML render correct; URI both `tg://` and `https://t.me/proxy?...` forms | Never run live. Telegram client connect + Fake-TLS handshake against real masquerade domain pending. |
