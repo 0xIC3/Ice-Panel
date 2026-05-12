@@ -145,7 +145,7 @@ jobs:
             context: .
             dockerfile: apps/panel-frontend/Dockerfile
           - name: ice-panel-node
-            context: .
+            context: apps/node
             dockerfile: apps/node/Dockerfile
 
     steps:
