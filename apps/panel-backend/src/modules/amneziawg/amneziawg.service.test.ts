@@ -61,8 +61,8 @@ describe('allocatePeer', () => {
     const a = await allocatePeer(profileId, u1);
     const b = await allocatePeer(profileId, u2);
 
-    expect(a.ip).toBe('10.0.0.2');
-    expect(b.ip).toBe('10.0.0.3');
+    expect(a.ip).toBe('10.66.66.2');
+    expect(b.ip).toBe('10.66.66.3');
   });
 
   it('is idempotent for the same (profile, user)', async () => {
@@ -84,11 +84,11 @@ describe('allocatePeer', () => {
 
     await allocatePeer(profileId, u1); // .2
     const peer2 = await allocatePeer(profileId, u2); // .3
-    expect(peer2.ip).toBe('10.0.0.3');
+    expect(peer2.ip).toBe('10.66.66.3');
 
     await releasePeer(profileId, u2);
     const peer3 = await allocatePeer(profileId, u3);
-    expect(peer3.ip).toBe('10.0.0.3');
+    expect(peer3.ip).toBe('10.66.66.3');
   });
 
   it('isolates allocations per profile', async () => {
@@ -99,8 +99,8 @@ describe('allocatePeer', () => {
     const a1 = await allocatePeer(p1, u);
     const a2 = await allocatePeer(p2, u);
 
-    expect(a1.ip).toBe('10.0.0.2');
-    expect(a2.ip).toBe('10.0.0.2');
+    expect(a1.ip).toBe('10.66.66.2');
+    expect(a2.ip).toBe('10.66.66.2');
   });
 
   it('respects a custom subnet', async () => {
@@ -142,7 +142,7 @@ describe('getPeer / listPeers / releasePeer', () => {
     await allocatePeer(profileId, u3);
 
     const peers = await listPeers(profileId);
-    expect(peers.map((p) => p.ip)).toEqual(['10.0.0.2', '10.0.0.3', '10.0.0.4']);
+    expect(peers.map((p) => p.ip)).toEqual(['10.66.66.2', '10.66.66.3', '10.66.66.4']);
   });
 
   it('release is a no-op when nothing is allocated', async () => {

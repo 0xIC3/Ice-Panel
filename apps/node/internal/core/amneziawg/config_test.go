@@ -18,21 +18,26 @@ func validInbound() InboundConfig {
 }
 
 func TestInboundDefaults(t *testing.T) {
-	in := validInbound()
-	cfg := in.withDefaults()
+	// Pass an explicitly-zero InboundConfig — withDefaults() should fill
+	// install-time fallbacks (Interface, ListenPort, PostUp/Down) but
+	// MUST leave junk / magic-size / Address as-is (zero is a legitimate
+	// "obfuscation off" value from the panel UI; the panel is always the
+	// source of truth for those fields).
+	cfg := (&InboundConfig{}).withDefaults()
 	if cfg.Interface != "awg0" {
 		t.Errorf("Interface default: got %q", cfg.Interface)
 	}
 	if cfg.ListenPort != 51820 {
 		t.Errorf("ListenPort default: got %d", cfg.ListenPort)
 	}
-	// Junk / magic-size fields and Address no longer carry hardcoded
-	// defaults — panel always sends explicit values (zero = legitimately
-	// "off"). Only PostUp / PostDown / Interface / ListenPort retain
-	// install-time defaults for cases where env-time init doesn't fill
-	// them.
-	if cfg.Jc != 0 || cfg.S1 != 0 {
-		t.Errorf("Jc/S1 should not be defaulted, got Jc=%d S1=%d", cfg.Jc, cfg.S1)
+	if cfg.Jc != 0 || cfg.Jmin != 0 || cfg.Jmax != 0 {
+		t.Errorf("Jc/Jmin/Jmax should remain zero, got %d/%d/%d", cfg.Jc, cfg.Jmin, cfg.Jmax)
+	}
+	if cfg.S1 != 0 || cfg.S2 != 0 || cfg.S3 != 0 || cfg.S4 != 0 {
+		t.Errorf("S1-S4 should remain zero, got %d/%d/%d/%d", cfg.S1, cfg.S2, cfg.S3, cfg.S4)
+	}
+	if cfg.Address != "" {
+		t.Errorf("Address should remain empty, got %q", cfg.Address)
 	}
 	if !strings.Contains(cfg.PostUp, "MASQUERADE") {
 		t.Errorf("PostUp default missing MASQUERADE: %q", cfg.PostUp)
