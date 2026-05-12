@@ -5,6 +5,7 @@ import { prisma } from '../../prisma.js';
 import { mtprotoSecret } from '../../core-adapters/mtproto/index.js';
 import { NodeTransport, NodeRequestError } from '../nodes/nodes.transport.js';
 import { inboundSyncJobs } from '../../lib/metrics.js';
+import { allocatePeer } from '../amneziawg/amneziawg.service.js';
 
 // ───── Job data shapes ─────
 
@@ -180,11 +181,52 @@ export async function applyInboundsForNode(nodeId: string): Promise<void> {
   // an up-to-date client list. addUser is idempotent on the node side.
   if (inbounds.length === 0) return;
 
+  // Find the AmneziaWG profile bound to this node (at most one — single
+  // awg-quick interface per host). When present, every active user with
+  // AWG creds needs an allocated IP inside the profile's subnet pushed
+  // alongside the public key — without it the node-agent silently
+  // skips the peer (AmneziaWGAllowedIP=="" → no-op AddUser). Caught
+  // live cycle #6 2026-05-12: addUser ok was logged but `awg show`
+  // showed zero peers because IP was empty on the wire.
+  //
+  // Keyed on profileId (NOT binding.id) so a user gets the same IP on
+  // every node a profile is bound to — matches the subscription /
+  // wgconf path which also keys on profileId.
+  const awgBinding = inbounds.find((i) => i.protocol === 'amneziawg');
+  let awgProfileId: string | null = null;
+  let awgSubnet: string | null = null;
+  if (awgBinding) {
+    const binding = await prisma.profileNodeBinding.findUnique({
+      where: { id: awgBinding.id },
+      select: { profileId: true, profile: { select: { config: true } } },
+    });
+    if (binding) {
+      awgProfileId = binding.profileId;
+      const pcfg = (binding.profile.config ?? {}) as { subnet?: string };
+      awgSubnet = pcfg.subnet ?? '10.0.0.0/24';
+    }
+  }
+
   const users = await fetchActiveUsers();
   console.log(
     `[worker:inbound-sync] pushing ${users.length} user(s) to ${node.name}`,
   );
   for (const u of users) {
+    let awgAllowedIp: string | undefined;
+    if (awgProfileId && awgSubnet && u.amneziawgPublicKey) {
+      try {
+        const peer = await allocatePeer(awgProfileId, u.id, awgSubnet);
+        awgAllowedIp = peer.ip;
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err);
+        console.log(
+          `[worker:inbound-sync] allocatePeer ${u.username} on profile ${awgProfileId} FAILED: ${detail}`,
+        );
+        // Fall through — addUser will silently skip the AWG portion on the
+        // node side, other protocols still work for this user.
+      }
+    }
+
     try {
       await transport.addUser({
         userId: u.id,
@@ -194,6 +236,7 @@ export async function applyInboundsForNode(nodeId: string): Promise<void> {
           xrayUuid: u.xrayUuid,
           hysteriaPassword: u.hysteriaPassword,
           amneziawgPublicKey: u.amneziawgPublicKey,
+          amneziawgAllowedIp: awgAllowedIp,
           naivePassword: u.naivePassword,
         },
       });
