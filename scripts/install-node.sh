@@ -998,18 +998,33 @@ elif [[ "$PROTOCOL" == "hysteria" ]]; then
   warn "Or manually write /etc/hysteria/config.yaml + systemd unit as documented in docs/deploy/install.md"
 fi
 
-# ───── 10. Wait for /healthz ─────
-log "Waiting for /healthz on 127.0.0.1:${NODE_PORT} (up to 30s)"
+# ───── 10. Wait for agent to be ready ─────
+# Cycle #6 (2026-05-12) — was a curl probe to /healthz, but S6 hardening
+# (cycle #5) added mTLS client-cert verification on the agent's HTTPS
+# server. The probe never presented a client cert, so it always reported
+# "didn't respond" even though the agent was perfectly healthy. We now
+# ask systemd directly: "is the unit active and not failing?" — which
+# is the right question anyway (the agent's mTLS health is a panel-side
+# concern, not an install-time one). Logs flooded with
+# `tls: client didn't provide a certificate` from the curl loop also
+# go away with this change.
+log "Waiting for ice-panel-node to be active (up to 30s)"
 ok=false
 for i in $(seq 1 30); do
-  if curl -sk --resolve "anything:${NODE_PORT}:127.0.0.1" "https://127.0.0.1:${NODE_PORT}/healthz" -o /dev/null 2>/dev/null; then
-    ok=true
-    break
+  if systemctl is-active --quiet ice-panel-node 2>/dev/null; then
+    # Also make sure it's not in a fast crashloop — any failures recorded
+    # since boot would suggest the unit started but immediately died.
+    if ! systemctl is-failed --quiet ice-panel-node 2>/dev/null; then
+      ok=true
+      break
+    fi
   fi
   sleep 1
 done
-if ! $ok; then
-  warn "/healthz didn't respond — check 'systemctl status ice-panel-node' and 'journalctl -u ice-panel-node -f'"
+if $ok; then
+  log "ice-panel-node is active. Panel will start polling over mTLS within ~30s."
+else
+  warn "ice-panel-node did NOT reach active state — check 'systemctl status ice-panel-node' and 'journalctl -u ice-panel-node -f'"
 fi
 
 # ───── 11. Done ─────

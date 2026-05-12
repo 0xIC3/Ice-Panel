@@ -41,6 +41,7 @@ ICE_PANEL_REPO=${ICE_PANEL_REPO:-https://github.com/0xIC3/Ice-Panel.git}
 ICE_PANEL_REF=${ICE_PANEL_REF:-main}
 FRONTEND_PORT=${FRONTEND_PORT:-8080}
 PANEL_DOMAIN=${PANEL_DOMAIN:-}
+ACME_DEFAULT_EMAIL=${ACME_DEFAULT_EMAIL:-}
 
 # ───── Interactive domain prompt ─────
 # If PANEL_DOMAIN wasn't passed via env AND we have a real TTY (admin is
@@ -80,6 +81,42 @@ if [[ -z "$PANEL_DOMAIN" && -r /dev/tty ]]; then
     log "Будет установлено на https://${PANEL_DOMAIN} (Caddy + auto-TLS)"
   else
     log "Домен не указан — установка в bare-IP режиме (доступ по http://<ip>:${FRONTEND_PORT})"
+  fi
+  printf '\n'
+fi
+
+# ───── Interactive ACME email prompt ─────
+# Cycle #6 (2026-05-12) — caught live: when this env was empty, the panel's
+# install-node command-emitter fell back to `--hysteria-email admin@example.com`,
+# and Let's Encrypt rejects @example.com as a forbidden test domain. The
+# operator only finds out 15 minutes later when their fresh Hysteria node
+# crashloops on cert obtain. Ask up-front; this also seeds Caddy's contact
+# field for renewal warnings on the panel's own cert.
+if [[ -z "$ACME_DEFAULT_EMAIL" && -r /dev/tty ]]; then
+  printf 'Контактный email для Let'\''s Encrypt (получит уведомления о renewal'\''ах):\n'
+  printf '  Используется и для Caddy панели, и автоматом подставляется в команду\n'
+  printf '  установки Hysteria/Naive-нод как --hysteria-email / --naive-email.\n'
+  printf '\n'
+  printf 'Оставь пустым — придётся передавать email вручную при создании каждой ноды.\n'
+  printf '\n'
+  printf '\033[1;33mEmail:\033[0m '
+  read -r ACME_DEFAULT_EMAIL </dev/tty || ACME_DEFAULT_EMAIL=""
+
+  if [[ -n "$ACME_DEFAULT_EMAIL" ]]; then
+    # Loose email check: must contain `@` and a `.` after it. Catches
+    # typos / pasted strings without dot in TLD. LE itself will reject
+    # @example.com / @example.net / @example.org as forbidden test domains.
+    if [[ ! "$ACME_DEFAULT_EMAIL" =~ ^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$ ]]; then
+      printf '\033[1;31m"%s" не похож на email. Установка прервана.\033[0m\n' "$ACME_DEFAULT_EMAIL" >&2
+      exit 1
+    fi
+    if [[ "$ACME_DEFAULT_EMAIL" =~ @(example\.com|example\.net|example\.org)$ ]]; then
+      printf '\033[1;31m"%s" — LE отвергает example.* как forbidden test domain. Введи реальный.\033[0m\n' "$ACME_DEFAULT_EMAIL" >&2
+      exit 1
+    fi
+    log "Email для ACME: ${ACME_DEFAULT_EMAIL}"
+  else
+    log "Email не указан — install-команды для Hysteria/Naive-нод будут с placeholder, заполнишь вручную"
   fi
   printf '\n'
 fi
@@ -205,7 +242,7 @@ LOGIN_LOCKOUT_WINDOW_MIN=15
 
 # ACME contact email auto-injected into Hysteria/Naive install commands.
 # Leave empty to make the UI emit a placeholder admin fills manually.
-ACME_DEFAULT_EMAIL=
+ACME_DEFAULT_EMAIL=${ACME_DEFAULT_EMAIL}
 
 # Telegram alerts (Tier-1). Empty = disabled, set both to enable. See
 # .env.production.example for what fires.
