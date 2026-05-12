@@ -41,8 +41,17 @@ export interface Recipe {
   /**
    * Field overrides applied on click. Keyed loosely — the form merges
    * these into existing values. Only protocol-specific fields belong here.
+   *
+   * Accepts a plain object OR a thunk that returns one. The thunk form is
+   * for recipes with **per-click randomness** (Salamander obfs password,
+   * AmneziaWG H1-H4 magic bytes, REALITY+xhttp path): a static object's
+   * `Math.random()` evaluates ONCE at module load, so every admin click
+   * within a session would get the same value. The consumer resolves the
+   * union at click-time so the call site doesn't have to care.
    */
-  apply: Record<string, string | number | boolean>;
+  apply:
+    | Record<string, string | number | boolean>
+    | (() => Record<string, string | number | boolean>);
   /**
    * Sanity warnings tied to this recipe. Empty array if pristine. Shown
    * as info banners after apply.
@@ -120,7 +129,7 @@ export const RECIPES: Recipe[] = [
       'VLESS + REALITY + xhttp transport. Trafic уезжает в HTTP/2 chunked-stream — выглядит как обычный HTTP/2 запрос (выпадает в общую массу h2 трафика к CDN). Чуть медленнее raw (≈10-15% потери на framing), но обходит DPI который начал режать REALITY+raw в некоторых ISP. Без Vision — для xhttp Vision не работает.',
     dpiResistance: 5,
     speed: 4,
-    apply: {
+    apply: () => ({
       xraySubprotocol: 'vless',
       xrayFlow: '',
       xrayNetwork: 'xhttp',
@@ -128,7 +137,7 @@ export const RECIPES: Recipe[] = [
       xrayServerNames: 'www.cloudflare.com',
       xrayFingerprint: 'chrome',
       xrayPath: randPath(),
-    },
+    }),
     notes: [
       'Path рандомизирован — не показывай его публично',
       'Если REALITY+raw блокируется в твоей сети — xhttp обычно ещё работает',
@@ -180,12 +189,12 @@ export const RECIPES: Recipe[] = [
       'Hysteria 2 с Salamander obfuscation password. Каждый UDP-пакет XOR-шифруется производным от пароля ключом — DPI не видит QUIC-сигнатуру. На РФ мобильных (Megafon/MTS/Beeline) clean Hysteria часто throttled до tx:0; Salamander обычно проходит. Brutal CC параметры выставлены для пиков 100 Mbps.',
     dpiResistance: 4,
     speed: 5,
-    apply: {
+    apply: () => ({
       hyObfsPassword: Math.random().toString(36).slice(2, 18),
       hyMasqueradeUrl: 'https://www.bing.com',
       hyBrutalUp: 100,
       hyBrutalDown: 100,
-    },
+    }),
     notes: [
       'Obfs password сгенерирован случайно — не теряй его, нужен на клиентах',
       'Brutal CC 100/100 Mbps — настрой под реальную пропускную способность ноды',
@@ -218,7 +227,7 @@ export const RECIPES: Recipe[] = [
       'AmneziaWG с параметрами обфускации, рекомендованными командой Amnezia для иранских ISP. Jc=4 (junk count), специфические S1-S4 паддинги, H1-H4 хедер-байты. На иранском DPI default-параметры не проходят, эти — да. Также часто помогают на корпоративных firewall.',
     dpiResistance: 5,
     speed: 4,
-    apply: {
+    apply: () => ({
       awgPreset: 'custom',
       awgJc: 4,
       awgJmin: 40,
@@ -229,7 +238,7 @@ export const RECIPES: Recipe[] = [
       awgS4: 16,
       ...randAwgHeaders(),
       awgSubnet: '10.0.0.0/24',
-    },
+    }),
   },
 
   // ───── Naive (1) ─────

@@ -515,8 +515,16 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
           <RecipePicker
             protocol={form.values.protocol}
             onPick={async (recipe) => {
-              // Apply recipe field overrides first.
-              form.setValues((current) => ({ ...current, ...recipe.apply }));
+              // Apply recipe field overrides first. `apply` may be a plain
+              // object (for static recipes) OR a thunk for recipes that
+               // need fresh randomness per click (Salamander password, AWG
+              // H1-H4, REALITY+xhttp path) — see Recipe.apply jsdoc. Resolve
+              // the union here so every click yields a new random where
+              // applicable, instead of the once-per-page-load value the
+              // static-object form would freeze.
+              const fields =
+                typeof recipe.apply === 'function' ? recipe.apply() : recipe.apply;
+              form.setValues((current) => ({ ...current, ...fields }));
 
               // Auto-fill missing crypto material so admin doesn't have to
               // chase 4 separate buttons (private key, public key, shortIds,
