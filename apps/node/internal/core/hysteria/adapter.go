@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"os/exec"
 	"sync"
+	"time"
 
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core/subprocess"
@@ -70,6 +71,29 @@ type Config struct {
 	// restart <ServiceUnit>`. Defaults to running the real binary via os/exec.
 	// Tests inject a fake to assert which commands fire without spawning anything.
 	RunCmd RunCmdFunc
+
+	// TrafficStatsListen is the `host:port` where hysteria-server's traffic
+	// API listens (e.g. "127.0.0.1:9999"). When set, renderConfig emits a
+	// `trafficStats:` block in /etc/hysteria/config.yaml and GetStats polls
+	// the endpoint to populate per-user uplink/downlink bytes. Empty disables
+	// stats collection (GetStats returns user list with zero counters).
+	TrafficStatsListen string
+
+	// TrafficStatsSecret is the bearer token the adapter sends as the
+	// `Authorization:` header when polling the traffic API. Hysteria-server
+	// requires it to match `trafficStats.secret` in its config. Generated
+	// once at install time and persisted in /etc/ice-panel-node/env.
+	TrafficStatsSecret string
+
+	// HTTPClient is the client used to poll the traffic API. Nil → built
+	// at first use with a short timeout. Tests inject a recorder.
+	HTTPClient HTTPClient
+}
+
+// HTTPClient is the subset of *http.Client we use — keeps the adapter
+// testable without dragging the full Client surface into mocks.
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
 }
 
 // RunCmdFunc executes an external command synchronously. The default impl
@@ -218,15 +242,102 @@ func (a *Adapter) RemoveUser(userID string) error {
 	return nil
 }
 
+// GetStats returns per-user uplink/downlink byte counters.
+//
+// Implementation pulls from hysteria-server's traffic API endpoint
+// (`trafficStats:` block in config.yaml, see renderConfig). The endpoint
+// returns a JSON map keyed by the userId we returned from /auth callback:
+//
+//	{
+//	  "user-uuid-1": {"tx": 12345, "rx": 67890},
+//	  "user-uuid-2": {"tx": 100,   "rx": 200}
+//	}
+//
+// We hit it with ?clear=1 so hysteria resets counters after read — that
+// way the panel can ingest deltas instead of computing them itself, same
+// model as xray's `statsquery -reset`.
+//
+// Soft-fails on every error path (network, auth, parse): returns the
+// known userId list with zero counters so a temporary stats outage
+// doesn't poison the cron poller for the rest of the node's adapters.
+// Cycle #6 (2026-05-12) — previously this was a TODO returning zero
+// bytes unconditionally; live test on Aeza London showed UI stuck at
+// `0 B today` even with multi-MiB tunnel traffic.
 func (a *Adapter) GetStats() (*core.Stats, error) {
-	// TODO slice 13: pull real counters from Hysteria's stats API.
 	a.mu.RLock()
-	defer a.mu.RUnlock()
-	users := make([]core.UserStats, 0, len(a.users))
+	statsListen := a.cfg.TrafficStatsListen
+	statsSecret := a.cfg.TrafficStatsSecret
+	httpClient := a.cfg.HTTPClient
+	users := make([]userEntry, 0, len(a.users))
 	for _, e := range a.users {
-		users = append(users, core.UserStats{UserID: e.UserID})
+		users = append(users, e)
 	}
-	return &core.Stats{Users: users}, nil
+	a.mu.RUnlock()
+
+	out := make([]core.UserStats, 0, len(users))
+
+	// Stats endpoint not configured (older agent OR explicitly disabled) —
+	// return the userId list with zero counters so the panel still sees
+	// who's registered even without traffic data.
+	if statsListen == "" || statsSecret == "" {
+		for _, e := range users {
+			out = append(out, core.UserStats{UserID: e.UserID})
+		}
+		return &core.Stats{Users: out}, nil
+	}
+
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: 5 * time.Second}
+	}
+
+	counters, err := fetchTrafficStats(httpClient, statsListen, statsSecret)
+	if err != nil {
+		a.logger.Warn("hysteria GetStats: traffic API fetch failed", "err", err)
+		for _, e := range users {
+			out = append(out, core.UserStats{UserID: e.UserID})
+		}
+		return &core.Stats{Users: out}, nil
+	}
+
+	for _, e := range users {
+		c := counters[e.UserID]
+		out = append(out, core.UserStats{
+			UserID:   e.UserID,
+			BytesIn:  c.Tx,
+			BytesOut: c.Rx,
+		})
+	}
+	return &core.Stats{Users: out}, nil
+}
+
+// trafficStat mirrors the per-user shape of hysteria's traffic API
+// response. Field names are byte counters since the last reset
+// (we always pass ?clear=1).
+type trafficStat struct {
+	Tx int64 `json:"tx"`
+	Rx int64 `json:"rx"`
+}
+
+func fetchTrafficStats(client HTTPClient, listen, secret string) (map[string]trafficStat, error) {
+	url := fmt.Sprintf("http://%s/traffic?clear=1", listen)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", secret)
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("traffic API HTTP %d", resp.StatusCode)
+	}
+	var out map[string]trafficStat
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, fmt.Errorf("decode: %w", err)
+	}
+	return out, nil
 }
 
 // Healthy reports whether the adapter is ready to serve traffic.

@@ -614,6 +614,17 @@ EOF
       # to fork its own hysteria process — which then fights the systemd-
       # managed copy for :443/udp and dies with "address already in use".
       echo "HYSTERIA_SERVICE_UNIT=hysteria" >> "$ENV_FILE"
+      # Cycle #6 reality-check 2026-05-12 — traffic API endpoint. Without
+      # this hysteria-server doesn't expose per-user uplink/downlink and
+      # the panel UI is stuck on "0 B today" for every Hysteria node even
+      # under multi-MiB load. Generate a random secret here so adapter
+      # (poller) and hysteria-server (validator) share the same value;
+      # bind loopback-only so the endpoint is unreachable from outside.
+      HYSTERIA_STATS_SECRET=$(openssl rand -hex 24 2>/dev/null || head -c 32 /dev/urandom | base64 | tr -d '=+/' | head -c 48)
+      {
+        echo "HYSTERIA_STATS_LISTEN=127.0.0.1:9999"
+        echo "HYSTERIA_STATS_SECRET=${HYSTERIA_STATS_SECRET}"
+      } >> "$ENV_FILE"
       ;;
     xray)
       cat >> "$ENV_FILE" <<EOF
@@ -860,6 +871,15 @@ bandwidth:
 # from Brutal because we re-render this section on ApplyInbound from
 # the panel.
 ignoreClientBandwidth: true
+
+# Cycle #6 traffic stats endpoint. Bind loopback-only so it isn't
+# reachable from outside; the agent polls it from the same host with
+# the matching secret from /etc/ice-panel-node/env (HYSTERIA_STATS_SECRET).
+# Without this block, the agent's GetStats returns zero counters and
+# the panel UI shows "0 B today" for every Hysteria node.
+trafficStats:
+  listen: 127.0.0.1:9999
+  secret: ${HYSTERIA_STATS_SECRET}
 EOF
       if [[ -n "$HY_OBFS_PASSWORD" ]]; then
         cat <<EOF

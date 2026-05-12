@@ -127,6 +127,21 @@ func renderConfig(adapterCfg Config, inbound InboundConfig) ([]byte, error) {
 	// "just work" without sacrificing power-user tunability.
 	b.WriteString("\nignoreClientBandwidth: true\n")
 
+	// Cycle #6 reality-check 2026-05-12: Hysteria 2's per-user uplink/downlink
+	// counters are exposed via a separate HTTP API (`trafficStats:` block).
+	// Without this, our adapter's GetStats only returned a userId list with
+	// zero bytes — UI showed `0 B today` for every Hysteria node even with
+	// active traffic. The endpoint binds loopback-only; secret is shared
+	// between adapter (poller) and hysteria-server (validator) via
+	// /etc/ice-panel-node/env. The block is only emitted when both fields
+	// are present, so a misconfigured node falls back to the zero-counter
+	// behaviour rather than crashing on hysteria-config parse.
+	if adapterCfg.TrafficStatsListen != "" && adapterCfg.TrafficStatsSecret != "" {
+		b.WriteString("\ntrafficStats:\n")
+		fmt.Fprintf(&b, "  listen: %s\n", adapterCfg.TrafficStatsListen)
+		fmt.Fprintf(&b, "  secret: %s\n", adapterCfg.TrafficStatsSecret)
+	}
+
 	return b.Bytes(), nil
 }
 
