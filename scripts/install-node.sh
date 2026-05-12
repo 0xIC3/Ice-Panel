@@ -726,7 +726,14 @@ if [[ "${SKIP_FIREWALL:-0}" != "1" ]]; then
       ufw allow 443/tcp                  >/dev/null 2>&1 || true
       ;;
     amneziawg)
+      # Open both 51820 (WireGuard default) and 443 (typical AWG stealth
+      # port — masquerades as HTTPS). Admin can pick either in the panel
+      # Profile UI; we open both because the install-time script doesn't
+      # know which the operator will choose. Caught live cycle #6
+      # 2026-05-12 on awg-VPS — server bound :443 from inbound config but
+      # UFW only had :51820 → handshakes silently dropped at firewall.
       ufw allow 51820/udp                >/dev/null 2>&1 || true
+      ufw allow 443/udp                  >/dev/null 2>&1 || true
       ;;
     naive)
       ufw allow 443/tcp                  >/dev/null 2>&1 || true
