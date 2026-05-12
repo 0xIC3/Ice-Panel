@@ -3,24 +3,21 @@
 -- an HMAC over (nodeId, secret); the agent presents that token on every
 -- heartbeat poll, panel verifies + checks deletedAt → 200 / 410.
 
+-- pgcrypto provides gen_random_bytes — load it unconditionally so a fresh
+-- Postgres container (which doesn't auto-load it) doesn't silently fall
+-- into a `digest() does not exist` failure inside a DO-block. The prior
+-- version of this migration used a `DO $$ IF EXISTS pg_extension` pattern
+-- whose ELSE branch ALSO depended on pgcrypto via digest() — defeating
+-- the purpose of the fallback. TROUBLESHOOTING.md cycle #5 documents the
+-- exact failure mode. Unconditional CREATE EXTENSION is a no-op when the
+-- extension is already loaded, so this is safe across all Postgres
+-- versions / images.
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- Add column nullable first so we can backfill, then enforce NOT NULL.
 ALTER TABLE "nodes" ADD COLUMN "heartbeat_secret" BYTEA;
 
 -- Backfill: every existing row gets a fresh random 32-byte secret.
--- pgcrypto's gen_random_bytes is preferred; fall back to a synthetic
--- per-row hash if pgcrypto isn't loaded (postgres 16 includes it but
--- self-managed setups may have it disabled).
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pgcrypto') THEN
-        UPDATE "nodes" SET "heartbeat_secret" = gen_random_bytes(32);
-    ELSE
-        UPDATE "nodes"
-        SET "heartbeat_secret" = decode(
-            encode(digest(id::text || clock_timestamp()::text || random()::text, 'sha256'), 'hex'),
-            'hex'
-        );
-    END IF;
-END $$;
+UPDATE "nodes" SET "heartbeat_secret" = gen_random_bytes(32);
 
 ALTER TABLE "nodes" ALTER COLUMN "heartbeat_secret" SET NOT NULL;
