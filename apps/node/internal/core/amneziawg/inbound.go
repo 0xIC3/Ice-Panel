@@ -117,18 +117,20 @@ func classifyDiff(old, new InboundConfig) diffKind {
 	if old.Address != new.Address {
 		return diffSubnet
 	}
+	// AmneziaWG fork v1.0.20251009 does NOT apply Jc/Jmin/Jmax/S1-S4
+	// changes via `awg syncconf` to a running interface — they're frozen
+	// at interface init. Verified live cycle #6 2026-05-12: changed Jc 4→0
+	// via panel UI, syncconf returned success, but `awg show awg0` still
+	// reported jc=4 until awg-quick down/up bounced the interface. So
+	// treat junk/magic-size changes as diffRestart, same as H1-H4 / key /
+	// port — all interface-init-time-only fields.
 	if old.PrivateKey != new.PrivateKey ||
 		old.ListenPort != new.ListenPort ||
 		old.Interface != new.Interface ||
-		old.H1 != new.H1 ||
-		old.H2 != new.H2 ||
-		old.H3 != new.H3 ||
-		old.H4 != new.H4 {
-		return diffRestart
-	}
-	if old.S1 != new.S1 || old.S2 != new.S2 || old.S3 != new.S3 || old.S4 != new.S4 ||
+		old.H1 != new.H1 || old.H2 != new.H2 || old.H3 != new.H3 || old.H4 != new.H4 ||
+		old.S1 != new.S1 || old.S2 != new.S2 || old.S3 != new.S3 || old.S4 != new.S4 ||
 		old.Jc != new.Jc || old.Jmin != new.Jmin || old.Jmax != new.Jmax {
-		return diffSyncconf
+		return diffRestart
 	}
 	return diffNone
 }

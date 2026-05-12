@@ -59,10 +59,10 @@ func TestClassifyDiff(t *testing.T) {
 		{"port change", func(c *InboundConfig) { c.ListenPort = 51821 }, diffRestart},
 		{"H1 change", func(c *InboundConfig) { c.H1 = 999 }, diffRestart},
 		{"H4 change", func(c *InboundConfig) { c.H4 = 999 }, diffRestart},
-		{"S1 change", func(c *InboundConfig) { c.S1 = 88 }, diffSyncconf},
-		{"S4 change", func(c *InboundConfig) { c.S4 = 24 }, diffSyncconf},
-		{"Jc change", func(c *InboundConfig) { c.Jc = 8 }, diffSyncconf},
-		{"Jmax change", func(c *InboundConfig) { c.Jmax = 100 }, diffSyncconf},
+		{"S1 change", func(c *InboundConfig) { c.S1 = 88 }, diffRestart},
+		{"S4 change", func(c *InboundConfig) { c.S4 = 24 }, diffRestart},
+		{"Jc change", func(c *InboundConfig) { c.Jc = 8 }, diffRestart},
+		{"Jmax change", func(c *InboundConfig) { c.Jmax = 100 }, diffRestart},
 	}
 
 	for _, c := range cases {
@@ -167,11 +167,13 @@ func TestApplyInbound_NoOpOnIdentical(t *testing.T) {
 	}
 }
 
-func TestApplyInbound_SyncconfPath(t *testing.T) {
+func TestApplyInbound_RestartPathOnS1(t *testing.T) {
 	runner := &recordingRunner{}
 	a := newApplyAdapter(t, runner)
 
-	// Only S1 change → diffSyncconf path
+	// S1 change now routes through diffRestart (awg-quick down/up) because
+	// the amneziawg fork doesn't apply junk/magic-size changes via syncconf
+	// on a running interface — frozen at init time.
 	body := wirePayload(t, func(m map[string]any) {
 		m["serverPrivateKey"] = "k0"
 		m["obfuscation"].(map[string]any)["s1"] = 88
@@ -180,13 +182,20 @@ func TestApplyInbound_SyncconfPath(t *testing.T) {
 		t.Fatalf("ApplyInbound: %v", err)
 	}
 
-	// Should invoke awg-quick strip + awg syncconf (existing regenerateAndSyncLocked path)
+	// Should invoke awg-quick down + up (restartInterfaceLocked path)
 	if len(runner.calls) == 0 {
-		t.Fatalf("expected CLI invocations for syncconf, got none")
+		t.Fatalf("expected CLI invocations for restart, got none")
 	}
-	joined := strings.Join(runner.calls[len(runner.calls)-1], " ")
-	if !strings.Contains(joined, "syncconf") {
-		t.Errorf("last call should be `awg syncconf`, got %v", runner.calls)
+	sawUp := false
+	for _, call := range runner.calls {
+		joined := strings.Join(call, " ")
+		if strings.Contains(joined, "awg-quick") && strings.Contains(joined, " up ") {
+			sawUp = true
+			break
+		}
+	}
+	if !sawUp {
+		t.Errorf("expected `awg-quick up` after S1 change, got %v", runner.calls)
 	}
 }
 
