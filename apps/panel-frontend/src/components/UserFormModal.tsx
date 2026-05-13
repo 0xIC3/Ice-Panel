@@ -761,33 +761,36 @@ function DirectEndpointRow({
   }
 
   return (
-    <Paper withBorder p="xs" radius="sm">
-      <Group justify="space-between" wrap="nowrap">
+    <Paper withBorder p="xs" radius="sm" style={{ overflow: 'hidden' }}>
+      <Group justify="space-between" wrap="nowrap" gap="xs">
         <Group gap="xs" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
-          <Badge variant="light" color="cyan" size="xs" tt="uppercase">
+          <Badge variant="light" color="cyan" size="xs" tt="uppercase" style={{ flexShrink: 0 }}>
             {endpoint.protocol}
           </Badge>
-          <Text size="xs" c="dimmed" truncate>
+          <Text size="xs" c="dimmed" truncate style={{ minWidth: 0 }}>
             {endpoint.nodeName} · {endpoint.host}:{endpoint.port}
           </Text>
         </Group>
         {hasUri ? (
           <Tooltip label={copied ? 'Copied!' : 'Copy URI'}>
-            <ActionIcon variant="light" size="sm" onClick={handleCopy} color={copied ? 'green' : 'blue'}>
+            <ActionIcon
+              variant="light"
+              size="sm"
+              onClick={handleCopy}
+              color={copied ? 'green' : 'blue'}
+              style={{ flexShrink: 0 }}
+            >
               {copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
             </ActionIcon>
           </Tooltip>
         ) : (
           <Tooltip label="Для AmneziaWG нет стандартного URI — используй subscription URL с ?format=wgconf">
-            <Badge variant="light" color="gray" size="xs">wgconf only</Badge>
+            <Badge variant="light" color="gray" size="xs" style={{ flexShrink: 0 }}>
+              wgconf only
+            </Badge>
           </Tooltip>
         )}
       </Group>
-      {hasUri && (
-        <Text size="xs" c="dimmed" ff="monospace" truncate mt={2}>
-          {endpoint.uri}
-        </Text>
-      )}
     </Paper>
   );
 }
