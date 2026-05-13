@@ -8,7 +8,7 @@ Where competitors (Marzban, Remnawave, x-ui) wrap everything through Xray-core, 
 
 ## 🚀 One-command install
 
-> Both scripts target Ubuntu 22.04+ / Debian 12+. Require root. Idempotent (safe to re-run). Cycles #6 → #8 reality-checked end-to-end on fresh Aeza fleet (2026-05-12 → 2026-05-13) — full deploy → connect verified for Xray (REALITY+Vision), Hysteria 2, AmneziaWG (iPhone real-traffic, 25 MB through tunnel), and MTProto (Telegram iOS).
+> Both scripts target Ubuntu 22.04+ / Debian 12+. Require root. Idempotent (safe to re-run). Cycles #6 → #8 reality-checked end-to-end on fresh Aeza fleet (2026-05-12 → 2026-05-13) — full deploy → connect verified for **Xray REALITY, Hysteria 2, AmneziaWG (21 GiB iPhone), MTProto (Telegram iOS), and NaiveProxy** (Variant1 padding via `naive.exe`).
 
 ### 1. Panel — install on the admin's VPS
 
@@ -105,28 +105,38 @@ Full deploy guide (per-protocol details, troubleshooting, update workflow): **[d
 
 ## Status
 
-🎯 **Phase 3 = 100%** — all 7 protocol adapters in code; 4 of them verified end-to-end on real client traffic. Panel + nodes deployable via one-command installers, CI green with auto-published container images.
+🎯 **Phase 3 = 100%** — all 7 protocol adapters in code; **5 of them verified end-to-end on real client traffic** in one VPS marathon (cycle #8, 2026-05-13). Panel + nodes deployable via one-command installers, CI green with auto-published container images.
 
-**Verified live on real VPS + real client** (cycle #6 + #7 + #8, through 2026-05-13):
-- ✅ **Xray REALITY + Vision** (raw / xhttp / gRPC / Trojan transports) — end-to-end on Aeza Sweden node, Hiddify + Streisand clients
+**Verified live on real VPS + real client** (cycle #6 → #8, through 2026-05-13):
+- ✅ **Xray REALITY + Vision** (raw / xhttp / gRPC / Trojan transports) — end-to-end on Aeza Sweden, Hiddify + Streisand iOS clients
 - ✅ **Hysteria 2** + Salamander obfuscation + port-hopping — RU iOS via Hiddify Next on Aeza London, 9 MB+ tunneled cleanly
-- ✅ **AmneziaWG** end-to-end on iPhone (AmneziaVPN client 4.8.15.4, Aeza Helsinki) — 25 MB through tunnel, real YouTube traffic. UDP port hop from 443 → 1234 to dodge mobile-carrier DPI; per-user `awg show dump` byte counters reported back to panel UI
-- ✅ **MTProto** (`9seconds/mtg` Fake-TLS, masquerade `www.bing.com`) — Telegram iOS client connects via Aeza Sweden node, real messaging traffic
+- ✅ **AmneziaWG** end-to-end on iPhone (AmneziaVPN 4.8.15.4, Aeza Helsinki, UDP port 1234) — **21 GiB** through tunnel over a day. Per-user `awg show dump` byte counters reported back to panel UI. UDP/443 outbound is DPI-dropped by RU mobile carriers — admin picks an alternate port from the panel; installer pre-opens 443 + 1234 in UFW.
+- ✅ **MTProto** (`9seconds/mtg` Fake-TLS masquerade `www.bing.com`) — Telegram iOS connects via Aeza Sweden, live messaging traffic. Node-wide bytes scraped from mtg's Prometheus endpoint into panel "Сегодня".
+- ✅ **NaiveProxy** (Caddy + `klzgrad/forwardproxy@naive`) — end-to-end via official `naive.exe` CLI on Windows, Aeza Sweden node, real Let's Encrypt cert via HTTP-01, Variant1 padding negotiated, `forward_proxy` + masquerade `file_server` co-routed
 - ✅ Tier-1 security: honeypot trap, honey-user tripwire, per-IP rate-limit, username lockout (5 fails → 15 min lock)
 - ✅ Slice 38 self-destruct: node-agent exits 42 on `/healthz` 410-Gone, `RestartPreventExitStatus` blocks systemd from reviving
 - ✅ CI: panel typecheck + tests, node-agent Go tests, multi-arch docker images published to `ghcr.io/0xic3/ice-panel-{backend,frontend,node}:main` on every push
 
-**Pipeline-only, real-traffic pending** — code paths exist but client-side verification not yet completed:
-- 🟡 NaiveProxy, Shadowsocks 2022, Mieru — never run on a real VPS yet
+**Pipeline-only, real-traffic pending** — code paths exist, never run live yet:
+- 🟡 Shadowsocks 2022 (included in subscription generator + Hiddify singbox JSON — likely works, just untested)
+- 🟡 Mieru — never run on a VPS
 
-**Cycle #6 + #7 + #8 reality-check** caught and fixed ~30 live-only bugs that no unit test had reached. Notable cycle #7/#8 additions:
-- **AWG default `iptables MASQUERADE` rule had wrong direction** (`-o %i` matched packets going TO peers; correct form is `! -o %i` matching WAN egress). Handshake completed, server received decrypted requests, but responses never routed back because the source IP was un-NATted private 10.x — VPN client showed "Connected" with 25 KiB RX / 348 B TX. Fixed in `apps/node/internal/core/amneziawg/config.go` default PostUp/PostDown.
-- **UFW `DEFAULT_FORWARD_POLICY=DROP` silently broke routed VPN.** Forwarded packets through `awg0`→WAN got dropped in FORWARD chain. install-node.sh now flips it to `ACCEPT` in the `amneziawg)` branch.
-- **systemd unit's `ProtectSystem=strict` made `/run` read-only for child processes** → ufw + netfilter-persistent both crashed with "Read-only file system: /run/ufw.lock", so `firewall.Allow()` silently no-op'd on fresh nodes. Added `-/run -/etc/iptables` to `ReadWritePaths=`.
-- **MTProto FakeTLS secret was 32 bytes instead of 16** (`sha256` digest passed through whole). Telegram client rejected with "Invalid proxy link". Sliced to `[:16]` on both panel (`mtprotoSecret`) and agent (`DeriveSecret`); they stay in sync because both slice identically.
-- **AmneziaVPN client bug #2582** — versions 4.8.12.9 through 4.8.15.5 silently drop traffic when server has non-zero S3/S4. All three AWG presets (TSPU / Mobile / Iran) now force `S3=0 S4=0` until upstream ships a fix.
-- **AmneziaWG per-user traffic stats wired up** — `GetStats()` was a stub returning zero counters; now parses `awg show <iface> dump`, maps pubkey → userID, reports back to panel "Сегодня" column.
-- See `docs/TROUBLESHOOTING.md` for the full numbered list.
+**Cycle #8 marathon (2026-05-13)** caught + fixed 14 live-only bugs in a single day. Highlights:
+- **AWG `iptables MASQUERADE` rule had wrong direction** (`-o %i` matched packets going TO peers; correct form is `! -o %i` matching WAN egress). Handshake completed, server received decrypted requests, but responses never routed back because src IP was un-NATted private 10.x — client showed "Connected" with 25 KiB RX / 348 B TX. Default fixed in `apps/node/internal/core/amneziawg/config.go`.
+- **UFW `DEFAULT_FORWARD_POLICY=DROP`** silently broke routed VPN. Forwarded packets through `awg0`→WAN got dropped in FORWARD chain. install-node.sh now flips it to ACCEPT in the `amneziawg)` branch.
+- **systemd unit `ProtectSystem=strict` made `/run` read-only** for child processes → ufw + netfilter-persistent both crashed with "Read-only file system: /run/ufw.lock", so `firewall.Allow()` silently no-op'd. Added `-/run -/etc/iptables` to `ReadWritePaths=`.
+- **MTProto FakeTLS secret was 32 bytes instead of 16** (sha256 digest passed through whole). Telegram rejected with "Invalid proxy link". Sliced to `[:16]` on both panel and agent — they stay in sync because both slice identically.
+- **AmneziaVPN client bug [#2582](https://github.com/amnezia-vpn/amnezia-client/issues/2582)** — versions 4.8.12.9 → 4.8.15.5 silently drop traffic with non-zero S3/S4. All AWG presets default `S3=0 S4=0` until upstream ships a fix.
+- **AWG per-user traffic stats wired up** — `GetStats()` was a stub. Now parses `awg show <iface> dump`, maps pubkey → userID. Panel "Сегодня" column shows live MiB.
+- **MTProto node-wide stats** — `GetStats()` now scrapes `127.0.0.1:3129/metrics`, sums `mtg_telegram_traffic{direction=...}` across DC labels. mtg is single-secret upstream so per-user attribution is architecturally impossible; node-level totals are the right surface.
+- **panel-cron `stats.cron` ignored `TotalBytesIn/Out`** at node-level — only summed per-user counters, which is 0 for mtproto. Added in-memory `totalSnapshot` map + delta computation fallback.
+- **Naive adapter not registered in `main.go`** (same class as AWG miss in cycle #6) — `applyInbounds` logged "no adapter for protocol", Caddy never started.
+- **Bootstrap-command builder emitted `--naive-domain` / `--naive-email`** that install-node.sh doesn't parse. Removed; Naive's hostname/email live on the Profile and reach the agent via applyInbound. Only Hysteria still takes install-time ACME flags (its `get.hy2.sh` service starts before the panel can push config — chicken-and-egg).
+- **xcaddy `--with` needed `@caddy2` suffix** on the replacement target, otherwise `forward_proxy` module silently doesn't register. Build succeeds, runtime fails. Pinned to `@naive` branch (Go semver rejects v2.x tags without /v2 path).
+- **Naive `Start()` crashed on empty Hostname** crash-loop. Now defers same way as mtproto/amneziawg adapters; `regenerateAndReloadLocked` cold-starts caddy on first apply (proc == nil) instead of trying to `caddy reload` a non-running daemon.
+- **Caddyfile with `probe_resistance` + zero `basic_auth`** lines failed Caddy validation. `forward_proxy` block emitted only when user list non-empty — pre-user the site is pure file_server masquerade (which is what probes should see anyway). First AddUser triggers reload that adds it.
+- **Caddy storage default `./caddy`** hit "Read-only file system" because `ProtectSystem=strict` + no HOME. Pinned via global `storage file_system /etc/caddy` directive in the rendered Caddyfile.
+- See `docs/TROUBLESHOOTING.md` and `docs/PROTOCOL_STATUS.md` cycle log for the full numbered list.
 
 Full plan: [docs/ROADMAP.md](./docs/ROADMAP.md) (v3.6, 2026-05-12).
 Authoritative protocol-validation status: [docs/PROTOCOL_STATUS.md](./docs/PROTOCOL_STATUS.md).
