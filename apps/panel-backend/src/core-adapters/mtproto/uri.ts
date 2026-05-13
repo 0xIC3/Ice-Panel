@@ -14,10 +14,11 @@
  *
  * Secret format (Fake-TLS, the only mode current TG clients accept):
  *
- *   ee<32-hex-bytes-secret><hex-encoded-domain>
+ *   ee<16-byte-secret-hex><hex-encoded-domain>
  *
  *   - Leading byte `0xee` (`ee`) selects Fake-TLS mode.
- *   - 32-byte secret is per-user (we derive from sha256(xrayUuid) :32 ).
+ *   - 16-byte random secret (32 hex chars). Spec-mandated length — TG client
+ *     rejects anything longer. Same length upstream `mtg generate-secret` emits.
  *   - Trailing bytes are the masquerade domain ASCII bytes hex-encoded.
  *
  * Reference: docs/references/mtproto.md
@@ -82,9 +83,14 @@ export function buildMtprotoTmeUri(
  * and the agent can independently re-derive for verification.
  */
 export function mtprotoSecret(inboundId: string, domain: string): string {
+  // FakeTLS (`ee` prefix) wire format: 1-byte prefix + 16-byte random + hex
+  // of the masquerade domain. Telegram's mtproto client (mobile + desktop)
+  // strictly validates the 16-byte length and rejects 32-byte secrets with
+  // "Некорректная ссылка на прокси" / "Invalid proxy link" — same as
+  // upstream `mtg generate-secret`. Caught live 2026-05-13 on iPhone test.
   const seed = `${inboundId}:${domain}`;
-  const seedBytes = createHash('sha256').update(seed, 'utf8').digest();
-  const seedHex = seedBytes.toString('hex'); // 64 hex chars (32 bytes)
+  const seedBytes = createHash('sha256').update(seed, 'utf8').digest().subarray(0, 16);
+  const seedHex = seedBytes.toString('hex'); // 32 hex chars (16 bytes)
   const domainHex = Buffer.from(domain, 'utf8').toString('hex');
   return `ee${seedHex}${domainHex}`;
 }

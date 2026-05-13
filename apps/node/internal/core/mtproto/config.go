@@ -87,7 +87,12 @@ func (c *InboundConfig) validate() error {
 
 // DeriveSecret produces the per-inbound mtg secret deterministically.
 //
-// Format (Fake-TLS): `ee<32-hex-bytes-from-sha256(seed)><hex-encoded-domain>`
+// Format (Fake-TLS): `ee<16-byte-secret-hex><hex-encoded-domain>`
+//
+// The 16-byte length is spec-mandated — the Telegram client (mobile + desktop)
+// rejects longer secrets with "Invalid proxy link" / "Некорректная ссылка на
+// прокси". Same length upstream `mtg generate-secret` emits. Caught live
+// 2026-05-13 on iPhone.
 //
 // We pass `seed = inboundId` so each inbound gets a unique secret without
 // any extra credential storage. Same (inboundId, domain) → same secret;
@@ -95,7 +100,7 @@ func (c *InboundConfig) validate() error {
 // inbound rotates the head. Both panel and agent compute the same value.
 func DeriveSecret(inboundID, domain string) string {
 	h := sha256.Sum256([]byte(inboundID + ":" + domain))
-	return "ee" + hex.EncodeToString(h[:]) + hex.EncodeToString([]byte(domain))
+	return "ee" + hex.EncodeToString(h[:16]) + hex.EncodeToString([]byte(domain))
 }
 
 // renderConfig produces the mtg TOML config. Schema verified against

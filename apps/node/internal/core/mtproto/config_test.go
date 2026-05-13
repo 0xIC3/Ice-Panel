@@ -17,8 +17,8 @@ func TestDeriveSecret_DeterministicAndShape(t *testing.T) {
 	if !strings.HasPrefix(a, "ee") {
 		t.Errorf("Secret must start with `ee` (Fake-TLS marker): %q", a)
 	}
-	// `ee` (2) + sha256 hex (64) + domain hex (len(domain)*2)
-	expectedLen := 2 + 64 + len(domain)*2
+	// `ee` (2) + 16-byte secret hex (32) + domain hex (len(domain)*2)
+	expectedLen := 2 + 32 + len(domain)*2
 	if len(a) != expectedLen {
 		t.Errorf("Secret length: got %d want %d", len(a), expectedLen)
 	}

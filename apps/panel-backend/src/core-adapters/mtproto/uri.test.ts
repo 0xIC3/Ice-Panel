@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { buildMtprotoUri, buildMtprotoTmeUri, mtprotoSecret } from './uri.js';
 
 describe('mtprotoSecret (single-secret-per-inbound model)', () => {
-  it('produces ee + 64 hex bytes (sha256) + domain hex', () => {
+  it('produces ee + 16-byte (32 hex) secret + domain hex per FakeTLS spec', () => {
     const s = mtprotoSecret('inbound-uuid-1', 'www.cloudflare.com');
     expect(s.startsWith('ee')).toBe(true);
-    expect(s).toHaveLength(2 + 64 + 'www.cloudflare.com'.length * 2);
+    // 2 ('ee') + 32 hex (16-byte secret) + 2*len(domain) hex
+    expect(s).toHaveLength(2 + 32 + 'www.cloudflare.com'.length * 2);
     const domainHex = Buffer.from('www.cloudflare.com', 'utf8').toString('hex');
     expect(s.endsWith(domainHex)).toBe(true);
   });
@@ -28,7 +29,8 @@ describe('mtprotoSecret (single-secret-per-inbound model)', () => {
     expect(a).not.toBe(b);
     // Both head and tail differ — head because the seed includes the
     // domain, tail because the domain is appended.
-    expect(a.slice(0, 66)).not.toBe(b.slice(0, 66));
+    // First 2 + 32 = 34 chars cover prefix + secret head.
+    expect(a.slice(0, 34)).not.toBe(b.slice(0, 34));
   });
 });
 
