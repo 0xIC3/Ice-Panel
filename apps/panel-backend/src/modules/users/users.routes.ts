@@ -7,6 +7,12 @@ import {
   UserIdParamSchema,
 } from './users.schemas.js';
 import * as usersService from './users.service.js';
+import { prisma } from '../../prisma.js';
+import {
+  generateSubscription,
+  SubscriptionForbiddenError,
+  SubscriptionNotFoundError,
+} from '../subscription/subscription.service.js';
 
 export async function usersRoutes(app: FastifyInstance): Promise<void> {
   // All /api/users/* require authenticated admin
@@ -41,6 +47,49 @@ export async function usersRoutes(app: FastifyInstance): Promise<void> {
     } catch (err) {
       if (err instanceof usersService.UserNotFoundError) {
         return reply.code(404).send({ error: 'NOT_FOUND', message: err.message });
+      }
+      throw err;
+    }
+  });
+
+  // GET /api/users/:id/endpoints — per-protocol URIs for this user.
+  // Reuses the same generateSubscription pipeline that powers /sub/<token>
+  // (no duplicated URI-building logic), then strips it down to {protocol,
+  // nodeName, host, port, uri} entries the admin UI can render with copy
+  // buttons. Added so admins don't have to fetch the public /sub endpoint
+  // and decode formats by hand.
+  app.get('/api/users/:id/endpoints', async (request, reply) => {
+    const params = UserIdParamSchema.parse(request.params);
+    const user = await prisma.user.findFirst({
+      where: { id: params.id, deletedAt: null },
+      select: { subscriptionToken: true },
+    });
+    if (!user) {
+      return reply.code(404).send({ error: 'NOT_FOUND', message: 'user not found' });
+    }
+    try {
+      const result = await generateSubscription(user.subscriptionToken, {
+        ip: request.ip,
+        // Admin context — no UA-driven SRR filtering, return every endpoint.
+        userAgent: '',
+      });
+      return reply.send({
+        endpoints: result.endpoints.map((e) => ({
+          protocol: e.protocol,
+          nodeName: e.nodeName,
+          host: e.host,
+          port: e.port,
+          uri: e.uri,
+        })),
+      });
+    } catch (err) {
+      if (err instanceof SubscriptionNotFoundError) {
+        return reply.code(404).send({ error: 'NOT_FOUND', message: 'subscription not found' });
+      }
+      if (err instanceof SubscriptionForbiddenError) {
+        return reply
+          .code(403)
+          .send({ error: 'FORBIDDEN', message: `Subscription is ${err.reason}` });
       }
       throw err;
     }

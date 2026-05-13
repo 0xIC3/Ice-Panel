@@ -43,6 +43,18 @@ const ConfigSchema = z.object({
   // mechanism that was supposed to revoke a stolen bundle just sat dead.
   PUBLIC_URL: z.url(),
 
+  // Path prefix where the subscription endpoint is mounted. Default
+  // `/sub` matches the historical default. Operators with concerns
+  // about Ice-Panel fingerprinting can change it (e.g. `/v` or `/get`)
+  // — the backend reads this when registering the subscription route,
+  // and `/api/auth/status` surfaces it to the SPA so admin sees the
+  // correct full URL when copy-pasting a user's subscription link.
+  // Always starts with `/`, no trailing slash.
+  SUBSCRIPTION_PATH_PREFIX: z
+    .string()
+    .regex(/^\/[a-zA-Z0-9_-]+$/, 'Must start with / and use only [a-zA-Z0-9_-]')
+    .default('/sub'),
+
   // Number of trusted reverse-proxy hops in front of the backend. Zero
   // (default) → request.ip is the immediate socket peer; X-Forwarded-For
   // is ignored. Production behind Caddy + Cloudflare uses 2. Don't bump

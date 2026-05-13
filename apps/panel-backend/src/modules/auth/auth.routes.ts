@@ -7,10 +7,15 @@ import * as adminService from '../admin/admin.service.js';
 import { mapAdminToPublic } from '../admin/admin.mapper.js';
 import { notifyTelegramAsync, escapeMarkdown } from '../../lib/telegram-notify.js';
 import { loginAttempts } from '../../lib/metrics.js';
+import { config } from '../../config.js';
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
   // GET /api/auth/status — public discovery: tells the frontend which auth
   // methods are enabled and whether bootstrap registration is still open.
+  // Also returns the panel's public URL so the SPA can build full
+  // subscription links (`<publicUrl>/sub/<token>`) for copy-paste — pre-
+  // cycle #6 admins saw only the path `/sub/...` and had to mentally
+  // prepend the domain. Now the UI displays the ready-to-paste URL.
   app.get('/api/auth/status', async () => {
     const adminCount = await adminService.countAdmins();
     return {
@@ -19,6 +24,13 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       },
       registration: {
         enabled: adminCount === 0,
+      },
+      panel: {
+        publicUrl: config.PUBLIC_URL.replace(/\/$/, ''),
+        // Subscription path prefix. Default `/sub` — admin can override
+        // via SUBSCRIPTION_PATH_PREFIX env to mask the Ice-Panel
+        // signature (e.g. `/v` or `/get`). Always starts with `/`.
+        subscriptionPathPrefix: config.SUBSCRIPTION_PATH_PREFIX,
       },
     };
   });

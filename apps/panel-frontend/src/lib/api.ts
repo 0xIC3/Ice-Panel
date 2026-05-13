@@ -35,6 +35,13 @@ api.interceptors.response.use(
 export interface AuthStatusResponse {
   authentication: { password: { enabled: boolean } };
   registration: { enabled: boolean };
+  /** Panel public URL + subscription path prefix — used by the SPA to
+   *  show admins the FULL copy-paste subscription URL on the user form,
+   *  rather than just the path. Both come from backend env. */
+  panel?: {
+    publicUrl: string;
+    subscriptionPathPrefix: string;
+  };
 }
 
 export interface LoginResponse {
@@ -185,9 +192,33 @@ export async function deleteUser(id: string): Promise<void> {
   await api.delete(`/api/users/${id}`);
 }
 
-/** Helper to build a copy-pasteable subscription URL for a user. */
-export function subscriptionUrl(token: string): string {
+/** Helper to build a copy-pasteable subscription URL for a user.
+ *  Pass `panel` (from /api/auth/status) to substitute the configured
+ *  public URL + path prefix; falls back to API_BASE_URL + /sub when
+ *  the metadata isn't available (dev / status endpoint failed). */
+export function subscriptionUrl(
+  token: string,
+  panel?: { publicUrl: string; subscriptionPathPrefix: string },
+): string {
+  if (panel?.publicUrl) {
+    return `${panel.publicUrl}${panel.subscriptionPathPrefix}/${token}`;
+  }
   return `${API_BASE_URL}/sub/${token}`;
+}
+
+// ───── Per-user subscription endpoints (admin view) ─────
+
+export interface UserEndpoint {
+  protocol: string;
+  nodeName: string;
+  host: string;
+  port: number;
+  uri: string;
+}
+
+export async function fetchUserEndpoints(id: string): Promise<{ endpoints: UserEndpoint[] }> {
+  const { data } = await api.get<{ endpoints: UserEndpoint[] }>(`/api/users/${id}/endpoints`);
+  return data;
 }
 
 // ───── Nodes ─────

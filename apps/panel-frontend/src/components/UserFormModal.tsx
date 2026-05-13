@@ -43,6 +43,8 @@ import { copyToClipboard } from '../lib/clipboard';
 import {
   ALL_SQUAD_ID,
   deleteHwidDevice,
+  fetchAuthStatus,
+  fetchUserEndpoints,
   listSquads,
   listUserDevices,
   subscriptionUrl,
@@ -198,7 +200,26 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
     form.reset();
   }
 
-  const subUrl = user ? subscriptionUrl(user.subscriptionToken) : '';
+  // Panel metadata (publicUrl + subscriptionPathPrefix) — drives the
+  // copy-paste subscription URL admin sees. Cached app-wide by query key.
+  const authStatusQuery = useQuery({
+    queryKey: ['auth', 'status'],
+    queryFn: fetchAuthStatus,
+    staleTime: 5 * 60 * 1000,
+  });
+  const subUrl = user
+    ? subscriptionUrl(user.subscriptionToken, authStatusQuery.data?.panel)
+    : '';
+
+  // Per-protocol endpoint URIs for THIS user — fetched only when the
+  // modal is open AND we have a user (i.e. editing, not creating). Each
+  // endpoint exposes a ready-made URI string for client import / copy.
+  const endpointsQuery = useQuery({
+    queryKey: ['user-endpoints', user?.id],
+    queryFn: () => fetchUserEndpoints(user!.id),
+    enabled: opened && !!user?.id,
+    staleTime: 30 * 1000,
+  });
 
   return (
     <Modal
@@ -224,6 +245,18 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
           {/* Profile header — only on edit */}
           {isEdit && user && (
             <ProfileHeader user={user} subUrl={subUrl} />
+          )}
+
+          {/* Per-protocol direct URIs — only on edit. Each endpoint
+              (xray vless, hysteria2, ss, etc.) gets its own copy
+              button so admin can ship a single-protocol link to a user
+              without forcing them through a subscription importer. */}
+          {isEdit && user && (
+            <DirectEndpointsCard
+              endpoints={endpointsQuery.data?.endpoints ?? []}
+              loading={endpointsQuery.isLoading}
+              error={endpointsQuery.error}
+            />
           )}
 
           <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
@@ -646,6 +679,115 @@ function DeviceRow({
           </ActionIcon>
         </Tooltip>
       </Group>
+    </Paper>
+  );
+}
+
+// ───── Direct per-protocol URIs ─────
+//
+// Shows a card with one row per enabled endpoint (vless://, hysteria2://,
+// ss://, awg-style identifier, etc) plus a "Copy" button. AWG has no URI
+// scheme upstream — admin gets a placeholder pointing at the wgconf
+// download link instead. Asked-for in cycle #6 2026-05-13: operators
+// who deal with non-Hiddify clients (raw v2rayN, Shadowrocket) want a
+// single-protocol link without the subscription wrapper.
+function DirectEndpointsCard({
+  endpoints,
+  loading,
+  error,
+}: {
+  endpoints: Array<{ protocol: string; nodeName: string; host: string; port: number; uri: string }>;
+  loading: boolean;
+  error: unknown;
+}) {
+  if (loading) {
+    return (
+      <SectionCard icon={<IconLink size={16} />} title="Прямые ссылки по протоколам">
+        <Text size="xs" c="dimmed">Загрузка…</Text>
+      </SectionCard>
+    );
+  }
+  if (error) {
+    return (
+      <SectionCard icon={<IconLink size={16} />} title="Прямые ссылки по протоколам">
+        <Text size="xs" c="red">{error instanceof Error ? error.message : String(error)}</Text>
+      </SectionCard>
+    );
+  }
+  if (endpoints.length === 0) {
+    return (
+      <SectionCard icon={<IconLink size={16} />} title="Прямые ссылки по протоколам">
+        <Text size="xs" c="dimmed">
+          Нет активных endpoint'ов. Привяжи юзера к squad с inbound'ами и разверни профиль на ноду.
+        </Text>
+      </SectionCard>
+    );
+  }
+  return (
+    <SectionCard icon={<IconLink size={16} />} title="Прямые ссылки по протоколам">
+      <Stack gap={6}>
+        {endpoints.map((e, idx) => (
+          <DirectEndpointRow key={`${e.protocol}-${e.host}-${e.port}-${idx}`} endpoint={e} />
+        ))}
+        <Text size="xs" c="dimmed">
+          Каждая ссылка — single-protocol импорт для клиентов которые не умеют subscription URL (raw v2rayN / Shadowrocket / Hiddify Manual Add).
+        </Text>
+      </Stack>
+    </SectionCard>
+  );
+}
+
+function DirectEndpointRow({
+  endpoint,
+}: {
+  endpoint: { protocol: string; nodeName: string; host: string; port: number; uri: string };
+}) {
+  const [copied, setCopied] = useState(false);
+  const hasUri = endpoint.uri.length > 0;
+
+  async function handleCopy() {
+    if (!hasUri) return;
+    try {
+      await copyToClipboard(endpoint.uri);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch (err) {
+      notifications.show({
+        color: 'red',
+        title: 'Copy failed',
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  return (
+    <Paper withBorder p="xs" radius="sm">
+      <Group justify="space-between" wrap="nowrap">
+        <Group gap="xs" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
+          <Badge variant="light" color="cyan" size="xs" tt="uppercase">
+            {endpoint.protocol}
+          </Badge>
+          <Text size="xs" c="dimmed" truncate>
+            {endpoint.nodeName} · {endpoint.host}:{endpoint.port}
+          </Text>
+        </Group>
+        {hasUri ? (
+          <Tooltip label={copied ? 'Copied!' : 'Copy URI'}>
+            <ActionIcon variant="light" size="sm" onClick={handleCopy} color={copied ? 'green' : 'blue'}>
+              {copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
+            </ActionIcon>
+          </Tooltip>
+        ) : (
+          <Tooltip label="Для AmneziaWG нет стандартного URI — используй subscription URL с ?format=wgconf">
+            <Badge variant="light" color="gray" size="xs">wgconf only</Badge>
+          </Tooltip>
+        )}
+      </Group>
+      {hasUri && (
+        <Text size="xs" c="dimmed" ff="monospace" truncate mt={2}>
+          {endpoint.uri}
+        </Text>
+      )}
     </Paper>
   );
 }

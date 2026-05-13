@@ -158,7 +158,10 @@ export async function subscriptionRoutes(app: FastifyInstance): Promise<void> {
   // bandwidth-flood by re-fetching one valid token, or burn through token
   // candidates by enumeration. Default 30/min is well above legit clients
   // (Hiddify refreshes every 24h) and well below scan/exfil throughput.
-  app.get('/sub/:token', {
+  // Path prefix is admin-configurable via SUBSCRIPTION_PATH_PREFIX env
+  // (default `/sub`). Lets operators mask Ice-Panel signature on the
+  // wire — e.g. `/v` so user links look like https://panel/v/<token>.
+  app.get(`${config.SUBSCRIPTION_PATH_PREFIX}/:token`, {
     config: {
       rateLimit: {
         max: config.RATE_LIMIT_SUB_PER_MIN,
