@@ -2,6 +2,16 @@ import { prisma } from '../../prisma.js';
 import { NodeTransport, NodeRequestError } from '../nodes/nodes.transport.js';
 
 /**
+ * Per-node in-memory snapshot of the last seen cumulative `totalBytesIn/Out`
+ * from the agent. Used by the "no per-user accounting" fallback (mtproto +
+ * any future single-counter adapter) to compute deltas tick-to-tick. Lives
+ * in module scope — cleared when the backend restarts; that's fine, the
+ * first tick after restart just records the current snapshot without
+ * writing a fake spike.
+ */
+const totalSnapshot = new Map<string, { in: bigint; out: bigint }>();
+
+/**
  * Poll per-user traffic stats from every online node and roll them into
  * `user_traffic.used_traffic_bytes` (per-user) and `node_usage_history`
  * (per-node, hourly bucket).
@@ -56,20 +66,16 @@ export async function pollNodeStats(): Promise<{ ok: number; failed: number }> {
             `[cron] node-stats-poll ${node.id} — ${res.users.length} entries, total=${rawTotal}B`,
           );
         }
-        if (!res.users || res.users.length === 0) {
-          ok++;
-          return;
-        }
-
         const multiplier = Number(node.consumptionMultiplier ?? 1) || 1;
         let nodeDownload = 0n;
         let nodeUpload = 0n;
+        const userList = res.users ?? [];
 
         // Per-user: increment used_traffic_bytes by delta * multiplier.
         // Wire format: bytesIn = uplink (user→server), bytesOut = downlink.
         // We sum both into used_traffic_bytes (panel doesn't separate
         // up/down at the user level today; node-level table has both).
-        for (const u of res.users) {
+        for (const u of userList) {
           const inB = BigInt(u.bytesIn || 0);
           const outB = BigInt(u.bytesOut || 0);
           nodeUpload += inB;
@@ -104,6 +110,27 @@ export async function pollNodeStats(): Promise<{ ok: number; failed: number }> {
         }
 
         // Per-node hourly bucket — increment current hour's totals.
+        //
+        // Fallback for protocols without per-user attribution (mtproto:
+        // single-secret upstream; same applies to any future adapter that
+        // only exposes node-wide counters). When per-user counters sum to
+        // zero but the agent reports `totalBytesIn/Out > 0`, treat those
+        // as node-level deltas and write them straight into the hourly
+        // bucket. We bookkeep the previous total in-memory per-node so
+        // we write the *delta* each tick, not the cumulative counter.
+        if (nodeDownload === 0n && nodeUpload === 0n) {
+          const cumIn = BigInt(res.totalBytesIn || 0);
+          const cumOut = BigInt(res.totalBytesOut || 0);
+          if (cumIn > 0n || cumOut > 0n) {
+            const prev = totalSnapshot.get(node.id) ?? { in: 0n, out: 0n };
+            const dIn = cumIn > prev.in ? cumIn - prev.in : 0n;
+            const dOut = cumOut > prev.out ? cumOut - prev.out : 0n;
+            totalSnapshot.set(node.id, { in: cumIn, out: cumOut });
+            nodeUpload += dIn;
+            nodeDownload += dOut;
+          }
+        }
+
         if (nodeDownload > 0n || nodeUpload > 0n) {
           await prisma.nodeUsageHistory.upsert({
             where: { nodeId_hour: { nodeId: node.id, hour: hourBucket } },
