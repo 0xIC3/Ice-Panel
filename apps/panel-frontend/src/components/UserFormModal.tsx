@@ -250,12 +250,15 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
           {/* Per-protocol direct URIs — only on edit. Each endpoint
               (xray vless, hysteria2, ss, etc.) gets its own copy
               button so admin can ship a single-protocol link to a user
-              without forcing them through a subscription importer. */}
+              without forcing them through a subscription importer.
+              AWG has no URI scheme — its row offers "copy wgconf URL"
+              instead (subscription URL with ?format=wgconf query). */}
           {isEdit && user && (
             <DirectEndpointsCard
               endpoints={endpointsQuery.data?.endpoints ?? []}
               loading={endpointsQuery.isLoading}
               error={endpointsQuery.error}
+              subUrl={subUrl}
             />
           )}
 
@@ -695,10 +698,12 @@ function DirectEndpointsCard({
   endpoints,
   loading,
   error,
+  subUrl,
 }: {
   endpoints: Array<{ protocol: string; nodeName: string; host: string; port: number; uri: string }>;
   loading: boolean;
   error: unknown;
+  subUrl: string;
 }) {
   if (loading) {
     return (
@@ -727,10 +732,14 @@ function DirectEndpointsCard({
     <SectionCard icon={<IconLink size={16} />} title="Прямые ссылки по протоколам">
       <Stack gap={6}>
         {endpoints.map((e, idx) => (
-          <DirectEndpointRow key={`${e.protocol}-${e.host}-${e.port}-${idx}`} endpoint={e} />
+          <DirectEndpointRow
+            key={`${e.protocol}-${e.host}-${e.port}-${idx}`}
+            endpoint={e}
+            subUrl={subUrl}
+          />
         ))}
         <Text size="xs" c="dimmed">
-          Каждая ссылка — single-protocol импорт для клиентов которые не умеют subscription URL (raw v2rayN / Shadowrocket / Hiddify Manual Add).
+          Каждая ссылка — single-protocol импорт для клиентов которые не умеют subscription URL (raw v2rayN / Shadowrocket / Hiddify Manual Add). Для AmneziaWG копируется URL подписки с ?format=wgconf — открывается в AmneziaVPN.
         </Text>
       </Stack>
     </SectionCard>
@@ -739,16 +748,23 @@ function DirectEndpointsCard({
 
 function DirectEndpointRow({
   endpoint,
+  subUrl,
 }: {
   endpoint: { protocol: string; nodeName: string; host: string; port: number; uri: string };
+  subUrl: string;
 }) {
   const [copied, setCopied] = useState(false);
   const hasUri = endpoint.uri.length > 0;
+  // For AWG there's no URI scheme — give admin the subscription URL with
+  // ?format=wgconf. Both AmneziaVPN desktop ("File with config") and
+  // Hiddify Next accept that URL directly (they fetch+parse).
+  const wgconfUrl = !hasUri && subUrl ? `${subUrl}?format=wgconf` : '';
 
   async function handleCopy() {
-    if (!hasUri) return;
+    const toCopy = hasUri ? endpoint.uri : wgconfUrl;
+    if (!toCopy) return;
     try {
-      await copyToClipboard(endpoint.uri);
+      await copyToClipboard(toCopy);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch (err) {
@@ -759,6 +775,12 @@ function DirectEndpointRow({
       });
     }
   }
+
+  const tooltipLabel = copied
+    ? 'Copied!'
+    : hasUri
+      ? 'Скопировать URI'
+      : 'Скопировать wgconf URL (открывается в AmneziaVPN: + → "Файл с настройками подключения" → вставить URL)';
 
   return (
     <Paper withBorder p="xs" radius="sm" style={{ overflow: 'hidden' }}>
@@ -771,25 +793,18 @@ function DirectEndpointRow({
             {endpoint.nodeName} · {endpoint.host}:{endpoint.port}
           </Text>
         </Group>
-        {hasUri ? (
-          <Tooltip label={copied ? 'Copied!' : 'Copy URI'}>
-            <ActionIcon
-              variant="light"
-              size="sm"
-              onClick={handleCopy}
-              color={copied ? 'green' : 'blue'}
-              style={{ flexShrink: 0 }}
-            >
-              {copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
-            </ActionIcon>
-          </Tooltip>
-        ) : (
-          <Tooltip label="Для AmneziaWG нет стандартного URI — используй subscription URL с ?format=wgconf">
-            <Badge variant="light" color="gray" size="xs" style={{ flexShrink: 0 }}>
-              wgconf only
-            </Badge>
-          </Tooltip>
-        )}
+        <Tooltip label={tooltipLabel} multiline w={260}>
+          <ActionIcon
+            variant="light"
+            size="sm"
+            onClick={handleCopy}
+            color={copied ? 'green' : hasUri ? 'blue' : 'grape'}
+            style={{ flexShrink: 0 }}
+            disabled={!hasUri && !wgconfUrl}
+          >
+            {copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
+          </ActionIcon>
+        </Tooltip>
       </Group>
     </Paper>
   );
