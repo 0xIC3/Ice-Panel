@@ -626,8 +626,9 @@ export function NodeEditModal({
                                           {
                                             onSuccess: () =>
                                               setPortDrafts((d) => {
-                                                const { [binding.id]: _, ...rest } = d;
-                                                return rest;
+                                                const clone = { ...d };
+                                                delete clone[binding.id];
+                                                return clone;
                                               }),
                                           },
                                         );

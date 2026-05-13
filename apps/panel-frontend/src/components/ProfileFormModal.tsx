@@ -76,6 +76,11 @@ interface FormValues {
   awgH2: number | '';
   awgH3: number | '';
   awgH4: number | '';
+  awgI1: string;
+  awgI2: string;
+  awgI3: string;
+  awgI4: string;
+  awgI5: string;
 
   // Naive
   naiveHostname: string;
