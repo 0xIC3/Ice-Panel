@@ -750,14 +750,16 @@ if [[ "${SKIP_FIREWALL:-0}" != "1" ]]; then
       ufw allow 443/tcp                  >/dev/null 2>&1 || true
       ;;
     amneziawg)
-      # Open both 51820 (WireGuard default) and 443 (typical AWG stealth
-      # port — masquerades as HTTPS). Admin can pick either in the panel
-      # Profile UI; we open both because the install-time script doesn't
-      # know which the operator will choose. Caught live cycle #6
-      # 2026-05-12 on awg-VPS — server bound :443 from inbound config but
-      # UFW only had :51820 → handshakes silently dropped at firewall.
-      ufw allow 51820/udp                >/dev/null 2>&1 || true
+      # Per upstream amnezia.org docs: pick a port BELOW 9999 (some ISPs
+      # block UDP on high ports, and 51820 is the well-known WireGuard
+      # default that DPI specifically targets). We pre-open 443 (HTTPS-
+      # masquerade) and 1234 (recommended by upstream as an example
+      # low-port alternative). Admin can pick either in the panel Profile
+      # UI; or open another port manually if they prefer something else.
+      # 51820 deliberately NOT opened — operators who really need it can
+      # `ufw allow 51820/udp` themselves. Caught live cycle #6 2026-05-12.
       ufw allow 443/udp                  >/dev/null 2>&1 || true
+      ufw allow 1234/udp                 >/dev/null 2>&1 || true
       ;;
     naive)
       ufw allow 443/tcp                  >/dev/null 2>&1 || true

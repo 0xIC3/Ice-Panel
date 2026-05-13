@@ -794,6 +794,26 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
 
           {form.values.protocol === 'amneziawg' && (
             <Stack>
+              {/* AmneziaWG-specific gotchas in one place. Per upstream
+                  amnezia.org docs: (a) pre-4.8.12.9 AmneziaVPN clients
+                  silently don't recognize S3/S4 v2.0 fields — handshake
+                  fails without error. (b) AmneziaWG 1.0 credentials are
+                  not interchangeable with 2.0 — fresh keys required for
+                  every peer when migrating. (c) port choice matters —
+                  upstream recommends < 9999 because some ISPs block
+                  high UDP ports; 51820 is the well-known WG default
+                  and is specifically targeted by DPI. Port is set on
+                  the binding (Nodes → Edit), not here. */}
+              <Alert color="blue" variant="light" p="xs">
+                <Text size="xs" component="div">
+                  <strong>Что важно знать про AmneziaWG 2.0:</strong>
+                  <ul style={{ margin: '4px 0 0 16px', paddingLeft: 0 }}>
+                    <li>Клиент: <strong>AmneziaVPN ≥ 4.8.12.9</strong> или Hiddify Next ≥ 2.4. Старые не подключатся.</li>
+                    <li>Порт (задаётся на binding): <strong>≤ 9999</strong>, например 443 или 1234. Не используй 51820 — известный WG-default, ISP его режут.</li>
+                    <li>При миграции со старого AmneziaWG 1.0 — все ключи peer'ов нужно перегенерить, со старыми не работает.</li>
+                  </ul>
+                </Text>
+              </Alert>
               <TextInput
                 label="Subnet (CIDR)"
                 placeholder="10.66.66.0/24"
