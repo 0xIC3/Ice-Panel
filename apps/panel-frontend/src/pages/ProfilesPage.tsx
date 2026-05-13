@@ -90,10 +90,20 @@ export function ProfilesPage() {
 
   const createMutation = useMutation({
     mutationFn: createProfile,
-    onSuccess: () => {
+    // After creating a profile, immediately open DeployModal so admin
+    // picks port + nodes without hunting for the "Развернуть" button.
+    // Closes the UX gap caught cycle #6 2026-05-13 ("где я выбираю порт?")
+    // — profile schema doesn't carry port (multi-node fan-out), but for
+    // 99% of operators the deploy step happens right after create.
+    onSuccess: (created) => {
       qc.invalidateQueries({ queryKey: ['profiles'] });
       qc.invalidateQueries({ queryKey: ['bindings'] });
-      notifications.show({ color: 'green', message: t('profiles.notify.created') });
+      notifications.show({
+        color: 'green',
+        message: t('profiles.notify.createdOpenDeploy'),
+      });
+      // Auto-open deploy modal for the just-created profile.
+      setDeploying(created);
     },
     onError: (err) =>
       notifications.show({
@@ -251,6 +261,9 @@ export function ProfilesPage() {
         loading={createMutation.isPending}
         onSubmit={async (input) => {
           await createMutation.mutateAsync(input as CreateProfileInput);
+          // Close create-modal once mutation succeeds — onSuccess in the
+          // mutation handler already opens DeployModal for the next step.
+          closeCreate();
         }}
       />
       <ProfileFormModal

@@ -272,6 +272,7 @@ export default {
     deleteSafe: 'Profile is not bound to any node — safe to delete.',
     notify: {
       created: 'Profile created',
+      createdOpenDeploy: 'Profile created. Pick nodes + port to deploy →',
       updated: 'Profile updated',
       deleted: 'Profile deleted',
     },
