@@ -8,7 +8,7 @@ Where competitors (Marzban, Remnawave, x-ui) wrap everything through Xray-core, 
 
 ## 🚀 One-command install
 
-> Both scripts target Ubuntu 22.04+ / Debian 12+. Require root. Idempotent (safe to re-run). Cycle #6 reality-checked end-to-end on fresh Aeza fleet 2026-05-12 — full deploy → connect for Xray (REALITY+Vision) and Hysteria 2; AmneziaWG server-side pipeline verified live (client handshake retest pending).
+> Both scripts target Ubuntu 22.04+ / Debian 12+. Require root. Idempotent (safe to re-run). Cycles #6 → #8 reality-checked end-to-end on fresh Aeza fleet (2026-05-12 → 2026-05-13) — full deploy → connect verified for Xray (REALITY+Vision), Hysteria 2, AmneziaWG (iPhone real-traffic, 25 MB through tunnel), and MTProto (Telegram iOS).
 
 ### 1. Panel — install on the admin's VPS
 
@@ -75,7 +75,14 @@ The script writes `/etc/hysteria/config.yaml` with ACME / masquerade / auth-call
 bash <(curl -fsSL .../install-node.sh) --panel-url ... --bootstrap ... --protocol amneziawg
 ```
 
-Installs the upstream amnezia-vpn DKMS kernel module + `awg` / `awg-quick` tools. **Subnet warning:** the default AWG profile uses `10.66.66.0/24` because `10.0.0.0/24` collides with internal infrastructure gateways on some VPS providers (notably Aeza — server tunnel-IP `10.0.0.1` matches the host's default route, VPS loses connectivity minutes after the tunnel comes up with no kernel logs). Pick any non-conflicting `/24` if your provider uses something else; check `ip route show` on the VPS before. Verified working on Debian 12 (kernel 6.1) and Ubuntu 26.04 (kernel 7.0) under the new default.
+Installs the upstream amnezia-vpn DKMS kernel module + `awg` / `awg-quick` tools. The installer auto-opens UDP 443 and UDP 1234 in UFW, flips `DEFAULT_FORWARD_POLICY=ACCEPT` (routed-NAT requirement), and configures `ip_forward`.
+
+**Operational notes** (validated live cycle #7/#8):
+
+- **Subnet:** default AWG profile uses `10.66.66.0/24` because `10.0.0.0/24` collides with internal infrastructure gateways on some VPS providers (notably Aeza — server tunnel-IP `10.0.0.1` matches the host's default route, VPS loses connectivity minutes after tunnel up, **no kernel logs**). Pick any non-conflicting `/24` if your provider differs.
+- **Port choice:** pick a port **below 9999**. Many RU mobile carriers DPI-drop UDP/443 outbound (Quic-style filter), so the canonical AWG port is throttled at the client side, not server. The panel UI lets the admin set the binding port; recommended `1234`, `51280`, or any high random < 9999. **Don't use 51820** (that's the well-known WireGuard default that DPI targets specifically).
+- **Client compatibility:** AmneziaVPN ≥ 4.8.12.9 or Hiddify Next ≥ 2.4. Earlier versions silently fail. AmneziaVPN 4.8.12.9 → 4.8.15.5 also has [upstream bug #2582](https://github.com/amnezia-vpn/amnezia-client/issues/2582) that drops traffic on non-zero S3/S4 — our presets default to `S3=0 S4=0` to dodge it.
+- Verified end-to-end on Debian 12 / kernel 6.1.0-47, iPhone iOS 26.4 + AmneziaVPN 4.8.15.4, 25 MB of YouTube traffic through tunnel 2026-05-13.
 
 #### NaiveProxy / Shadowsocks 2022 / MTProto / Mieru
 
@@ -96,24 +103,27 @@ Full deploy guide (per-protocol details, troubleshooting, update workflow): **[d
 
 ## Status
 
-🎯 **Phase 3 ≈ 92%** — all 7 protocol adapters in code, panel + nodes deployable via one-command installers, CI green with auto-published container images.
+🎯 **Phase 3 = 100%** — all 7 protocol adapters in code; 4 of them verified end-to-end on real client traffic. Panel + nodes deployable via one-command installers, CI green with auto-published container images.
 
-**Verified live on real VPS** (cycle #6, 2026-05-12):
-- ✅ Xray REALITY + Vision (raw / xhttp / gRPC / Trojan transports) — end-to-end on Aeza Sweden node
-- ✅ Hysteria 2 + Salamander obfuscation + port-hopping — RU iOS works via Hiddify Next on Hetzner Germany node
-- ✅ AmneziaWG server-side pipeline (Debian 12 / kernel 6.1.0-47) — adapter registered, panel pushes config, `awg0` UP with peer allocated, wgconf subscription correct
+**Verified live on real VPS + real client** (cycle #6 + #7 + #8, through 2026-05-13):
+- ✅ **Xray REALITY + Vision** (raw / xhttp / gRPC / Trojan transports) — end-to-end on Aeza Sweden node, Hiddify + Streisand clients
+- ✅ **Hysteria 2** + Salamander obfuscation + port-hopping — RU iOS via Hiddify Next on Aeza London, 9 MB+ tunneled cleanly
+- ✅ **AmneziaWG** end-to-end on iPhone (AmneziaVPN client 4.8.15.4, Aeza Helsinki) — 25 MB through tunnel, real YouTube traffic. UDP port hop from 443 → 1234 to dodge mobile-carrier DPI; per-user `awg show dump` byte counters reported back to panel UI
+- ✅ **MTProto** (`9seconds/mtg` Fake-TLS, masquerade `www.bing.com`) — Telegram iOS client connects via Aeza Sweden node, real messaging traffic
 - ✅ Tier-1 security: honeypot trap, honey-user tripwire, per-IP rate-limit, username lockout (5 fails → 15 min lock)
 - ✅ Slice 38 self-destruct: node-agent exits 42 on `/healthz` 410-Gone, `RestartPreventExitStatus` blocks systemd from reviving
 - ✅ CI: panel typecheck + tests, node-agent Go tests, multi-arch docker images published to `ghcr.io/0xic3/ice-panel-{backend,frontend,node}:main` on every push
 
 **Pipeline-only, real-traffic pending** — code paths exist but client-side verification not yet completed:
-- 🟡 AmneziaWG client handshake — AmneziaVPN desktop client disconnects mid-handshake, retest scheduled
-- 🟡 NaiveProxy, Shadowsocks 2022, MTProto, Mieru — never run on a real VPS yet
+- 🟡 NaiveProxy, Shadowsocks 2022, Mieru — never run on a real VPS yet
 
-**Cycle #6 reality-check** caught and fixed 21 live-only bugs that no unit test had reached (each cross-cuts panel + nginx + docker-compose + agent + install script). Notable ones:
-- AmneziaWG default subnet `10.0.0.0/24` collided with VPS provider infrastructure gateway — caused VPS to lose connectivity minutes after tunnel up, **no kernel logs**. Diagnosed via Aeza support ticket #604280, default changed to `10.66.66.0/24`.
-- `@fastify/rate-limit` Error{statusCode:429} was getting converted to 500 by the global error handler — broken protective signal, fixed.
-- Honeypot scanner paths (`/.env`, `/wp-admin`, ...) never reached the backend because the SPA-fallback in frontend nginx ate them. Added regex location to forward to backend.
+**Cycle #6 + #7 + #8 reality-check** caught and fixed ~30 live-only bugs that no unit test had reached. Notable cycle #7/#8 additions:
+- **AWG default `iptables MASQUERADE` rule had wrong direction** (`-o %i` matched packets going TO peers; correct form is `! -o %i` matching WAN egress). Handshake completed, server received decrypted requests, but responses never routed back because the source IP was un-NATted private 10.x — VPN client showed "Connected" with 25 KiB RX / 348 B TX. Fixed in `apps/node/internal/core/amneziawg/config.go` default PostUp/PostDown.
+- **UFW `DEFAULT_FORWARD_POLICY=DROP` silently broke routed VPN.** Forwarded packets through `awg0`→WAN got dropped in FORWARD chain. install-node.sh now flips it to `ACCEPT` in the `amneziawg)` branch.
+- **systemd unit's `ProtectSystem=strict` made `/run` read-only for child processes** → ufw + netfilter-persistent both crashed with "Read-only file system: /run/ufw.lock", so `firewall.Allow()` silently no-op'd on fresh nodes. Added `-/run -/etc/iptables` to `ReadWritePaths=`.
+- **MTProto FakeTLS secret was 32 bytes instead of 16** (`sha256` digest passed through whole). Telegram client rejected with "Invalid proxy link". Sliced to `[:16]` on both panel (`mtprotoSecret`) and agent (`DeriveSecret`); they stay in sync because both slice identically.
+- **AmneziaVPN client bug #2582** — versions 4.8.12.9 through 4.8.15.5 silently drop traffic when server has non-zero S3/S4. All three AWG presets (TSPU / Mobile / Iran) now force `S3=0 S4=0` until upstream ships a fix.
+- **AmneziaWG per-user traffic stats wired up** — `GetStats()` was a stub returning zero counters; now parses `awg show <iface> dump`, maps pubkey → userID, reports back to panel "Сегодня" column.
 - See `docs/TROUBLESHOOTING.md` for the full numbered list.
 
 Full plan: [docs/ROADMAP.md](./docs/ROADMAP.md) (v3.6, 2026-05-12).

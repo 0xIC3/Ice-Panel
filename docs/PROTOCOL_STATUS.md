@@ -4,7 +4,7 @@ What's actually validated by real traffic vs what's scaffolded. **Updated after 
 
 > **Companion docs:** [ROADMAP.md](./ROADMAP.md) tracks slices; [TESTING.md](./TESTING.md) carries per-slice checklists; **this file** answers "what can I sell to a paying user today, vs what's still a science experiment".
 
-> **Last updated:** 2026-05-12 (**VPS cycle #6** — fresh Aeza fleet, full reality-check after cycle #6 code-side closure). Re-confirmed end-to-end on freshly-imaged London (Hysteria) + Helsinki (Xray) VPS via single-command install. All 4 Xray transports (raw/xhttp/gRPC/Trojan) ✅. **Hysteria 2 + port-hopping** (slice 31.5) — **9 MB+ tunneled from RU client via Hiddify Next**, fixing the cycle #5 RU iOS gap. Slice 38 self-destruct + auto-resync both reality-checked. Hysteria per-user traffic counters via `/traffic` API (was TODO). Tier-1 security (honeypot, honey-user tripwire, username lockout, per-IP rate-limit) all fire correctly with proper status codes. 12 live install-time + cross-layer bugs caught + fixed mid-cycle (see TROUBLESHOOTING.md cycle #6 summary at top).
+> **Last updated:** 2026-05-13 (**VPS cycles #7 + #8** — Phase 3 closed). **AmneziaWG end-to-end on iPhone** (AmneziaVPN 4.8.15.4 → Aeza Helsinki, 25 MB real YouTube traffic) — UDP port hop from 443 → 1234 to dodge RU mobile carrier DPI, per-user `awg show dump` byte counters reported back to panel "Сегодня" column. **MTProto end-to-end** (Telegram iOS → Aeza Sweden mtg with `www.bing.com` Fake-TLS). Plus 8 cycle #7/#8 bugs (AWG NAT direction, UFW forward policy, /run ReadWritePaths, MTProto 16-byte secret, AWG S3/S4 client workaround, per-user stats wiring — see cycle entries below + TROUBLESHOOTING.md).
 
 ## ✅ Confirmed by real traffic
 
@@ -62,7 +62,28 @@ The only one. Anything else listed below is some shade of "tested locally / loop
 - **Verified:** **VPS cycle #5 (2026-05-10)** — single user gets both vless + hy2 endpoints in their subscription, Hiddify shows two profile entries, switches cleanly between cores
 - **What it proves:** profile + binding + host model (slice 27/30) actually works under real traffic with two independent VPS hosting two different cores. End-to-end multi-node ops.
 
-The four xray transports + Hysteria are the **default safe set** for new commercial users today.
+### AmneziaWG (kernel module + obfuscation)
+
+- **Slice:** 19 (core), 23 (presets + form), 24b3 (smart-diff classifier), 27 (Profile+Binding wiring)
+- **Verified end-to-end:** **VPS cycle #8 (2026-05-13)** on Aeza Helsinki (Debian 12 / kernel 6.1.0-47 / amneziawg DKMS v1.0.20251009). iPhone iOS 26.4 + AmneziaVPN 4.8.15.4. **25 MB of real YouTube traffic** flowed through tunnel; `awg show awg0 transfer` reported matching RX/TX growth on server.
+- **Per-user stats:** ✅ shipped cycle #8. `GetStats()` parses `awg show <iface> dump` (kernel-cumulative bytes, peer pubkey → userID via tracked peers map), panel `node-stats-poll` cron picks it up, "Сегодня" column on Nodes page shows live MiB.
+- **Operational gotchas locked in (cycle #7 + #8 lessons):**
+  - **Subnet:** `10.0.0.0/24` collides with Aeza host gateway (`10.0.0.1`) — VPS loses connectivity minutes after tunnel up. Default changed to `10.66.66.0/24`.
+  - **Port:** RU mobile carriers DPI-drop UDP/443 outbound. We open both 443 and 1234 in UFW; admin sets the binding port in the panel UI. Don't use 51820 (well-known WG default; DPI targets it specifically).
+  - **Client version:** AmneziaVPN ≥ 4.8.12.9 or Hiddify Next ≥ 2.4. Older clients silently fail.
+  - **Upstream client bug [#2582](https://github.com/amnezia-vpn/amnezia-client/issues/2582)** — AmneziaVPN 4.8.12.9 → 4.8.15.5 silently drops traffic when server has non-zero S3 or S4. Our TSPU / Mobile / Iran presets all default `S3=0 S4=0` until upstream ships a fix.
+  - **`iptables MASQUERADE` direction:** awg-quick's default template uses `-o %i` (interface itself = traffic to peers — wrong direction). Our agent's default PostUp uses `! -o %i` (any iface EXCEPT awg — i.e. WAN egress). Without this, handshake completes but responses never NAT back to clients.
+  - **UFW `DEFAULT_FORWARD_POLICY=DROP`:** routed VPN needs ACCEPT. install-node.sh flips it in the `amneziawg)` branch.
+  - **systemd unit `/run` sandbox:** ufw + netfilter-persistent both need `/run/*.lock` writable. `ReadWritePaths=-/run -/etc/iptables` added.
+
+### MTProto (Telegram-only via `9seconds/mtg` Fake-TLS)
+
+- **Slice:** 41 (core + URI), 24b4-equivalent (ApplyInbound wiring)
+- **Verified end-to-end:** **VPS cycle #8 (2026-05-13)** on Aeza Sweden, Telegram iOS, masquerade `www.bing.com`. Connect → real Telegram messaging traffic flows.
+- **Architecture note:** mtg is intentionally single-secret upstream — one mtg instance = one secret. We derive deterministically from `(inboundId, domain)` so panel + agent independently compute the same value. Every user in the inbound's squad receives the same URL. No per-user accounting available (architectural ceiling of upstream; documented as ⚠️ in "Won't work without rework" below).
+- **Spec compliance:** FakeTLS secret is `ee` + **16 random bytes** + hex-encoded SNI domain. Caught cycle #8: we'd been emitting 32 random bytes (the whole sha256 digest), Telegram rejected with "Invalid proxy link" / "Некорректная ссылка на прокси". Now sliced to `[:16]` in both panel and agent.
+
+The four xray transports + Hysteria + **AmneziaWG + MTProto** are the **default safe set** for new commercial users today.
 
 ## ⚠️ Pipeline proven, real traffic NOT proven
 
@@ -70,10 +91,8 @@ Code is honest but unverified end-to-end against a real client. Don't promise to
 
 | Protocol | What's proven | Gap before sellable |
 |---|---|---|
-| **AmneziaWG 2.0** | Full server-side pipeline ✅ verified live 2026-05-12 on Debian 12 / kernel 6.1.0-47: adapter registered, panel pushes config with per-binding port, agent renders `/etc/amnezia/amneziawg/awg0.conf` with correct keys + subnet + obfuscation, `awg-quick up` brings interface UP, peer auto-allocated and added with IP from `allocatePeer` (10.66.66.2/32), `awg show` reports peer + obfuscation params matching wgconf subscription. **v2.0 spec alignment** (2026-05-13 from docs.amnezia.org): tightened param bounds (Jmin/Jmax 64..1024, S1-S3 0..64, S4 0..32, Jc 0..10), added optional I1-I5 mimicry fields, updated TSPU/Mobile presets. 9 cycle-#6 bugs closed here (see TROUBLESHOOTING #13-21). | AmneziaVPN-desktop client handshake fails — connects then immediately disconnects with Jc=0; not yet retested with TSPU preset after the renderConfig defaults fix landed. Real `awg show transfer` >0 + `curl ifconfig.me`-via-tunnel pending next session. Requires client AmneziaVPN ≥ 4.8.12.9 or Hiddify Next ≥ 2.4 — older clients silently fail. H1-H4 range syntax (v2.0 feature) deferred until DPI-fingerprinting becomes a real concern. |
 | **NaiveProxy** | Caddyfile render + `caddy reload` plumbing | Never run live. Need xcaddy build + real naive-client connect. |
 | **Shadowsocks 2022** | Render config (with server PSK), URI builder, adapter wired through xray-core; SS2022/legacy AEAD ciphers in schema | Never run live. Outline / Shadowrocket / sing-box connect verify pending. |
-| **MTProto** (`9seconds/mtg`) | Single-secret architecture verified against upstream; TOML render correct; URI both `tg://` and `https://t.me/proxy?...` forms | Never run live. Telegram client connect + Fake-TLS handshake against real masquerade domain pending. |
 | **Mieru** (`enfein/mieru`) | JSON render verified against upstream operation.md; `mita apply config` + `reload` graceful; tracked-user bookkeeping | Never run live. mieru-client / sing-box connect pending. |
 
 ## 🟡 Code-complete but VPS-untouched
@@ -103,6 +122,15 @@ Slices that landed in this batch but haven't seen ANY VPS — even loopback.
 
 - **Cycle #1 (2026-05-06):** 10 bugs.
 - **Cycle #2 (2026-05-07):** 8 bugs + 3 upstream-mismatch (mtg secrets array, mieru YAML, SS2022 missing serverPSK).
+- **Cycle #7 + #8 (2026-05-13) — Phase 3 close.** AmneziaWG end-to-end on iPhone (25 MB tunneled) and MTProto end-to-end on Telegram iOS. 8 cross-layer bugs closed during the marathon:
+  1. **AWG MASQUERADE direction.** Default PostUp template was `iptables -t nat -A POSTROUTING -o %i -j MASQUERADE` — `-o %i` matches packets exiting on the wg interface itself (= traffic TO peers, wrong direction). Fixed to `! -o %i` (any iface EXCEPT wg = real WAN egress). Without this, AWG handshake completed but VPN clients had 25 KiB RX / 348 B TX because responses never got NATted back. `config.go` default updated; old installations need a manual `iptables -t nat -D POSTROUTING -o awg0 -j MASQUERADE; iptables -t nat -A POSTROUTING -s <subnet> ! -o awg0 -j MASQUERADE`.
+  2. **UFW `DEFAULT_FORWARD_POLICY=DROP` silently broke AWG.** Forwarded packets between awg0 and WAN got reject'd in the FORWARD chain. install-node.sh now flips it to ACCEPT in the `amneziawg)` branch (+ `ufw default allow routed`).
+  3. **systemd unit `/run` read-only crashed ufw + netfilter-persistent inside agent.** `ProtectSystem=strict` plus a `ReadWritePaths=` whitelist that omitted `/run` meant ufw could not write `/run/ufw.lock` — `firewall.Allow()` silent-no-op'd on every applyInbound. Added `-/run -/etc/iptables` to `ReadWritePaths=`.
+  4. **AmneziaWG per-user traffic stats wired up.** `GetStats()` was a stub returning zero counters. Now parses `awg show <iface> dump` TSV (peer pubkey → rx/tx bytes), maps to userID via tracked `peers` map. Falls back to zero counters on `awg show` failure rather than erroring the stats poll. Result: "Сегодня" column on Nodes page shows live MiB on AWG.
+  5. **AmneziaVPN client bug [#2582](https://github.com/amnezia-vpn/amnezia-client/issues/2582).** Versions 4.8.12.9 → 4.8.15.5 silently drop traffic when server has non-zero `S3` or `S4`. All three AWG presets (TSPU / Mobile / Iran) now default `S3=0 S4=0`. Schema still allows non-zero so admins can flip when upstream ships a fix.
+  6. **RU mobile carriers DPI-drop UDP/443 outbound.** Mid-tunnel tcpdump on awg-VPS showed zero incoming packets despite client showing "Sending handshake initiation" every 5s. UFW pre-opens 443 AND 1234 UDP for amneziawg; admin picks the binding port in panel UI. 1234 (or any high random < 9999) bypasses the filter. Documented in install-node.sh `amneziawg)` ufw block.
+  7. **MTProto FakeTLS secret was 32 bytes — Telegram rejected with "Invalid proxy link".** Spec mandates exactly 16 random bytes after the `ee` prefix; longer secrets fail client-side validation. Sliced sha256 digest to `[:16]` in both `panel-backend/src/core-adapters/mtproto/uri.ts` (`mtprotoSecret`) and `node/internal/core/mtproto/config.go` (`DeriveSecret`) so both still compute the same value for `(inboundId, domain)`.
+  8. **AmneziaWG default subnet via withDefaults() overrode legitimate zero values.** Slice 19's withDefaults() hard-coded `Address = 10.0.0.1/24` / `Jc = 4` / `S1-S4 = 72, 56, 32, 16` so when admin explicitly set anything to zero in the UI, the agent rewrote it to the default. Same code was responsible for the Aeza-collision incident. Removed all withDefaults overrides for Address/Jc/Jmin/Jmax/S1-S4 — zero on the wire now means zero. Caught and fixed cycle #6 but verified end-to-end in cycle #8 with `Jc=0`.
 - **Cycle #3 (2026-05-08):**
   1. **`install-panel.sh`: PUBLIC_URL invalid URL crash-loop.** Backend Zod `z.url().optional()` rejected empty string supplied by docker-compose `${PUBLIC_URL}` substitution. Fixed: install-panel writes `PUBLIC_URL` into `.env.production` from `PANEL_DOMAIN` / public IP; config schema additionally tolerates empty string.
   2. **TS `noUnusedLocals` killing prod build:** `Badge` import in SquadsPage and `GiB` constant in UsersPage left over after slice 27 cleanup. Fixed.
