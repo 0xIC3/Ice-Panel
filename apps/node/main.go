@@ -15,6 +15,7 @@ import (
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core/hysteria"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core/mieru"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core/mtproto"
+	"github.com/0xIC3/Ice-Panel/apps/node/internal/core/naive"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core/shadowsocks"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core/xray"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/heartbeat"
@@ -230,6 +231,29 @@ func buildAdapters(logger *slog.Logger) []core.CoreAdapter {
 		}
 		adapters = append(adapters, amneziawg.New(awgCfg, logger))
 		logger.Info("amneziawg adapter registered", "bin", awgBinPath)
+	}
+
+	// Slice 20 — NaiveProxy via Caddy + klzgrad/forwardproxy@naive plugin.
+	// bootstrap-naive.sh builds a custom Caddy at /usr/local/bin/caddy-naive
+	// (the upstream `caddy` package would lack the forward_proxy module).
+	// Register unconditionally when that binary exists — that's our
+	// "naive-capable node" probe, same pattern as amneziawg.
+	//
+	// Caught live cycle #8 reality-check 2026-05-13: adapter code shipped
+	// with slice 20 but was never wired into the registry, so applyInbound
+	// for naive landed with `no adapter for protocol — config persisted
+	// but not applied live`. Hence the explicit registration here.
+	caddyBinPath := getenv("CADDY_NAIVE_BIN", "/usr/local/bin/caddy-naive")
+	if _, err := os.Stat(caddyBinPath); err == nil {
+		naiveCfg := naive.Config{
+			CaddyBin:      caddyBinPath,
+			CaddyfilePath: getenv("NAIVE_CONFIG", "/etc/caddy/Caddyfile"),
+			Inbound: naive.InboundConfig{
+				ListenPort: getenvInt("NAIVE_PORT", 443),
+			},
+		}
+		adapters = append(adapters, naive.New(naiveCfg, logger))
+		logger.Info("naive adapter registered", "bin", caddyBinPath)
 	}
 
 	return adapters
