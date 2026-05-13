@@ -4,9 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
 	"os/exec"
+	"strconv"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core/subprocess"
@@ -30,6 +35,15 @@ type Config struct {
 	// RunCmd is the injectable command runner for stats scraping.
 	// Defaults to os/exec; tests inject a fake.
 	RunCmd RunCmdFunc
+
+	// MetricsURL is the mtg Prometheus stats endpoint. mtg's config.toml
+	// hard-codes `bind-to = "127.0.0.1:3129"` per renderConfig, so this
+	// defaults to that — overridable for tests.
+	MetricsURL string
+
+	// metricsClient is the HTTP client used for scraping. nil → default
+	// 2-second-timeout client. Tests inject a fake transport.
+	metricsClient *http.Client
 }
 
 type RunCmdFunc func(ctx context.Context, name string, args ...string) ([]byte, error)
@@ -53,6 +67,12 @@ type Adapter struct {
 func New(cfg Config, logger *slog.Logger) *Adapter {
 	if cfg.RunCmd == nil {
 		cfg.RunCmd = defaultRunCmd
+	}
+	if cfg.MetricsURL == "" {
+		cfg.MetricsURL = "http://127.0.0.1:3129/metrics"
+	}
+	if cfg.metricsClient == nil {
+		cfg.metricsClient = &http.Client{Timeout: 2 * time.Second}
 	}
 	return &Adapter{
 		cfg:    cfg,
@@ -148,20 +168,98 @@ func (a *Adapter) ApplyInbound(rawCfg json.RawMessage) error {
 	return a.regenerateAndRestartLocked(context.Background())
 }
 
-// GetStats returns tracked users with zero counters. Real per-user
-// metrics aren't available — mtg's Prometheus endpoint exposes only
-// global counters for a single-secret instance. A future commit may add
-// inbound-level (not user-level) counters by scraping the Prometheus
-// endpoint, but that information doesn't fit the per-user core.Stats
-// shape.
+// GetStats returns tracked users with zero per-user counters plus
+// node-wide totals scraped from mtg's Prometheus endpoint.
+//
+// Per-user accounting is architecturally impossible: mtg is single-secret
+// upstream, every user in the inbound's squad shares the same wire
+// identity, so the kernel/userspace can't attribute bytes back to a
+// specific userId. We surface that honestly by leaving UserStats counters
+// at zero and pushing the real numbers into Stats.TotalBytesIn/Out.
+//
+// Metric source: `mtg_telegram_traffic{direction="from_client"|"to_client",...}`
+// summed across all (dc, telegram_ip) label combinations. `mtg_domain_fronting_traffic`
+// is deliberately ignored — that's SNI-probe traffic from non-Telegram
+// scanners that mtg forwards to the cover domain as camouflage, not user
+// traffic.
 func (a *Adapter) GetStats() (*core.Stats, error) {
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	users := make([]core.UserStats, 0, len(a.users))
 	for id := range a.users {
 		users = append(users, core.UserStats{UserID: id})
 	}
-	return &core.Stats{Users: users}, nil
+	url := a.cfg.MetricsURL
+	client := a.cfg.metricsClient
+	a.mu.Unlock()
+
+	in, out, err := scrapeMtgMetrics(client, url)
+	if err != nil {
+		// Stats poll must not fail just because metrics endpoint is
+		// momentarily unreachable (mtg restart, port not yet bound, ...).
+		// Log + return zero totals so the panel-side cron stays happy.
+		a.logger.Warn("mtproto: prometheus scrape failed, returning zero totals", "err", err)
+		return &core.Stats{Users: users}, nil
+	}
+	return &core.Stats{
+		Users:         users,
+		TotalBytesIn:  in,
+		TotalBytesOut: out,
+	}, nil
+}
+
+// scrapeMtgMetrics fetches the mtg Prometheus endpoint and sums
+// `mtg_telegram_traffic{direction=...}` across all label sets.
+//
+// Returns (bytesIn, bytesOut, err). bytesIn = from_client (Telegram client
+// → server → DC); bytesOut = to_client (DC → server → client).
+func scrapeMtgMetrics(client *http.Client, url string) (int64, int64, error) {
+	resp, err := client.Get(url)
+	if err != nil {
+		return 0, 0, fmt.Errorf("GET %s: %w", url, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 0, 0, fmt.Errorf("GET %s: status %d", url, resp.StatusCode)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, 0, fmt.Errorf("read body: %w", err)
+	}
+	return parseMtgTelegramTraffic(string(body))
+}
+
+// parseMtgTelegramTraffic scans Prometheus exposition text for lines of
+// the form `mtg_telegram_traffic{...direction="from_client"...} <number>`
+// and sums them per direction.
+func parseMtgTelegramTraffic(body string) (int64, int64, error) {
+	var in, out int64
+	for _, line := range strings.Split(body, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "mtg_telegram_traffic{") {
+			continue
+		}
+		braceEnd := strings.IndexByte(line, '}')
+		if braceEnd < 0 {
+			continue
+		}
+		labels := line[len("mtg_telegram_traffic{"):braceEnd]
+		valueField := strings.TrimSpace(line[braceEnd+1:])
+		// Strip optional Prometheus timestamp after the value.
+		if sp := strings.IndexByte(valueField, ' '); sp > 0 {
+			valueField = valueField[:sp]
+		}
+		v, err := strconv.ParseFloat(valueField, 64)
+		if err != nil {
+			continue
+		}
+		switch {
+		case strings.Contains(labels, `direction="from_client"`):
+			in += int64(v)
+		case strings.Contains(labels, `direction="to_client"`):
+			out += int64(v)
+		}
+	}
+	return in, out, nil
 }
 
 func (a *Adapter) Healthy() bool {
