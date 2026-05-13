@@ -2,6 +2,7 @@ package amneziawg
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"os"
@@ -141,6 +142,92 @@ func TestAdapter_GetStats(t *testing.T) {
 	}
 	if len(stats.Users) != 2 {
 		t.Errorf("expected 2 user stat entries, got %d", len(stats.Users))
+	}
+}
+
+// fakeAwgDump is realistic output from `awg show awg0 dump`: tab-separated,
+// first line is the interface, peer lines follow. Two peers, one with
+// non-zero traffic, one untouched.
+const fakeAwgDump = `srv-priv	srv-pub	1234	off	6	64	256	48	64	0	0	92327638	69242219	322809981	1135808409
+peer-pub-a	psk-a	1.2.3.4:54321	10.66.66.2/32	1778646563	24390	348	25
+peer-pub-b	(none)	(none)	10.66.66.3/32	0	0	0	off
+`
+
+func TestAdapter_GetStats_ParsesDumpAndMapsToUsers(t *testing.T) {
+	dir := t.TempDir()
+	calls := []string{}
+	a := New(Config{
+		Inbound:     validInbound(),
+		ConfigPath:  filepath.Join(dir, "awg0.conf"),
+		AwgBin:      "/usr/bin/awg",
+		AwgQuickBin: "/usr/bin/awg-quick",
+	}, slog.Default())
+	a.cfg.runCmd = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		calls = append(calls, name+" "+strings.Join(args, " "))
+		if len(args) > 0 && args[0] == "show" {
+			return []byte(fakeAwgDump), nil
+		}
+		return nil, nil
+	}
+	if err := a.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	a.AddUser(core.User{UserID: "alice", AmneziaWGPublicKey: "peer-pub-a", AmneziaWGAllowedIP: "10.66.66.2"})
+	a.AddUser(core.User{UserID: "bob", AmneziaWGPublicKey: "peer-pub-b", AmneziaWGAllowedIP: "10.66.66.3"})
+
+	stats, err := a.GetStats()
+	if err != nil {
+		t.Fatalf("GetStats: %v", err)
+	}
+	byID := map[string]core.UserStats{}
+	for _, u := range stats.Users {
+		byID[u.UserID] = u
+	}
+	if got := byID["alice"]; got.BytesIn != 24390 || got.BytesOut != 348 {
+		t.Errorf("alice counters: got rx=%d tx=%d, want 24390/348", got.BytesIn, got.BytesOut)
+	}
+	if got := byID["bob"]; got.BytesIn != 0 || got.BytesOut != 0 {
+		t.Errorf("bob counters: got rx=%d tx=%d, want 0/0", got.BytesIn, got.BytesOut)
+	}
+	if stats.TotalBytesIn != 24390 || stats.TotalBytesOut != 348 {
+		t.Errorf("totals: got %d/%d, want 24390/348", stats.TotalBytesIn, stats.TotalBytesOut)
+	}
+}
+
+func TestAdapter_GetStats_AwgFailureReturnsZeros(t *testing.T) {
+	dir := t.TempDir()
+	a := New(Config{
+		Inbound:     validInbound(),
+		ConfigPath:  filepath.Join(dir, "awg0.conf"),
+		AwgBin:      "/usr/bin/awg",
+		AwgQuickBin: "/usr/bin/awg-quick",
+	}, slog.Default())
+	a.cfg.runCmd = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		if len(args) > 0 && args[0] == "show" {
+			return nil, errors.New("iface down")
+		}
+		return nil, nil
+	}
+	if err := a.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	a.AddUser(core.User{UserID: "u1", AmneziaWGPublicKey: "p1", AmneziaWGAllowedIP: "10.66.66.2"})
+	stats, err := a.GetStats()
+	if err != nil {
+		t.Fatalf("GetStats should fall back, not error: %v", err)
+	}
+	if len(stats.Users) != 1 || stats.Users[0].BytesIn != 0 {
+		t.Errorf("expected zero-counter fallback, got %+v", stats.Users)
+	}
+}
+
+func TestParseAwgDump_SkipsMalformed(t *testing.T) {
+	rx, tx := parseAwgDump(fakeAwgDump + "garbage line with too few\n")
+	if rx["peer-pub-a"] != 24390 || tx["peer-pub-a"] != 348 {
+		t.Errorf("peer-pub-a: rx=%d tx=%d", rx["peer-pub-a"], tx["peer-pub-a"])
+	}
+	if _, ok := rx["garbage"]; ok {
+		t.Errorf("malformed line should not produce entries")
 	}
 }
 

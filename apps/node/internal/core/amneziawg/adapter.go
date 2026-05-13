@@ -178,16 +178,99 @@ func (a *Adapter) RemoveUser(userID string) error {
 	return a.regenerateAndSyncLocked(context.Background())
 }
 
-// GetStats currently returns just the tracked user list with zero counters.
-// Per-user byte counters require parsing `awg show <iface> dump` — Phase 3.
+// GetStats parses `awg show <iface> dump` and maps per-peer RX/TX counters
+// back to user IDs via the tracked peers. Counters are kernel-cumulative
+// (lifetime of the interface) — the panel computes daily/monthly deltas
+// by snapshotting these values periodically.
+//
+// In config-only mode (no AwgBin) returns zero counters per user without
+// shelling out, mirroring the old stub behaviour for dev environments
+// without amneziawg installed.
 func (a *Adapter) GetStats() (*core.Stats, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
 	users := make([]core.UserStats, 0, len(a.peers))
-	for id := range a.peers {
-		users = append(users, core.UserStats{UserID: id})
+
+	if a.cfg.AwgBin == "" {
+		for id := range a.peers {
+			users = append(users, core.UserStats{UserID: id})
+		}
+		return &core.Stats{Users: users}, nil
 	}
-	return &core.Stats{Users: users}, nil
+
+	iface := a.cfg.Inbound.Interface
+	if iface == "" {
+		iface = "awg0"
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	out, err := a.cfg.runCmd(ctx, a.cfg.AwgBin, "show", iface, "dump")
+	if err != nil {
+		// Interface may be down or never started — fall back to zero counters
+		// rather than failing the whole stats poll.
+		for id := range a.peers {
+			users = append(users, core.UserStats{UserID: id})
+		}
+		return &core.Stats{Users: users}, nil
+	}
+
+	rxByPub, txByPub := parseAwgDump(string(out))
+
+	var totalIn, totalOut int64
+	for id, peer := range a.peers {
+		rx := rxByPub[peer.PublicKey]
+		tx := txByPub[peer.PublicKey]
+		users = append(users, core.UserStats{
+			UserID:   id,
+			BytesIn:  rx,
+			BytesOut: tx,
+		})
+		totalIn += rx
+		totalOut += tx
+	}
+
+	return &core.Stats{
+		Users:         users,
+		TotalBytesIn:  totalIn,
+		TotalBytesOut: totalOut,
+	}, nil
+}
+
+// parseAwgDump parses the TSV output of `awg show <iface> dump`. The first
+// line is the interface itself; remaining lines are peers in the format:
+//
+//	<pubkey> <psk> <endpoint> <allowed-ips> <latest-handshake> <rx> <tx> <keepalive>
+//
+// Returns maps pubkey→rx-bytes and pubkey→tx-bytes. From the server's
+// perspective: peer's "rx" is what the server received from the client
+// (BytesIn for our user), peer's "tx" is what the server sent back
+// (BytesOut for our user). Malformed lines are skipped silently.
+func parseAwgDump(dump string) (rx, tx map[string]int64) {
+	rx = make(map[string]int64)
+	tx = make(map[string]int64)
+	lines := strings.Split(strings.TrimSpace(dump), "\n")
+	if len(lines) < 2 {
+		return
+	}
+	for _, line := range lines[1:] {
+		fields := strings.Fields(line)
+		if len(fields) < 7 {
+			continue
+		}
+		pub := fields[0]
+		var r, t int64
+		if _, err := fmt.Sscanf(fields[5], "%d", &r); err != nil {
+			continue
+		}
+		if _, err := fmt.Sscanf(fields[6], "%d", &t); err != nil {
+			continue
+		}
+		rx[pub] = r
+		tx[pub] = t
+	}
+	return
 }
 
 // Healthy reports whether the adapter has finished Start successfully and
