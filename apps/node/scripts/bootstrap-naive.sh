@@ -73,26 +73,25 @@ log "xcaddy: $(xcaddy version 2>&1 | head -1 || echo present)"
 
 # ───── 5. Build caddy + forwardproxy@naive ─────
 #
-# Two important details vs the obvious xcaddy invocation:
+# The replacement target on the LEFT side MUST be
+# `github.com/caddyserver/forwardproxy@caddy2` (the upstream module path
+# Caddy v2 expects), NOT plain `github.com/caddyserver/forwardproxy`.
+# Without the @caddy2 suffix xcaddy still produces a binary, but the
+# forward_proxy handler module doesn't register and `caddy list-modules`
+# shows nothing under http.handlers.forward_proxy — runtime fails silently.
+# Caught live cycle #8 2026-05-13 on the second xcaddy build attempt; module
+# cache resolved a different inner version than the first attempt and the
+# missing @caddy2 suffix surfaced.
 #
-#   1. The replacement target on the LEFT side MUST be
-#      `github.com/caddyserver/forwardproxy@caddy2` (the upstream module
-#      path Caddy v2 expects), NOT plain `github.com/caddyserver/forwardproxy`.
-#      Without the @caddy2 suffix xcaddy still produces a binary, but the
-#      forward_proxy handler module doesn't register and `caddy list-modules`
-#      shows nothing under http.handlers.forward_proxy. Build looks like it
-#      succeeded; runtime fails silently. Caught live cycle #8 2026-05-13
-#      on the second xcaddy build attempt — module cache resolved a
-#      different inner version than the first attempt and the missing
-#      @caddy2 suffix manifested.
-#
-#   2. Pin a tagged release (v2.10.0-naive) instead of the floating @naive
-#      branch. The branch is force-pushed occasionally; pinning makes
-#      builds reproducible.
+# We reference the `@naive` BRANCH (not a v2.x tag) because klzgrad's repo
+# doesn't follow the Go-modules /v2 path convention — Go semver rejects
+# tags >= v2.0 unless the module path ends in /v2. The branch reference
+# works because Go resolves it to a pseudo-version that bypasses semver
+# strict-mode. This is exactly what the upstream NaïveProxy ArchWiki and
+# klzgrad/forwardproxy README document.
 #
 # Reference: NaïveProxy ArchWiki / klzgrad/forwardproxy README.
-FORWARDPROXY_PIN=${FORWARDPROXY_PIN:-v2.10.0-naive}
-log "Building Caddy + klzgrad/forwardproxy@${FORWARDPROXY_PIN} plugin → $CADDY_NAIVE_BIN"
+log "Building Caddy + klzgrad/forwardproxy@naive plugin → $CADDY_NAIVE_BIN"
 
 # Clear any stale module cache from previous failed attempts. Without this
 # `go build` can keep resolving to a half-baked older entry.
@@ -101,7 +100,7 @@ rm -rf "${GOPATH:-$HOME/go}/pkg/mod/cache/download/github.com/klzgrad" 2>/dev/nu
 WORKDIR=$(mktemp -d)
 pushd "$WORKDIR" > /dev/null
 xcaddy build \
-  --with "github.com/caddyserver/forwardproxy@caddy2=github.com/klzgrad/forwardproxy@${FORWARDPROXY_PIN}" \
+  --with 'github.com/caddyserver/forwardproxy@caddy2=github.com/klzgrad/forwardproxy@naive' \
   --output "$CADDY_NAIVE_BIN"
 popd > /dev/null
 rm -rf "$WORKDIR"
