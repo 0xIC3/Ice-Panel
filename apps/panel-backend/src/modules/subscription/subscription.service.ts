@@ -91,6 +91,14 @@ interface AmneziawgObfuscation {
   h2: number;
   h3: number;
   h4: number;
+  /** I1-I5: v2.0 mimicry signature packets (hex). Optional — Zod
+   *  defaults to empty string when absent, so existing profiles
+   *  saved before the v2.0 alignment still parse cleanly. */
+  i1?: string;
+  i2?: string;
+  i3?: string;
+  i4?: string;
+  i5?: string;
 }
 
 interface AmneziawgInboundConfig {

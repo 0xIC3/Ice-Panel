@@ -418,6 +418,12 @@ export interface AmneziawgObfuscation {
   h2: number;
   h3: number;
   h4: number;
+  /** v2.0 mimicry packets (hex). Optional — Zod defaults empty. */
+  i1?: string;
+  i2?: string;
+  i3?: string;
+  i4?: string;
+  i5?: string;
 }
 
 export interface AmneziawgInboundConfig {
