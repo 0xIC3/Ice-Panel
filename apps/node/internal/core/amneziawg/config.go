@@ -126,10 +126,19 @@ func (c *InboundConfig) withDefaults() InboundConfig {
 	// admin set Jc=0 in UI to debug, server kept rendering Jc=4 because
 	// of these defaults, handshake silently failed.
 	if out.PostUp == "" {
-		out.PostUp = "iptables -t nat -A POSTROUTING -o %i -j MASQUERADE"
+		// `! -o %i` matches packets exiting on ANY interface OTHER than the wg
+		// interface itself — i.e. real WAN egress. The earlier default used
+		// `-o %i` which MASQUERADE'd traffic going TO peers and never NAT'd
+		// the actual internet-bound traffic, so VPN clients reached "Connected"
+		// but RX/TX was massively asymmetric (server received decrypted
+		// requests, forwarded them with private src 10.x, responses never
+		// routed back). Caught live 2026-05-13 on Aeza FI node, fixed inline
+		// with `iptables -t nat -A POSTROUTING -s 10.66.66.0/24 -o net0 -j MASQUERADE`;
+		// this default uses `! -o %i` so it works regardless of WAN iface name.
+		out.PostUp = "iptables -t nat -A POSTROUTING ! -o %i -j MASQUERADE"
 	}
 	if out.PostDown == "" {
-		out.PostDown = "iptables -t nat -D POSTROUTING -o %i -j MASQUERADE"
+		out.PostDown = "iptables -t nat -D POSTROUTING ! -o %i -j MASQUERADE"
 	}
 	return out
 }

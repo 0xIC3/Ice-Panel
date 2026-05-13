@@ -760,6 +760,15 @@ if [[ "${SKIP_FIREWALL:-0}" != "1" ]]; then
       # `ufw allow 51820/udp` themselves. Caught live cycle #6 2026-05-12.
       ufw allow 443/udp                  >/dev/null 2>&1 || true
       ufw allow 1234/udp                 >/dev/null 2>&1 || true
+      # UFW defaults DEFAULT_FORWARD_POLICY=DROP, but AmneziaWG is a routed
+      # VPN — packets enter on awg0 and must FORWARD to the WAN. Without
+      # this flip clients reach "Connected" and handshake completes, but
+      # the FORWARD chain silently drops their decrypted traffic.
+      # Caught live 2026-05-13 on Aeza FI node.
+      if [[ -f /etc/default/ufw ]]; then
+        sed -i 's/^DEFAULT_FORWARD_POLICY=.*/DEFAULT_FORWARD_POLICY="ACCEPT"/' /etc/default/ufw
+      fi
+      ufw default allow routed           >/dev/null 2>&1 || true
       ;;
     naive)
       ufw allow 443/tcp                  >/dev/null 2>&1 || true
