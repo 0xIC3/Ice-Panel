@@ -152,6 +152,15 @@ async function resolveFormat(
   return 'plain';
 }
 
+// Strip characters Content-Disposition can't legally carry to keep
+// browsers happy across OSes. Username comes from admin-controlled
+// input so paranoia is cheap; whitelist [a-zA-Z0-9._-], fold rest to
+// underscore, cap length to keep filesystem-safe.
+function sanitizeFilename(name: string): string {
+  const cleaned = name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 64);
+  return cleaned || 'subscription';
+}
+
 export async function subscriptionRoutes(app: FastifyInstance): Promise<void> {
   // GET /sub/:token — public (the token IS the credential).
   // Tight rate-limit: keyed by (ip, token). Without this, an attacker can
@@ -306,8 +315,18 @@ export async function subscriptionRoutes(app: FastifyInstance): Promise<void> {
             .send(buildSingboxJson(filtered, { bundle: sbBundle }));
         }
         case 'wgconf':
+          // Content-Disposition with .conf suffix so browser saves the
+          // file as `<username>.conf` rather than the raw token path.
+          // AmneziaVPN / wg-quick / Hiddify file-pickers all filter by
+          // *.conf — without the suffix admin gets an extensionless
+          // download that fails the picker filter on Windows / macOS.
+          // Caught live cycle #6 2026-05-13 (operator's iPhone test).
           return reply
             .type('text/plain; charset=utf-8')
+            .header(
+              'Content-Disposition',
+              `attachment; filename="${sanitizeFilename(result.json.user.username)}.conf"`,
+            )
             .send(buildWgQuickConf(filtered));
         case 'xrayjson': {
           const xjBundle: 'flat' | 'balancer' | undefined =
