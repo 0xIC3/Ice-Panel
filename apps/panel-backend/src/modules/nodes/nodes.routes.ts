@@ -64,15 +64,8 @@ async function renderRefreshBootstrapCommand(
         : '  --hysteria-email admin@example.com  # set ACME_DEFAULT_EMAIL env to inject automatically',
     );
   }
-  if (protocol === 'naive' && acmeDomain) {
-    lines[lines.length - 1] += ' \\';
-    lines.push(`  --naive-domain ${acmeDomain} \\`);
-    lines.push(
-      acmeEmail
-        ? `  --naive-email ${acmeEmail}`
-        : '  --naive-email admin@example.com  # set ACME_DEFAULT_EMAIL env to inject automatically',
-    );
-  }
+  // Naive / SS2022 / MTProto / Mieru: no install-time flags. Profile-side
+  // config flows over mTLS from panel via applyInbound after bootstrap.
   return lines.join('\n');
 }
 

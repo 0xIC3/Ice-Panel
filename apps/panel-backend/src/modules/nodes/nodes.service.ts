@@ -143,11 +143,16 @@ async function renderBootstrapCommand(
     lines.push('  --panel-ip YOUR_PANEL_PUBLIC_IP  # auto-detect failed, replace with panel IP');
   }
 
-  // Slice S7 — protocols that need an ACME cert (Hysteria, Naive) get
-  // their domain + email auto-baked in. Domain comes from node.address
-  // (host part, port stripped); admin already typed it during create-
-  // node and keeping it in sync here avoids the "agent installs but
-  // server doesn't start" gotcha. ACME_DEFAULT_EMAIL is panel-wide env.
+  // Hysteria is the only protocol that takes install-time ACME flags.
+  // It fights a chicken-and-egg with `hysteria-server.service` from
+  // `get.hy2.sh` upstream that starts before the panel can push config;
+  // pre-baking the domain + email into the install command lets that
+  // service come up cleanly.
+  //
+  // Naive / SS2022 / MTProto / Mieru stay idle after bootstrap and
+  // wait for the panel's applyInbound payload. Domain, email,
+  // masquerade etc. live on the Profile — no install-time flags exist
+  // for them in install-node.sh, so don't emit any here.
   const acmeDomain = nodeAddress?.split(':')[0] ?? '';
   const acmeEmail = (process.env.ACME_DEFAULT_EMAIL ?? '').trim();
   if (protocol === 'hysteria' && acmeDomain) {
@@ -157,15 +162,6 @@ async function renderBootstrapCommand(
       lines.push(`  --hysteria-email ${acmeEmail}`);
     } else {
       lines.push('  --hysteria-email admin@example.com  # set ACME_DEFAULT_EMAIL env to inject automatically');
-    }
-  }
-  if (protocol === 'naive' && acmeDomain) {
-    lines[lines.length - 1] += ' \\';
-    lines.push(`  --naive-domain ${acmeDomain} \\`);
-    if (acmeEmail) {
-      lines.push(`  --naive-email ${acmeEmail}`);
-    } else {
-      lines.push('  --naive-email admin@example.com  # set ACME_DEFAULT_EMAIL env to inject automatically');
     }
   }
   return lines.join('\n');

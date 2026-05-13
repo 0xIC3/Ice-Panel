@@ -134,7 +134,7 @@ fi
 if [[ -z "$ACME_DEFAULT_EMAIL" && -r /dev/tty ]]; then
   printf 'Контактный email для Let'\''s Encrypt (получит уведомления о renewal'\''ах):\n'
   printf '  Используется и для Caddy панели, и автоматом подставляется в команду\n'
-  printf '  установки Hysteria/Naive-нод как --hysteria-email / --naive-email.\n'
+  printf '  установки Hysteria-нод как --hysteria-email.\n'
   printf '\n'
   printf 'Оставь пустым — придётся передавать email вручную при создании каждой ноды.\n'
   printf '\n'
