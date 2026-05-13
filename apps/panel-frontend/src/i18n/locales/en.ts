@@ -320,7 +320,8 @@ export default {
     },
     deploy: {
       title: 'Deploy "{{name}}" to nodes',
-      hint: 'Tick the nodes you want this profile on. Unticking deletes existing bindings (cascade — users lose URLs for that node). Default port: {{port}}.',
+      hint: 'Tick the nodes you want this profile on. Unticking deletes existing bindings (cascade — users lose URLs for that node). Port for new bindings: {{port}}.',
+      port: 'Port for new bindings',
       noNodes: 'No nodes — create one under Nodes first.',
       saved: 'Deployed: +{{added}} / removed: -{{removed}}',
       noChanges: 'No changes',

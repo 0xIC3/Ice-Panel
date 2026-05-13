@@ -8,6 +8,7 @@ import {
   Group,
   Loader,
   Modal,
+  NumberInput,
   Paper,
   Stack,
   Text,
@@ -67,6 +68,14 @@ export function DeployProfileModal({ profile, onClose }: Props) {
     return cfg?.port ?? 443;
   }, [profile]);
 
+  // Port admin chooses for NEW bindings created in this modal session.
+  // Existing bindings keep their port — admin edits them inline in
+  // Nodes → Edit. Initialized to the profile default on each open.
+  const [port, setPort] = useState<number>(defaultPort);
+  useEffect(() => {
+    if (opened) setPort(defaultPort);
+  }, [opened, defaultPort]);
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!profile) return;
@@ -89,7 +98,7 @@ export function DeployProfileModal({ profile, onClose }: Props) {
           createBinding({
             profileId: profile.id,
             nodeId,
-            port: defaultPort,
+            port,
           }),
         ),
         ...toDelete.map((id) => deleteBinding(id)),
@@ -152,8 +161,27 @@ export function DeployProfileModal({ profile, onClose }: Props) {
     >
       <Stack>
         <Alert color="blue" variant="light">
-          {t('profiles.deploy.hint', { port: defaultPort })}
+          {t('profiles.deploy.hint', { port })}
         </Alert>
+
+        {/* Port input for new bindings created here. Existing bindings
+            keep their old port; to change an existing binding's port,
+            admin goes to Nodes → Edit → inline edit in the Bindings
+            list. Per AmneziaWG upstream: prefer <= 9999 ports (some
+            ISPs block high UDP), avoid 51820 (well-known WG default
+            targeted by DPI). */}
+        <NumberInput
+          label={t('profiles.deploy.port')}
+          description={
+            profile?.protocol === 'amneziawg'
+              ? 'Для AmneziaWG: ≤ 9999, например 443 или 1234. 51820 не используй.'
+              : undefined
+          }
+          min={1}
+          max={65535}
+          value={port}
+          onChange={(v) => setPort(typeof v === 'number' ? v : Number(v) || defaultPort)}
+        />
 
         {loading ? (
           <Group justify="center" py="xl">

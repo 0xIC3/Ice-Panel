@@ -809,7 +809,7 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
                   <strong>Что важно знать про AmneziaWG 2.0:</strong>
                   <ul style={{ margin: '4px 0 0 16px', paddingLeft: 0 }}>
                     <li>Клиент: <strong>AmneziaVPN ≥ 4.8.12.9</strong> или Hiddify Next ≥ 2.4. Старые не подключатся.</li>
-                    <li>Порт (задаётся на binding): <strong>≤ 9999</strong>, например 443 или 1234. Не используй 51820 — известный WG-default, ISP его режут.</li>
+                    <li>Порт выберешь на следующем шаге («Развернуть на нодах»). Рекомендация: <strong>≤ 9999</strong>, например 443 или 1234. Не используй 51820 — известный WG-default, ISP его режут.</li>
                     <li>При миграции со старого AmneziaWG 1.0 — все ключи peer'ов нужно перегенерить, со старыми не работает.</li>
                   </ul>
                 </Text>
