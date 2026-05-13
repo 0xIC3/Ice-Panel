@@ -80,11 +80,24 @@ func realRunCmd(ctx context.Context, name string, args ...string) ([]byte, error
 
 func (a *Adapter) Name() string { return Name }
 
-// Start writes the initial (no-user) Caddyfile and launches caddy. In
-// config-only mode (CaddyBin == "") it just writes the Caddyfile.
+// Start either launches caddy now (when bootstrap-time config already has
+// Hostname) or defers — same pattern as mtproto/amneziawg adapters that
+// wait for the panel's first ApplyInbound before they have enough to
+// render a config. Caddy can't open a TLS site without the FQDN (it'd
+// fail ACME), and Hostname only arrives via applyInbound (set on the
+// panel-side Profile), so deferring is the only sane move at install time.
+//
+// Caught live cycle #8 2026-05-13: agent crash-looped with
+// `render Caddyfile: Hostname is required` because Start tried to render
+// before applyInbound landed.
 func (a *Adapter) Start(ctx context.Context) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
+	if a.cfg.Inbound.Hostname == "" {
+		a.logger.Info("naive adapter: hostname not set — waiting for ApplyInbound from panel")
+		return nil
+	}
 
 	if err := a.writeCurrentCaddyfileLocked(); err != nil {
 		return err
@@ -96,6 +109,12 @@ func (a *Adapter) Start(ctx context.Context) error {
 		return nil
 	}
 
+	return a.spawnCaddyLocked(ctx)
+}
+
+// spawnCaddyLocked starts the caddy subprocess. Caller must hold a.mu and
+// must have ensured the Caddyfile is up to date on disk first.
+func (a *Adapter) spawnCaddyLocked(ctx context.Context) error {
 	proc := subprocess.New(subprocess.Config{
 		Name:   Name,
 		Binary: a.cfg.CaddyBin,
@@ -224,8 +243,16 @@ func (a *Adapter) ApplyInbound(rawCfg json.RawMessage) error {
 }
 
 // regenerateAndReloadLocked must be called with a.mu held. It writes the
-// current users-map to the Caddyfile and (when managed) tells caddy to
-// reload via `caddy reload --config <path>` — graceful, no session drop.
+// current users-map to the Caddyfile and either:
+//   - cold-starts caddy if this is the first ApplyInbound (proc==nil)
+//   - tells the running caddy to reload via `caddy reload` — graceful,
+//     no session drop, no port re-bind
+//
+// Cold-start path matters: at install time the agent registers with no
+// Hostname (it comes from panel applyInbound), Start() deferred caddy
+// spawn. Without this branch the first reload after applyInbound would
+// hit "no caddy running, can't reload" and the proxy would never come
+// online.
 func (a *Adapter) regenerateAndReloadLocked(parent context.Context) error {
 	if err := a.writeCurrentCaddyfileLocked(); err != nil {
 		return err
@@ -234,6 +261,10 @@ func (a *Adapter) regenerateAndReloadLocked(parent context.Context) error {
 	if a.cfg.CaddyBin == "" {
 		a.logger.Info("naive Caddyfile written (config-only mode)", "users", len(a.users))
 		return nil
+	}
+
+	if a.proc == nil {
+		return a.spawnCaddyLocked(parent)
 	}
 
 	ctx, cancel := context.WithTimeout(parent, a.cfg.ReloadTimeout)
