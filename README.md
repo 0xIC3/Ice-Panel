@@ -93,9 +93,11 @@ bash <(curl -fsSL .../install-node.sh) --panel-url ... --bootstrap ... --protoco
 bash <(curl -fsSL .../install-node.sh) --panel-url ... --bootstrap ... --protocol mieru
 ```
 
-Bootstrap installs the upstream binary (xcaddy fork for Naive — 2 GB RAM minimum; xray-core for SS2022; `9seconds/mtg` for MTProto; `enfein/mieru` for Mieru). Inbound config flows over mTLS from the panel via `applyInbounds`.
+Bootstrap installs the upstream binary (xcaddy fork for Naive — 2 GB RAM minimum; xray-core for SS2022; `9seconds/mtg` for MTProto; `enfein/mieru` for Mieru).
 
-> ⚠️ **`node.address` is BOTH the mTLS endpoint AND the public host in client URIs** until slice 25. So set it correctly at create time: domain for Hysteria/Naive (`hy2-01.example.com:8443`), IP for Xray/AmneziaWG (`<ip>:8443`). Changing it later requires `Refresh bootstrap` (key icon on node row) to re-issue the cert with the matching SAN.
+**Unlike Hysteria**, these protocols take **no** domain / email / cert flags at install time — they all start idle and wait for the panel to push their inbound config via `applyInbounds`. Domain, email, masquerade, and other protocol-specific fields live on the panel-side **Profile** (set once via UI), then auto-propagate to every node the profile is deployed to. Naive needs a real DNS A-record (set in the panel profile's `hostname` field); MTProto picks its masquerade domain in the profile; SS2022 / Mieru have no public-domain requirement.
+
+> ⚠️ **`node.address` is the mTLS endpoint the panel uses to reach the agent** (port `:8443` by default). For routed-style cores (Hysteria / Naive / MTProto) this is the same FQDN that clients will hit on `:443`; for IP-style cores (Xray REALITY / AmneziaWG) it's the bare VPS IP. Set it correctly at node-create time — changing later requires `Refresh bootstrap` (🔑 icon on node row) to re-issue the agent cert with the matching SAN.
 
 Full deploy guide (per-protocol details, troubleshooting, update workflow): **[docs/deploy/install.md](./docs/deploy/install.md)**.
 
