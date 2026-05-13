@@ -20,9 +20,29 @@ import (
 
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/dto"
+	"github.com/0xIC3/Ice-Panel/apps/node/internal/firewall"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/metrics"
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/payload"
 )
+
+// protoForInbound returns the L4 protocols the given inbound listens on.
+// Keep in sync with apps/node/main.go default-port env keys and with
+// scripts/install-node.sh's per-protocol ufw block.
+//   - hysteria, amneziawg: UDP only (QUIC / WireGuard)
+//   - xray, naive, mtproto: TCP only
+//   - shadowsocks, mieru: both TCP and UDP (xray-core SS2022 listens on
+//     both; mita supports either depending on per-port transport)
+func protoForInbound(p dto.ProtocolName) []string {
+	switch p {
+	case "hysteria", "amneziawg":
+		return []string{"udp"}
+	case "shadowsocks", "mieru":
+		return []string{"tcp", "udp"}
+	default:
+		// xray, naive, mtproto, plus any new TCP-only protocol.
+		return []string{"tcp"}
+	}
+}
 
 type Config struct {
 	Host    string
@@ -295,6 +315,14 @@ func (s *Server) handleApplyInbounds(w http.ResponseWriter, r *http.Request) {
 				"core", matched.Name(), "inboundId", ib.ID, "err", err)
 			failed++
 			continue
+		}
+		// Open UFW for the inbound's port BEFORE marking applied — admin
+		// might've picked a port that install-node.sh didn't pre-open
+		// (it only opens 443/1234/conventional). Idempotent: ufw skips
+		// already-existing rules silently. Per-protocol UDP vs TCP from
+		// protoForInbound() — keeps in lockstep with install-node.sh.
+		for _, proto := range protoForInbound(ib.Protocol) {
+			firewall.Allow(r.Context(), s.logger, ib.Port, proto)
 		}
 		applied++
 	}
