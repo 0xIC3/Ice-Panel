@@ -105,6 +105,32 @@ fail() { printf '\033[1;31m[fail]\033[0m %s\n' "$*" >&2; exit 1; }
 
 [[ $EUID -eq 0 ]] || fail "Must run as root (sudo bash $0)"
 
+# ───── Concurrency + apt lock hygiene ─────
+# Same protections as install-panel.sh — flock against concurrent runs,
+# graceful wait on apt locks via DPkg::Lock::Timeout, stale-lock cleanup
+# for the orphan-apt-process case. See install-panel.sh for the rationale.
+exec 9>/var/run/ice-panel-node-install.lock || fail "cannot open install lockfile"
+if ! flock -n 9; then
+  fail "another install-node.sh is already running. Wait, or remove /var/run/ice-panel-node-install.lock if you're sure it crashed."
+fi
+
+APT_OPTS=(-o "DPkg::Lock::Timeout=300" -o "Dpkg::Options::=--force-confold" -o "Dpkg::Options::=--force-confdef")
+APT_ENV=(env DEBIAN_FRONTEND=noninteractive APT_LISTCHANGES_FRONTEND=none)
+
+cleanup_stale_apt_locks() {
+  local lock_holder
+  for lockfile in /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock /var/cache/apt/archives/lock; do
+    [[ -e "$lockfile" ]] || continue
+    lock_holder=$(fuser "$lockfile" 2>/dev/null || true)
+    if [[ -z "$lock_holder" ]]; then
+      log "stale apt lock at $lockfile — removing"
+      rm -f "$lockfile"
+    fi
+  done
+  dpkg --configure -a >/dev/null 2>&1 || true
+}
+cleanup_stale_apt_locks
+
 ICE_NODE_DIR=${ICE_NODE_DIR:-/opt/ice-panel-node}
 ICE_NODE_REPO=${ICE_NODE_REPO:-https://github.com/0xIC3/Ice-Panel.git}
 ICE_NODE_REF=${ICE_NODE_REF:-main}
@@ -434,16 +460,14 @@ log "Detected $PRETTY_NAME, protocol=$PROTOCOL"
 # Skip with SKIP_OS_UPGRADE=1 on a freshly-built image.
 if [[ "${SKIP_OS_UPGRADE:-0}" != "1" ]]; then
   log "Upgrading OS packages (apt-get update + dist-upgrade)"
-  export DEBIAN_FRONTEND=noninteractive
-  apt-get update -y
-  apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" \
-          dist-upgrade -y
-  apt-get autoremove -y
+  "${APT_ENV[@]}" apt-get "${APT_OPTS[@]}" update -y
+  "${APT_ENV[@]}" apt-get "${APT_OPTS[@]}" dist-upgrade -y
+  "${APT_ENV[@]}" apt-get "${APT_OPTS[@]}" autoremove -y
 fi
 
 # ───── 2b. Prereqs ─────
 log "Installing apt prereqs"
-apt-get install -y git curl ca-certificates ufw
+"${APT_ENV[@]}" apt-get "${APT_OPTS[@]}" install -y git curl ca-certificates ufw
 
 # ───── 3. Go ─────
 NEED_GO=true

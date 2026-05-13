@@ -36,6 +36,45 @@ fail() { printf '\033[1;31m[fail]\033[0m %s\n' "$*" >&2; exit 1; }
 
 [[ $EUID -eq 0 ]] || fail "Must run as root (sudo bash $0)"
 
+# ───── Concurrency + apt lock hygiene ─────
+# Caught live cycle #6 2026-05-13: operator ran the installer twice
+# (impatient retry after the curl looked like it hung), 2nd run crashed
+# on `apt-get` lock held by the 1st. Three layered protections:
+#
+# 1. flock(1) on /var/run/ice-panel-install.lock — refuses a second
+#    concurrent install-panel.sh on the same host.
+# 2. APT_OPTS includes DPkg::Lock::Timeout=300 — apt waits up to 5 min
+#    for the lock instead of failing instantly. Covers the common case
+#    where Ubuntu's `unattended-upgrades` is running at boot.
+# 3. Stale-lock cleanup — if a previous apt-get process died ungracefully
+#    and left the lock file behind (no actual process holds it), nuke it
+#    and run `dpkg --configure -a` to finish any half-applied state.
+exec 9>/var/run/ice-panel-install.lock || fail "cannot open install lockfile"
+if ! flock -n 9; then
+  fail "another install-panel.sh is already running (lock held). Wait for it, or 'rm /var/run/ice-panel-install.lock' if you're sure it crashed."
+fi
+
+APT_OPTS=(-o "DPkg::Lock::Timeout=300" -o "Dpkg::Options::=--force-confold" -o "Dpkg::Options::=--force-confdef")
+APT_ENV=(env DEBIAN_FRONTEND=noninteractive APT_LISTCHANGES_FRONTEND=none)
+
+cleanup_stale_apt_locks() {
+  local lock_holder
+  # Check all common apt/dpkg lock files. If a lock file exists but no
+  # process holds it (fuser empty), it's stale.
+  for lockfile in /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock /var/cache/apt/archives/lock; do
+    [[ -e "$lockfile" ]] || continue
+    lock_holder=$(fuser "$lockfile" 2>/dev/null || true)
+    if [[ -z "$lock_holder" ]]; then
+      log "stale apt lock detected at $lockfile (no process holds it), removing"
+      rm -f "$lockfile"
+    fi
+  done
+  # Run dpkg --configure -a in case an interrupted apt left packages
+  # in a half-configured state. No-op when everything is clean.
+  dpkg --configure -a >/dev/null 2>&1 || true
+}
+cleanup_stale_apt_locks
+
 ICE_PANEL_DIR=${ICE_PANEL_DIR:-/opt/ice-panel}
 ICE_PANEL_REPO=${ICE_PANEL_REPO:-https://github.com/0xIC3/Ice-Panel.git}
 ICE_PANEL_REF=${ICE_PANEL_REF:-main}
@@ -137,11 +176,9 @@ log "Detected $PRETTY_NAME"
 # Skip with SKIP_OS_UPGRADE=1 if you've just rebuilt the image.
 if [[ "${SKIP_OS_UPGRADE:-0}" != "1" ]]; then
   log "Upgrading OS packages (apt-get update + dist-upgrade)"
-  export DEBIAN_FRONTEND=noninteractive
-  apt-get update -y
-  apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" \
-          dist-upgrade -y
-  apt-get autoremove -y
+  "${APT_ENV[@]}" apt-get "${APT_OPTS[@]}" update -y
+  "${APT_ENV[@]}" apt-get "${APT_OPTS[@]}" dist-upgrade -y
+  "${APT_ENV[@]}" apt-get "${APT_OPTS[@]}" autoremove -y
 fi
 
 # ───── 2b. Firewall — open the bare minimum, then enable ─────
@@ -149,7 +186,7 @@ fi
 # flip the defaults to deny + enable.
 if [[ "${SKIP_FIREWALL:-0}" != "1" ]]; then
   if ! command -v ufw >/dev/null; then
-    apt-get install -y ufw
+    "${APT_ENV[@]}" apt-get "${APT_OPTS[@]}" install -y ufw
   fi
   log "Configuring firewall (ufw): allow SSH + 80/443, deny everything else inbound"
   ufw allow 22/tcp                       >/dev/null 2>&1 || true
@@ -175,7 +212,7 @@ fi
 # Compose plugin is bundled with modern Docker, but the convenience-script
 # image used by some clouds may ship without it.
 if ! docker compose version >/dev/null 2>&1; then
-  apt-get install -y docker-compose-plugin
+  "${APT_ENV[@]}" apt-get "${APT_OPTS[@]}" install -y docker-compose-plugin
 fi
 log "Docker: $(docker --version)"
 log "Compose: $(docker compose version)"
@@ -183,7 +220,7 @@ log "Compose: $(docker compose version)"
 # ───── 3. Source checkout ─────
 if [[ ! -d "$ICE_PANEL_DIR/.git" ]]; then
   log "Cloning $ICE_PANEL_REPO@$ICE_PANEL_REF into $ICE_PANEL_DIR"
-  apt-get install -y git
+  "${APT_ENV[@]}" apt-get "${APT_OPTS[@]}" install -y git
   git clone --depth 1 --branch "$ICE_PANEL_REF" "$ICE_PANEL_REPO" "$ICE_PANEL_DIR"
 else
   log "Updating existing checkout at $ICE_PANEL_DIR"
@@ -199,7 +236,7 @@ if [[ -f "$ENV_FILE" ]]; then
   log ".env.production already exists; keeping current secrets"
 else
   log "Generating .env.production with fresh secrets (openssl rand -hex)"
-  apt-get install -y openssl >/dev/null 2>&1 || true
+  "${APT_ENV[@]}" apt-get "${APT_OPTS[@]}" install -y openssl >/dev/null 2>&1 || true
   PG_PASSWORD=$(openssl rand -hex 24)
   JWT_SECRET=$(openssl rand -hex 32)
   PUBLIC_IP=$(curl -fsSL https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')
@@ -294,13 +331,13 @@ done
 if [[ -n "$PANEL_DOMAIN" ]]; then
   log "Installing Caddy and configuring TLS for ${PANEL_DOMAIN}"
   if ! command -v caddy >/dev/null; then
-    apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl gnupg
+    "${APT_ENV[@]}" apt-get "${APT_OPTS[@]}" install -y debian-keyring debian-archive-keyring apt-transport-https curl gnupg
     curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
       | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
     curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
       > /etc/apt/sources.list.d/caddy-stable.list
-    apt-get update -y
-    apt-get install -y caddy
+    "${APT_ENV[@]}" apt-get "${APT_OPTS[@]}" update -y
+    "${APT_ENV[@]}" apt-get "${APT_OPTS[@]}" install -y caddy
   fi
   cat > /etc/caddy/Caddyfile <<EOF
 ${PANEL_DOMAIN} {
