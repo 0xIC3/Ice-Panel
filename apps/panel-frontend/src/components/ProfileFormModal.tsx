@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  Accordion,
   Alert,
   Button,
   Divider,
@@ -893,27 +894,35 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
                   Re-roll
                 </Button>
               </Group>
-              {/* I1-I5: optional v2.0 mimicry packets (hex). Most ISPs
-                  don't need these — TSPU/Mobile presets work without.
-                  Set when impersonating a specific protocol (QUIC/DNS/...)
-                  is required to pass particularly aggressive DPI. */}
-              <Stack gap={4}>
-                <Text size="sm" fw={500}>
-                  I1-I5 mimicry packets (optional, hex)
-                </Text>
-                <Text size="xs" c="dimmed">
-                  Per amnezia v2.0 spec — disguise the handshake as another protocol. Leave empty for default behavior. Each up to 256 hex chars.
-                </Text>
-                <Group grow>
-                  <TextInput label="I1" placeholder="hex" {...form.getInputProps('awgI1')} />
-                  <TextInput label="I2" placeholder="hex" {...form.getInputProps('awgI2')} />
-                  <TextInput label="I3" placeholder="hex" {...form.getInputProps('awgI3')} />
-                </Group>
-                <Group grow>
-                  <TextInput label="I4" placeholder="hex" {...form.getInputProps('awgI4')} />
-                  <TextInput label="I5" placeholder="hex" {...form.getInputProps('awgI5')} />
-                </Group>
-              </Stack>
+              {/* I1-I5 mimicry packets — power-user feature, 99% of
+                  operators don't need them. Hidden behind a collapsible
+                  section so the main form stays clean. Standard pattern
+                  for "you probably don't want this, but it exists". */}
+              <Accordion variant="separated" radius="sm">
+                <Accordion.Item value="awg-mimicry">
+                  <Accordion.Control>
+                    <Text size="sm" fw={500}>
+                      Advanced: I1–I5 mimicry packets (опционально)
+                    </Text>
+                  </Accordion.Control>
+                  <Accordion.Panel>
+                    <Stack gap={6}>
+                      <Text size="xs" c="dimmed">
+                        AmneziaWG v2.0 фича — маскирует handshake под другой протокол (QUIC / DNS / STUN). Нужно ТОЛЬКО если стандартный TSPU/Mobile preset не проходит DPI. Пустые поля = выключено, безопасно. Значения hex, до 256 символов каждое, ДОЛЖНЫ совпадать с клиентом.
+                      </Text>
+                      <Group grow>
+                        <TextInput label="I1" placeholder="hex" {...form.getInputProps('awgI1')} />
+                        <TextInput label="I2" placeholder="hex" {...form.getInputProps('awgI2')} />
+                        <TextInput label="I3" placeholder="hex" {...form.getInputProps('awgI3')} />
+                      </Group>
+                      <Group grow>
+                        <TextInput label="I4" placeholder="hex" {...form.getInputProps('awgI4')} />
+                        <TextInput label="I5" placeholder="hex" {...form.getInputProps('awgI5')} />
+                      </Group>
+                    </Stack>
+                  </Accordion.Panel>
+                </Accordion.Item>
+              </Accordion>
               {(() => {
                 // Live H-uniqueness validator. Empty values pass — let the
                 // `required` semantics fire on submit instead.
