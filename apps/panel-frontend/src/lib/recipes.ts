@@ -242,17 +242,20 @@ export const RECIPES: Recipe[] = [
     dpiResistance: 5,
     speed: 4,
     apply: () => ({
-      // Values within upstream v2.0 bounds (Jmin/Jmax 64..1024, S1-S3 0..64).
+      // Values within upstream v2.0 bounds (Jmin/Jmax 64..1024, S1-S2 0..64).
       // Iran-tuned variant: more junk packets (Jc=6) + larger Jmax for
       // bigger size variance vs default TSPU.
+      // S3+S4 forced to 0 — AmneziaVPN client 4.8.15.x drops traffic
+      // with non-zero S3/S4 (upstream bug #2582). Reverted to non-zero
+      // when upstream fixes the client.
       awgPreset: 'custom',
       awgJc: 6,
       awgJmin: 64,
       awgJmax: 256,
       awgS1: 48,
       awgS2: 64,
-      awgS3: 48,
-      awgS4: 24,
+      awgS3: 0,
+      awgS4: 0,
       ...randAwgHeaders(),
       awgSubnet: '10.66.66.0/24',
     }),

@@ -106,11 +106,24 @@ interface FormValues {
 
 // Values bounded by upstream AmneziaWG v2.0 spec (docs.amnezia.org):
 //   - Jc 0..10, Jmin/Jmax 64..1024, S1-S3 0..64, S4 0..32
-// The old TSPU preset (Jmin=40, S1=72) was based on v1.5 era guidance
-// and silently breaks v2.0 handshake on current DKMS modules. Updated
-// 2026-05-13 after reading upstream docs.
-const TSPU_PRESET = { jc: 4, jmin: 64, jmax: 128, s1: 32, s2: 56, s3: 32, s4: 16 };
-const MOBILE_PRESET = { jc: 3, jmin: 64, jmax: 100, s1: 32, s2: 56, s3: 32, s4: 16 };
+//
+// S3 and S4 forced to ZERO due to upstream bug
+// https://github.com/amnezia-vpn/amnezia-client/issues/2582 —
+// AmneziaVPN client 4.8.15.x (Android + iOS, awg-go v0.2.16 under
+// the hood) DROPS all transport traffic when server has non-zero
+// S3/S4. Connection reaches "CONNECTED" state but handshake retries
+// forever and zero bytes flow. Bug open since Feb 2026, claimed
+// fixed in 4.8.12.9 but persisted into 4.8.15.5. Reproduced live
+// on iOS 26.4 client cycle #6 2026-05-13 with our awg-VPS — same
+// "Connected, but no traffic, handshake retries every 5s" symptom.
+// Workaround: server must set S3=0 S4=0. Lift these defaults to
+// non-zero again when upstream fixes the client.
+//
+// S1 and S2 stay non-zero — they were in AmneziaWG since v1.5, the
+// bug only affects the v2.0-added S3+S4 fields. Junk-packet (Jc)
+// obfuscation also remains active.
+const TSPU_PRESET = { jc: 4, jmin: 64, jmax: 128, s1: 32, s2: 56, s3: 0, s4: 0 };
+const MOBILE_PRESET = { jc: 3, jmin: 64, jmax: 100, s1: 32, s2: 56, s3: 0, s4: 0 };
 
 /**
  * AmneziaWG H1-H4 magic-header bytes. Spec says they must be:
@@ -811,6 +824,7 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
                     <li>Клиент: <strong>AmneziaVPN ≥ 4.8.12.9</strong> или Hiddify Next ≥ 2.4. Старые не подключатся.</li>
                     <li>Порт выберешь на следующем шаге («Развернуть на нодах»). Рекомендация: <strong>≤ 9999</strong>, например 443 или 1234. Не используй 51820 — известный WG-default, ISP его режут.</li>
                     <li>При миграции со старого AmneziaWG 1.0 — все ключи peer'ов нужно перегенерить, со старыми не работает.</li>
+                    <li><strong>S3 и S4 оставлены = 0</strong> из-за upstream-бага AmneziaVPN client 4.8.15.x (<a href="https://github.com/amnezia-vpn/amnezia-client/issues/2582" target="_blank" rel="noreferrer">issue #2582</a>): при ненулевых S3/S4 connect показывает «Подключено», но реально трафик не идёт. Вернём дефолты на non-zero когда апстрим починит.</li>
                   </ul>
                 </Text>
               </Alert>

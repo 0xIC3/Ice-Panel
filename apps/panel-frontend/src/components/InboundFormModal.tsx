@@ -100,11 +100,12 @@ interface FormValues {
   mieruMtu: number | '';
 }
 
-// Bounded by upstream AmneziaWG v2.0 (docs.amnezia.org); see
-// ProfileFormModal.tsx for full notes. Old values rejected by v2.0
-// DKMS module — silent handshake fail.
-const TSPU_PRESET = { jc: 4, jmin: 64, jmax: 128, s1: 32, s2: 56, s3: 32, s4: 16 };
-const MOBILE_PRESET = { jc: 3, jmin: 64, jmax: 100, s1: 32, s2: 56, s3: 32, s4: 16 };
+// Bounded by upstream AmneziaWG v2.0 (docs.amnezia.org). S3+S4 set
+// to 0 because AmneziaVPN client 4.8.15.x silently drops traffic
+// when server uses non-zero S3/S4 — upstream bug #2582. See
+// ProfileFormModal.tsx for full notes.
+const TSPU_PRESET = { jc: 4, jmin: 64, jmax: 128, s1: 32, s2: 56, s3: 0, s4: 0 };
+const MOBILE_PRESET = { jc: 3, jmin: 64, jmax: 100, s1: 32, s2: 56, s3: 0, s4: 0 };
 
 function defaults(rule: Inbound | null, defaultNodeId: string): FormValues {
   const base: FormValues = {
