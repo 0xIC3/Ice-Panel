@@ -177,6 +177,11 @@ export const RECIPES: Recipe[] = [
     apply: {
       hyObfsPassword: '',
       hyMasqueradeUrl: '',
+      // Явно обнуляем port-hopping чтобы переключение с RU-mobile recipe
+      // обратно на clean не оставило 20000-50000 в полях. Recipe должен
+      // приводить форму в consistent state, а не делать partial merge.
+      hyPortHopStart: '',
+      hyPortHopEnd: '',
     },
   },
   {
@@ -194,10 +199,19 @@ export const RECIPES: Recipe[] = [
       hyMasqueradeUrl: 'https://www.bing.com',
       hyBrutalUp: 100,
       hyBrutalDown: 100,
+      // Port-hopping (slice 31.5) — critical on RU mobile carriers.
+      // Без него ТСПУ срезает QUIC-handshake на :443 за секунды.
+      // install-node.sh по умолчанию выставляет iptables NAT redirect
+      // для 20000-50000 → :443, так что client может слать на любой
+      // порт из range и сервер всё равно его примет. Здесь admin
+      // может сузить range если не хочет такой широкой fanout-зоны.
+      hyPortHopStart: 20000,
+      hyPortHopEnd: 50000,
     }),
     notes: [
       'Obfs password сгенерирован случайно — не теряй его, нужен на клиентах',
       'Brutal CC 100/100 Mbps — настрой под реальную пропускную способность ноды',
+      'Port-hopping 20000-50000 включён — без него RU TSPU режет QUIC. install-node.sh уже выставил iptables NAT для этого range',
     ],
   },
 
