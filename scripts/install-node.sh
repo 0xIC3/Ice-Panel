@@ -819,7 +819,13 @@ LimitNOFILE=1048576
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=-/var/log -/etc/ice-panel-node -/etc/hysteria -/etc/xray -/usr/local/etc/xray -/etc/amnezia/amneziawg -/etc/caddy -/etc/mtg -/etc/mita -/var/lib/mita
+# /run is needed for ufw's lockfile (/run/ufw.lock) — without it the agent's
+# firewall.Allow() helper crashes with "Read-only file system" because
+# ProtectSystem=strict forbids /run writes by default. /run/xtables.lock
+# matters too — iptables uses it from awg-quick PostUp.
+# /etc/iptables/ for netfilter-persistent users (rules.v4 rewrites).
+# Caught live 2026-05-13 on Aeza FI node after fresh install.
+ReadWritePaths=-/var/log -/etc/ice-panel-node -/etc/hysteria -/etc/xray -/usr/local/etc/xray -/etc/amnezia/amneziawg -/etc/caddy -/etc/mtg -/etc/mita -/var/lib/mita -/run -/etc/iptables
 PrivateTmp=true
 
 # Journald log limits — without these a node running for months can balloon
