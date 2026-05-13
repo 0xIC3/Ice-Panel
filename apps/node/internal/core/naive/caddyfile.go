@@ -104,6 +104,15 @@ func renderCaddyfile(inbound InboundConfig, users []User) (string, error) {
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Username < sorted[j].Username })
 
 	var b strings.Builder
+	// Global options block — pin storage to /etc/caddy. Without this Caddy
+	// tries $HOME/.local/share/caddy first, then falls back to ./caddy
+	// (relative to cwd). Our systemd unit has ProtectSystem=strict, no
+	// HOME set, and only /etc/caddy in ReadWritePaths — so the fallback
+	// hits "mkdir caddy: read-only file system" and ACME never persists
+	// a cert. Caught live cycle #8 2026-05-13.
+	fmt.Fprintln(&b, "{")
+	fmt.Fprintln(&b, "\tstorage file_system /etc/caddy")
+	fmt.Fprintln(&b, "}")
 	fmt.Fprintf(&b, ":%d, %s {\n", cfg.ListenPort, cfg.Hostname)
 	fmt.Fprintf(&b, "\ttls %s\n", cfg.TLSEmail)
 	fmt.Fprintln(&b, "\troute {")
