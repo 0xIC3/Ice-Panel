@@ -107,14 +107,21 @@ func renderCaddyfile(inbound InboundConfig, users []User) (string, error) {
 	fmt.Fprintf(&b, ":%d, %s {\n", cfg.ListenPort, cfg.Hostname)
 	fmt.Fprintf(&b, "\ttls %s\n", cfg.TLSEmail)
 	fmt.Fprintln(&b, "\troute {")
-	fmt.Fprintln(&b, "\t\tforward_proxy {")
-	for _, u := range sorted {
-		fmt.Fprintf(&b, "\t\t\tbasic_auth %s %s\n", u.Username, u.Password)
+	// forward_proxy with probe_resistance + zero basic_auth lines fails
+	// validation: "probe resistance requires authentication". Emit the
+	// block only when we have at least one user. Before any user is
+	// added the site is pure file_server masquerade — looks like a
+	// vanilla static-content host on probes, which is what we want.
+	if len(sorted) > 0 {
+		fmt.Fprintln(&b, "\t\tforward_proxy {")
+		for _, u := range sorted {
+			fmt.Fprintf(&b, "\t\t\tbasic_auth %s %s\n", u.Username, u.Password)
+		}
+		fmt.Fprintln(&b, "\t\t\thide_ip")
+		fmt.Fprintln(&b, "\t\t\thide_via")
+		fmt.Fprintln(&b, "\t\t\tprobe_resistance")
+		fmt.Fprintln(&b, "\t\t}")
 	}
-	fmt.Fprintln(&b, "\t\t\thide_ip")
-	fmt.Fprintln(&b, "\t\t\thide_via")
-	fmt.Fprintln(&b, "\t\t\tprobe_resistance")
-	fmt.Fprintln(&b, "\t\t}")
 	fmt.Fprintf(&b, "\t\tfile_server {\n\t\t\troot %s\n\t\t}\n", cfg.MasqueradeRoot)
 	fmt.Fprintln(&b, "\t}")
 	fmt.Fprintln(&b, "}")

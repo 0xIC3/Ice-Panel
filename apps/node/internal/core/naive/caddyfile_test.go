@@ -112,12 +112,20 @@ func TestRenderCaddyfileNoUsers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("renderCaddyfile: %v", err)
 	}
-	if strings.Contains(out, "basic_auth") {
-		t.Errorf("expected no basic_auth lines when user list empty:\n%s", out)
+	// forward_proxy with probe_resistance + zero basic_auth lines fails
+	// Caddy validation ("probe resistance requires authentication"), so
+	// we skip the whole forward_proxy block when there are no users. The
+	// site is pure file_server masquerade — looks like a vanilla
+	// static-content host on probes. First AddUser triggers a reload
+	// that adds the forward_proxy block. Caught live cycle #8 2026-05-13.
+	if strings.Contains(out, "forward_proxy") {
+		t.Errorf("expected forward_proxy block to be absent when user list empty:\n%s", out)
 	}
-	// forward_proxy block + file_server still expected.
-	if !strings.Contains(out, "forward_proxy {") || !strings.Contains(out, "probe_resistance") {
-		t.Errorf("forward_proxy block missing for empty user list:\n%s", out)
+	if strings.Contains(out, "probe_resistance") {
+		t.Errorf("expected probe_resistance to be absent when user list empty:\n%s", out)
+	}
+	if !strings.Contains(out, "file_server {") {
+		t.Errorf("expected file_server masquerade block:\n%s", out)
 	}
 }
 

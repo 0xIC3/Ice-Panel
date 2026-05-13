@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/0xIC3/Ice-Panel/apps/node/internal/core"
+	"github.com/0xIC3/Ice-Panel/apps/node/internal/core/subprocess"
 )
 
 // fakeCLI mirrors the helper from amneziawg/awg_cli_test.go: records every
@@ -80,6 +81,10 @@ func newManagedTestAdapter(t *testing.T, fake *fakeCLI) (*Adapter, string) {
 		t.Fatalf("seed Caddyfile: %v", err)
 	}
 	a.started = true
+	// Non-nil proc forces regenerateAndReloadLocked into the reload branch
+	// (via injected runCmd) instead of the production cold-start path that
+	// shells out to subprocess.New — caddy binary isn't on PATH in CI.
+	a.proc = &subprocess.Subprocess{}
 	return a, caddyfile
 }
 
