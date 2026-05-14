@@ -148,3 +148,6 @@ vite.config.ts.timestamp-*
 apps/node/ice-panel-node
 apps/node/ice-panel-node-*
 apps/node/ice-panel-node.exe
+
+# Playwright MCP — screenshots, snapshots, console logs from review sessions
+.playwright-mcp/
