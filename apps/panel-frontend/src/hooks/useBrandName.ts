@@ -16,5 +16,5 @@ export function useBrandName(): string {
     queryFn: getPublicSettings,
     staleTime: 5 * 60 * 1000, // 5 min
   });
-  return data?.brandName ?? 'Ice-Panel';
+  return data?.brandName ?? 'Floe';
 }

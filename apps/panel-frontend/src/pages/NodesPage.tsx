@@ -11,7 +11,6 @@ import {
   Stack,
   Table,
   Text,
-  Title,
   Tooltip,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
@@ -46,13 +45,27 @@ import { NodeEditModal } from '../components/NodeEditModal';
 import { NodePayloadModal } from '../components/NodePayloadModal';
 import { NodeCard } from '../components/NodeCard';
 import { countryFlag } from '../lib/countries';
+import { PageHero } from '../components/PageHero';
 
-const STATUS_COLORS: Record<string, string> = {
-  online: 'green',
-  unknown: 'gray',
-  offline: 'red',
-  unreachable: 'red',
-  disabled: 'gray',
+const HAIRLINE = '#1C2A3D';
+const CARD = '#0F1A28';
+const GROUND = '#08101A';
+const SNOW = '#C8D4E3';
+const MIST = '#7A8BA3';
+const CYAN = '#7DD3FC';
+const MOSS = '#A7D8B9';
+const AMBER = '#F5B14C';
+const RED = '#E07A5F';
+
+const MONO = { fontFamily: "'JetBrains Mono', monospace" };
+
+const STATUS_ACCENT: Record<string, string> = {
+  online: MOSS,
+  unknown: MIST,
+  offline: RED,
+  unreachable: RED,
+  disabled: MIST,
+  degraded: AMBER,
 };
 
 function formatBytes(n: number): string {
@@ -259,17 +272,32 @@ export function NodesPage() {
 
   return (
     <Stack>
-      <Group justify="space-between" align="flex-end">
-        <Stack gap={2}>
-          <Title order={2}>{t('nodes.title')}</Title>
-          <Text c="dimmed" size="sm">
-            {t('nodes.countSummary', {
-              count: enrichedNodes.length,
-              online: enrichedNodes.filter((n) => n.status === 'online').length,
-            })}
-          </Text>
-        </Stack>
-        <Group>
+      <PageHero
+        eyebrow={`FLEET · ${enrichedNodes.length} VPS · ${new Set(enrichedNodes.map((n) => n.countryCode).filter(Boolean)).size} COUNTRIES`}
+        title="Nodes."
+        subtitle="One node runs one protocol core. Panel pushes config over mTLS — agent applies and reports back."
+        right={
+          <Group gap={8}>
+            <Button
+              leftSection={<IconPlus size={14} />}
+              onClick={openCreate}
+              style={{
+                backgroundColor: CYAN,
+                color: GROUND,
+                fontWeight: 500,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                fontSize: 12,
+                height: 36,
+              }}
+            >
+              {t('nodes.create')}
+            </Button>
+          </Group>
+        }
+      />
+      <Group justify="space-between" align="center">
+        <Group gap={8}>
           <SegmentedControl
             size="xs"
             value={layout}
@@ -304,13 +332,11 @@ export function NodesPage() {
                 qc.invalidateQueries({ queryKey: ['dashboard'] });
               }}
               loading={nodesQuery.isFetching || overviewQuery.isFetching}
+              style={{ color: MIST }}
             >
               <IconRefresh size={18} />
             </ActionIcon>
           </Tooltip>
-          <Button leftSection={<IconPlus size={16} />} onClick={openCreate}>
-            {t('nodes.create')}
-          </Button>
         </Group>
       </Group>
 
@@ -343,7 +369,7 @@ export function NodesPage() {
       )}
 
       {enrichedNodes.length === 0 ? (
-        <Text c="dimmed" ta="center" py="xl">
+        <Text ta="center" py="xl" style={{ color: MIST }}>
           {t('nodes.empty')}
         </Text>
       ) : layout === 'cards' ? (
@@ -392,78 +418,119 @@ export function NodesPage() {
           })}
         </SimpleGrid>
       ) : (
-        <Table.ScrollContainer minWidth={800}>
-          <Table verticalSpacing="sm" highlightOnHover withTableBorder>
+        <Table.ScrollContainer
+          minWidth={800}
+          style={{ backgroundColor: CARD, borderRadius: 10, border: `1px solid ${HAIRLINE}` }}
+        >
+          <Table verticalSpacing="sm" highlightOnHover>
             <Table.Thead>
-              <Table.Tr>
-                <Table.Th>{t('nodes.table.name')}</Table.Th>
-                <Table.Th>{t('nodes.table.address')}</Table.Th>
-                <Table.Th>{t('nodes.table.country')}</Table.Th>
-                <Table.Th>{t('nodes.table.status')}</Table.Th>
-                <Table.Th>{t('nodes.table.bindings')}</Table.Th>
-                <Table.Th>{t('nodes.table.today')}</Table.Th>
-                <Table.Th style={{ width: 1 }}>{t('common.actions')}</Table.Th>
+              <Table.Tr style={{ borderBottom: `1px solid ${HAIRLINE}` }}>
+                <Table.Th style={{ ...MONO, fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: MIST }}>{t('nodes.table.name')}</Table.Th>
+                <Table.Th style={{ ...MONO, fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: MIST }}>{t('nodes.table.address')}</Table.Th>
+                <Table.Th style={{ ...MONO, fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: MIST }}>{t('nodes.table.country')}</Table.Th>
+                <Table.Th style={{ ...MONO, fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: MIST }}>{t('nodes.table.status')}</Table.Th>
+                <Table.Th style={{ ...MONO, fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: MIST }}>{t('nodes.table.bindings')}</Table.Th>
+                <Table.Th style={{ ...MONO, fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: MIST }}>{t('nodes.table.today')}</Table.Th>
+                <Table.Th style={{ width: 1, ...MONO, fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: MIST }}>{t('common.actions')}</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {enrichedNodes.map((n) => (
-                <Table.Tr key={n.id}>
-                  <Table.Td>
-                    <Text fw={500}>{n.name}</Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text ff="monospace" size="sm">
-                      {n.address}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    {n.countryCode ? (
-                      <Group gap={4} wrap="nowrap">
-                        <Text>{countryFlag(n.countryCode)}</Text>
-                        <Text size="sm">{n.countryCode}</Text>
+              {enrichedNodes.map((n) => {
+                const accent = STATUS_ACCENT[n.status] ?? MIST;
+                const isOffline = n.status === 'offline' || n.status === 'unreachable';
+                return (
+                  <Table.Tr
+                    key={n.id}
+                    style={{
+                      backgroundColor: isOffline ? `${RED}08` : undefined,
+                      borderBottom: `1px solid ${HAIRLINE}`,
+                    }}
+                  >
+                    <Table.Td>
+                      <Group gap={6} wrap="nowrap">
+                        <span
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            backgroundColor: accent,
+                            boxShadow: `0 0 8px ${accent}99`,
+                            flexShrink: 0,
+                          }}
+                        />
+                        <Text fw={500} style={{ color: SNOW }}>{n.name}</Text>
                       </Group>
-                    ) : (
-                      <Text c="dimmed">—</Text>
-                    )}
-                  </Table.Td>
-                  <Table.Td>
-                    <Badge color={STATUS_COLORS[n.status] ?? 'gray'} variant="light">
-                      {n.status}
-                    </Badge>
-                  </Table.Td>
-                  <Table.Td>{n.overview?.inboundCount ?? 0}</Table.Td>
-                  <Table.Td>
-                    {n.overview ? formatBytes(n.overview.todayBytes) : '—'}
-                  </Table.Td>
-                  <Table.Td>
-                    <Group gap={4} wrap="nowrap">
-                      <Tooltip label={t('nodes.refreshBootstrap')}>
-                        <ActionIcon
-                          variant="subtle"
-                          color="blue"
-                          loading={
-                            refreshBootstrapMutation.isPending &&
-                            refreshBootstrapMutation.variables?.id === n.id
-                          }
-                          onClick={() => handleRefreshBootstrap(n)}
-                        >
-                          <IconKey size={16} />
-                        </ActionIcon>
-                      </Tooltip>
-                      <Tooltip label={t('common.edit')}>
-                        <ActionIcon variant="subtle" onClick={() => setEditing(n)}>
-                          <IconEdit size={16} />
-                        </ActionIcon>
-                      </Tooltip>
-                      <Tooltip label={t('common.delete')}>
-                        <ActionIcon variant="subtle" color="red" onClick={() => handleDelete(n)}>
-                          <IconTrash size={16} />
-                        </ActionIcon>
-                      </Tooltip>
-                    </Group>
-                  </Table.Td>
-                </Table.Tr>
-              ))}
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="sm" style={{ ...MONO, color: SNOW }}>{n.address}</Text>
+                    </Table.Td>
+                    <Table.Td>
+                      {n.countryCode ? (
+                        <Group gap={4} wrap="nowrap">
+                          <Text>{countryFlag(n.countryCode)}</Text>
+                          <Text size="sm" style={{ ...MONO, color: MIST }}>{n.countryCode}</Text>
+                        </Group>
+                      ) : (
+                        <Text style={{ color: MIST }}>—</Text>
+                      )}
+                    </Table.Td>
+                    <Table.Td>
+                      <Badge
+                        variant="light"
+                        style={{
+                          backgroundColor: `${accent}1A`,
+                          color: accent,
+                          border: `1px solid ${accent}33`,
+                          textTransform: 'uppercase',
+                          whiteSpace: 'nowrap',
+                          ...MONO,
+                          letterSpacing: '0.08em',
+                        }}
+                      >
+                        {n.status}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="sm" style={{ ...MONO, color: SNOW }}>
+                        {n.overview?.inboundCount ?? 0}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="sm" style={{ ...MONO, color: SNOW }}>
+                        {n.overview ? formatBytes(n.overview.todayBytes) : '—'}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Group gap={4} wrap="nowrap">
+                        <Tooltip label={t('nodes.refreshBootstrap')}>
+                          <ActionIcon
+                            variant="outline"
+                            size="sm"
+                            loading={
+                              refreshBootstrapMutation.isPending &&
+                              refreshBootstrapMutation.variables?.id === n.id
+                            }
+                            onClick={() => handleRefreshBootstrap(n)}
+                            style={{ borderColor: `${CYAN}55`, color: CYAN }}
+                          >
+                            <IconKey size={14} />
+                          </ActionIcon>
+                        </Tooltip>
+                        <Tooltip label={t('common.edit')}>
+                          <ActionIcon variant="subtle" size="sm" onClick={() => setEditing(n)} style={{ color: MIST }}>
+                            <IconEdit size={14} />
+                          </ActionIcon>
+                        </Tooltip>
+                        <Tooltip label={t('common.delete')}>
+                          <ActionIcon variant="subtle" size="sm" color="red" onClick={() => handleDelete(n)}>
+                            <IconTrash size={14} />
+                          </ActionIcon>
+                        </Tooltip>
+                      </Group>
+                    </Table.Td>
+                  </Table.Tr>
+                );
+              })}
             </Table.Tbody>
           </Table>
         </Table.ScrollContainer>

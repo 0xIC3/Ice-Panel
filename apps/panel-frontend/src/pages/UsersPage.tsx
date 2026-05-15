@@ -6,7 +6,6 @@ import {
   Button,
   Card,
   Group,
-  Paper,
   Progress,
   SegmentedControl,
   SimpleGrid,
@@ -15,7 +14,6 @@ import {
   Text,
   TextInput,
   ThemeIcon,
-  Title,
   Tooltip,
 } from '@mantine/core';
 import { copyToClipboard } from '../lib/clipboard';
@@ -51,14 +49,36 @@ import {
   type User,
 } from '../lib/api';
 import { UserFormModal } from '../components/UserFormModal';
+import { PageHero } from '../components/PageHero';
 
 // ───── Helpers ─────
 
-const STATUS_COLORS: Record<string, string> = {
-  active: 'teal',
-  disabled: 'gray',
-  expired: 'red',
-  limited: 'yellow',
+const HAIRLINE = '#1C2A3D';
+const CARD = '#0F1A28';
+const GROUND = '#08101A';
+const SNOW = '#C8D4E3';
+const MIST = '#7A8BA3';
+const CYAN = '#7DD3FC';
+const MOSS = '#A7D8B9';
+const AMBER = '#F5B14C';
+const RED = '#E07A5F';
+const VIOLET = '#A78BFA';
+
+const DISPLAY = { fontFamily: "'Space Grotesk', Inter, sans-serif" };
+const MONO = { fontFamily: "'JetBrains Mono', monospace" };
+const MONO_LABEL = {
+  ...MONO,
+  fontSize: 10,
+  letterSpacing: '0.12em',
+  textTransform: 'uppercase' as const,
+  color: MIST,
+};
+
+const STATUS_ACCENT: Record<string, string> = {
+  active: MOSS,
+  disabled: MIST,
+  expired: RED,
+  limited: AMBER,
 };
 
 function formatBytes(n: number): string {
@@ -154,12 +174,12 @@ interface StatChipProps {
   icon: React.ReactNode;
   label: string;
   value: number;
-  color: string;
+  accent: string;
   active?: boolean;
   onClick?: () => void;
 }
 
-function StatChip({ icon, label, value, color, active, onClick }: StatChipProps) {
+function StatChip({ icon, label, value, accent, active, onClick }: StatChipProps) {
   return (
     <Card
       withBorder
@@ -168,20 +188,28 @@ function StatChip({ icon, label, value, color, active, onClick }: StatChipProps)
       onClick={onClick}
       style={{
         cursor: onClick ? 'pointer' : 'default',
-        borderColor: active ? `var(--mantine-color-${color}-6)` : undefined,
+        backgroundColor: CARD,
+        borderColor: active ? accent : HAIRLINE,
         borderWidth: active ? 2 : 1,
       }}
     >
       <Group justify="space-between" wrap="nowrap">
-        <Stack gap={0}>
-          <Text size="xs" c="dimmed" tt="uppercase" lts={0.6} fw={600}>
-            {label}
-          </Text>
-          <Text size="xl" fw={700} lh={1.1}>
+        <Stack gap={2}>
+          <Text style={MONO_LABEL}>{label}</Text>
+          <Text style={{ ...DISPLAY, fontSize: 28, fontWeight: 500, lineHeight: 1, color: SNOW }}>
             {value}
           </Text>
         </Stack>
-        <ThemeIcon size={36} radius="md" variant="light" color={color}>
+        <ThemeIcon
+          size={36}
+          radius="md"
+          variant="light"
+          style={{
+            backgroundColor: `${accent}1A`,
+            color: accent,
+            border: `1px solid ${accent}33`,
+          }}
+        >
           {icon}
         </ThemeIcon>
       </Group>
@@ -297,30 +325,41 @@ export function UsersPage() {
 
   return (
     <Stack gap="lg">
-      <Group justify="space-between" align="flex-end">
-        <Stack gap={2}>
-          <Title order={2}>{t('users.title')}</Title>
-          <Text c="dimmed" size="sm">
-            {stats.total}
-            {filteredUsers.length !== stats.total && ` · ${filteredUsers.length}`}
-          </Text>
-        </Stack>
-        <Group>
-          <Tooltip label={t('common.refresh')}>
-            <ActionIcon
-              variant="subtle"
-              size="lg"
-              onClick={() => qc.invalidateQueries({ queryKey: ['users'] })}
-              loading={usersQuery.isFetching}
+      <PageHero
+        eyebrow={`${stats.total} ACCOUNTS · ${stats.active} ONLINE${stats.limited > 0 ? ` · ${stats.limited} LIMITED` : ''}`}
+        title="Users."
+        subtitle="Each user is one subscription URL. Disable, throttle, or revoke without touching the protocol layer."
+        right={
+          <Group gap={8}>
+            <Tooltip label={t('common.refresh')}>
+              <ActionIcon
+                variant="subtle"
+                size="lg"
+                onClick={() => qc.invalidateQueries({ queryKey: ['users'] })}
+                loading={usersQuery.isFetching}
+                style={{ color: MIST }}
+              >
+                <IconRefresh size={18} />
+              </ActionIcon>
+            </Tooltip>
+            <Button
+              leftSection={<IconPlus size={14} />}
+              onClick={openCreate}
+              style={{
+                backgroundColor: CYAN,
+                color: GROUND,
+                fontWeight: 500,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                fontSize: 12,
+                height: 36,
+              }}
             >
-              <IconRefresh size={18} />
-            </ActionIcon>
-          </Tooltip>
-          <Button leftSection={<IconPlus size={16} />} onClick={openCreate}>
-            {t('users.create')}
-          </Button>
-        </Group>
-      </Group>
+              {t('users.create')}
+            </Button>
+          </Group>
+        }
+      />
 
       {/* Stats row — clickable as filters */}
       <SimpleGrid cols={{ base: 2, sm: 3, lg: 5 }} spacing="sm">
@@ -328,7 +367,7 @@ export function UsersPage() {
           icon={<IconUsers size={20} />}
           label={t('common.all')}
           value={stats.total}
-          color="blue"
+          accent={CYAN}
           active={statusFilter === 'all'}
           onClick={() => setStatusFilter('all')}
         />
@@ -336,7 +375,7 @@ export function UsersPage() {
           icon={<IconCircleCheck size={20} />}
           label="Active"
           value={stats.active}
-          color="teal"
+          accent={MOSS}
           active={statusFilter === 'active'}
           onClick={() => setStatusFilter('active')}
         />
@@ -344,7 +383,7 @@ export function UsersPage() {
           icon={<IconClockHour4 size={20} />}
           label="Expired"
           value={stats.expired}
-          color="red"
+          accent={RED}
           active={statusFilter === 'expired'}
           onClick={() => setStatusFilter('expired')}
         />
@@ -352,7 +391,7 @@ export function UsersPage() {
           icon={<IconCircleMinus size={20} />}
           label="Limited"
           value={stats.limited}
-          color="yellow"
+          accent={AMBER}
           active={statusFilter === 'limited'}
           onClick={() => setStatusFilter('limited')}
         />
@@ -360,7 +399,7 @@ export function UsersPage() {
           icon={<IconCircleOff size={20} />}
           label="Disabled"
           value={stats.disabled}
-          color="gray"
+          accent={MIST}
           active={statusFilter === 'disabled'}
           onClick={() => setStatusFilter('disabled')}
         />
@@ -370,10 +409,13 @@ export function UsersPage() {
       <Group gap="sm" wrap="nowrap">
         <TextInput
           placeholder={t('users.searchPlaceholder')}
-          leftSection={<IconSearch size={16} />}
+          leftSection={<IconSearch size={16} color={MIST} />}
           value={search}
           onChange={(e) => setSearch(e.currentTarget.value)}
           style={{ flex: 1 }}
+          styles={{
+            input: { backgroundColor: CARD, borderColor: HAIRLINE, color: SNOW },
+          }}
         />
         <SegmentedControl
           value={statusFilter}
@@ -391,19 +433,19 @@ export function UsersPage() {
       </Group>
 
       {/* Table */}
-      <Card withBorder padding={0} radius="md">
+      <Card withBorder padding={0} radius="md" style={{ backgroundColor: CARD, borderColor: HAIRLINE }}>
         <Table.ScrollContainer minWidth={1100}>
           <Table verticalSpacing="sm" highlightOnHover>
             <Table.Thead>
-              <Table.Tr>
-                <Table.Th>{t('users.table.username')}</Table.Th>
-                <Table.Th>{t('users.table.status')}</Table.Th>
-                <Table.Th>{t('users.table.subscription')}</Table.Th>
-                <Table.Th>{t('users.table.expires')}</Table.Th>
-                <Table.Th>{t('users.table.traffic')}</Table.Th>
-                <Table.Th>{t('users.table.squads')}</Table.Th>
-                <Table.Th>Tag</Table.Th>
-                <Table.Th style={{ width: 1 }}>{t('common.actions')}</Table.Th>
+              <Table.Tr style={{ borderBottom: `1px solid ${HAIRLINE}` }}>
+                <Table.Th style={MONO_LABEL}>{t('users.table.username')}</Table.Th>
+                <Table.Th style={MONO_LABEL}>{t('users.table.status')}</Table.Th>
+                <Table.Th style={MONO_LABEL}>{t('users.table.subscription')}</Table.Th>
+                <Table.Th style={MONO_LABEL}>{t('users.table.expires')}</Table.Th>
+                <Table.Th style={MONO_LABEL}>{t('users.table.traffic')}</Table.Th>
+                <Table.Th style={MONO_LABEL}>{t('users.table.squads')}</Table.Th>
+                <Table.Th style={MONO_LABEL}>Tag</Table.Th>
+                <Table.Th style={{ width: 1, ...MONO_LABEL }}>{t('common.actions')}</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -429,26 +471,39 @@ export function UsersPage() {
                 const trafficPct = trafficPercent(u.trafficUsedBytes, u.trafficLimitBytes);
                 const trafficColor =
                   trafficPct === null
-                    ? 'teal'
+                    ? MOSS
                     : trafficPct >= 90
-                      ? 'red'
+                      ? RED
                       : trafficPct >= 70
-                        ? 'yellow'
-                        : 'teal';
+                        ? AMBER
+                        : MOSS;
+                const statusAccent = STATUS_ACCENT[u.status] ?? MIST;
+                const rowTint =
+                  u.status === 'expired'
+                    ? `${RED}08`
+                    : u.status === 'limited'
+                      ? `${AMBER}08`
+                      : undefined;
                 const otherSquads = u.groupIds.filter(
                   (id) => id !== '00000000-0000-0000-0000-000000000001',
                 );
 
                 return (
-                  <Table.Tr key={u.id}>
+                  <Table.Tr
+                    key={u.id}
+                    style={{
+                      backgroundColor: rowTint,
+                      borderBottom: `1px solid ${HAIRLINE}`,
+                    }}
+                  >
                     <Table.Td>
                       <Group gap="sm" wrap="nowrap">
-                        <StatusDot status={u.status} />
+                        <StatusDot accent={statusAccent} />
                         <Stack gap={0}>
-                          <Text size="sm" fw={600}>
+                          <Text size="sm" fw={600} style={{ color: SNOW }}>
                             {u.username}
                           </Text>
-                          <Text size="xs" c="dimmed" ff="monospace">
+                          <Text size="xs" style={{ ...MONO, color: MIST }}>
                             {u.shortId}
                           </Text>
                         </Stack>
@@ -457,8 +512,14 @@ export function UsersPage() {
                     <Table.Td>
                       <Badge
                         variant="light"
-                        color={STATUS_COLORS[u.status] ?? 'gray'}
-                        tt="uppercase"
+                        style={{
+                          backgroundColor: `${statusAccent}1A`,
+                          color: statusAccent,
+                          border: `1px solid ${statusAccent}33`,
+                          textTransform: 'uppercase',
+                          ...MONO,
+                          letterSpacing: '0.08em',
+                        }}
                       >
                         {u.status}
                       </Badge>
@@ -469,13 +530,10 @@ export function UsersPage() {
                       >
                         <Text
                           size="sm"
-                          c={
-                            last.tone === 'fresh'
-                              ? 'teal'
-                              : last.tone === 'never'
-                                ? 'dimmed'
-                                : undefined
-                          }
+                          style={{
+                            color:
+                              last.tone === 'fresh' ? MOSS : last.tone === 'never' ? MIST : SNOW,
+                          }}
                         >
                           {last.text}
                         </Text>
@@ -485,15 +543,16 @@ export function UsersPage() {
                       <Tooltip label={u.expireAt ? new Date(u.expireAt).toLocaleString() : '—'}>
                         <Text
                           size="sm"
-                          c={
-                            exp.tone === 'bad'
-                              ? 'red'
-                              : exp.tone === 'warn'
-                                ? 'yellow'
-                                : exp.tone === 'never'
-                                  ? 'dimmed'
-                                  : undefined
-                          }
+                          style={{
+                            color:
+                              exp.tone === 'bad'
+                                ? RED
+                                : exp.tone === 'warn'
+                                  ? AMBER
+                                  : exp.tone === 'never'
+                                    ? MIST
+                                    : SNOW,
+                          }}
                         >
                           {exp.text}
                         </Text>
@@ -502,9 +561,9 @@ export function UsersPage() {
                     <Table.Td miw={200}>
                       <Stack gap={4}>
                         <Group justify="space-between" gap="xs">
-                          <Text size="xs" ff="monospace">
+                          <Text size="xs" style={{ ...MONO, color: SNOW }}>
                             {formatBytes(u.trafficUsedBytes)}{' '}
-                            <Text span c="dimmed">
+                            <Text span style={{ color: MIST }}>
                               /{' '}
                               {u.trafficLimitBytes === null
                                 ? '∞'
@@ -512,33 +571,53 @@ export function UsersPage() {
                             </Text>
                           </Text>
                           {trafficPct !== null && (
-                            <Text size="xs" c={trafficColor} ff="monospace" fw={600}>
+                            <Text size="xs" fw={600} style={{ ...MONO, color: trafficColor }}>
                               {trafficPct.toFixed(0)}%
                             </Text>
                           )}
                         </Group>
                         <Progress
                           value={trafficPct ?? 0}
-                          color={trafficColor}
                           size="sm"
                           radius="xl"
+                          styles={{
+                            root: { backgroundColor: HAIRLINE },
+                            section: { backgroundColor: trafficColor },
+                          }}
                         />
                       </Stack>
                     </Table.Td>
                     <Table.Td>
                       {otherSquads.length === 0 ? (
-                        <Badge variant="default" color="gray" size="sm">
+                        <Badge
+                          variant="default"
+                          size="sm"
+                          style={{ backgroundColor: `${MIST}1A`, color: MIST }}
+                        >
                           All
                         </Badge>
                       ) : (
                         <Group gap={4}>
                           {otherSquads.slice(0, 2).map((id) => (
-                            <Badge key={id} variant="light" color="indigo" size="sm">
+                            <Badge
+                              key={id}
+                              variant="light"
+                              size="sm"
+                              style={{
+                                backgroundColor: `${VIOLET}1A`,
+                                color: VIOLET,
+                                border: `1px solid ${VIOLET}33`,
+                              }}
+                            >
                               {squadNameById.get(id) ?? id.slice(0, 6)}
                             </Badge>
                           ))}
                           {otherSquads.length > 2 && (
-                            <Badge variant="default" color="gray" size="sm">
+                            <Badge
+                              variant="default"
+                              size="sm"
+                              style={{ backgroundColor: `${MIST}1A`, color: MIST }}
+                            >
                               +{otherSquads.length - 2}
                             </Badge>
                           )}
@@ -547,11 +626,15 @@ export function UsersPage() {
                     </Table.Td>
                     <Table.Td>
                       {u.tag ? (
-                        <Badge variant="outline" color="gray" size="sm">
+                        <Badge
+                          variant="outline"
+                          size="sm"
+                          style={{ borderColor: HAIRLINE, color: MIST, ...MONO }}
+                        >
                           {u.tag}
                         </Badge>
                       ) : (
-                        <Text c="dimmed" size="xs">
+                        <Text size="xs" style={{ color: MIST }}>
                           —
                         </Text>
                       )}
@@ -608,15 +691,18 @@ export function UsersPage() {
   );
 }
 
-function StatusDot({ status }: { status: string }) {
-  const color = STATUS_COLORS[status] ?? 'gray';
+function StatusDot({ accent }: { accent: string }) {
   return (
-    <Paper
-      w={10}
-      h={10}
-      radius={999}
-      bg={`var(--mantine-color-${color}-6)`}
-      style={{ flexShrink: 0 }}
+    <span
+      style={{
+        width: 10,
+        height: 10,
+        borderRadius: '50%',
+        backgroundColor: accent,
+        boxShadow: `0 0 8px ${accent}99`,
+        flexShrink: 0,
+        display: 'inline-block',
+      }}
     />
   );
 }

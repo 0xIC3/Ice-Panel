@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   ActionIcon,
   Badge,
+  Box,
   Button,
   Card,
   Group,
@@ -12,8 +13,8 @@ import {
   Text,
   TextInput,
   ThemeIcon,
-  Title,
   Tooltip,
+  UnstyledButton,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { modals } from '@mantine/modals';
@@ -44,15 +45,29 @@ import {
 import { ProfileFormModal } from '../components/ProfileFormModal';
 import { DeployProfileModal } from '../components/DeployProfileModal';
 import { TestConnectModal } from '../components/TestConnectModal';
+import { PageHero } from '../components/PageHero';
 
-const PROTOCOL_COLORS: Record<string, string> = {
-  hysteria: 'blue',
-  xray: 'violet',
-  amneziawg: 'teal',
-  naive: 'orange',
-  shadowsocks: 'pink',
-  mtproto: 'cyan',
-  mieru: 'grape',
+const HAIRLINE = '#1C2A3D';
+const CARD = '#0F1A28';
+const GROUND = '#08101A';
+const SNOW = '#C8D4E3';
+const MIST = '#7A8BA3';
+const CYAN = '#7DD3FC';
+const MOSS = '#A7D8B9';
+const AMBER = '#F5B14C';
+const VIOLET = '#A78BFA';
+const PURPLE = '#C78BFA';
+const PINK = '#F5A3B8';
+const CYAN2 = '#67E8F9';
+
+const PROTOCOL_ACCENT: Record<string, string> = {
+  hysteria: CYAN,
+  xray: VIOLET,
+  amneziawg: MOSS,
+  naive: AMBER,
+  shadowsocks: PINK,
+  mtproto: CYAN2,
+  mieru: PURPLE,
 };
 
 const PROTOCOL_LABELS: Record<string, string> = {
@@ -78,8 +93,6 @@ export function ProfilesPage() {
   const profilesQuery = useQuery({ queryKey: ['profiles'], queryFn: () => listProfiles() });
   const bindingsQuery = useQuery({ queryKey: ['bindings'], queryFn: () => listBindings() });
 
-  // Group bindings by profile so cards can show "deployed on: N nodes"
-  // without an extra request per card.
   const bindingsByProfile = useMemo(() => {
     const m = new Map<string, number>();
     for (const b of bindingsQuery.data?.bindings ?? []) {
@@ -90,11 +103,6 @@ export function ProfilesPage() {
 
   const createMutation = useMutation({
     mutationFn: createProfile,
-    // After creating a profile, immediately open DeployModal so admin
-    // picks port + nodes without hunting for the "Развернуть" button.
-    // Closes the UX gap caught cycle #6 2026-05-13 ("где я выбираю порт?")
-    // — profile schema doesn't carry port (multi-node fan-out), but for
-    // 99% of operators the deploy step happens right after create.
     onSuccess: (created) => {
       qc.invalidateQueries({ queryKey: ['profiles'] });
       qc.invalidateQueries({ queryKey: ['bindings'] });
@@ -102,7 +110,6 @@ export function ProfilesPage() {
         color: 'green',
         message: t('profiles.notify.createdOpenDeploy'),
       });
-      // Auto-open deploy modal for the just-created profile.
       setDeploying(created);
     },
     onError: (err) =>
@@ -176,41 +183,60 @@ export function ProfilesPage() {
 
   return (
     <Stack gap="lg">
-      <Group justify="space-between" align="flex-end">
-        <Stack gap={2}>
-          <Title order={2}>{t('profiles.title')}</Title>
-          <Text c="dimmed" size="sm">
-            {t('profiles.subtitle')}
-          </Text>
-        </Stack>
-        <Group>
-          <Tooltip label={t('common.refresh')}>
-            <ActionIcon
-              variant="subtle"
-              size="lg"
-              loading={profilesQuery.isFetching}
-              onClick={() => qc.invalidateQueries({ queryKey: ['profiles'] })}
+      <PageHero
+        eyebrow={`INBOUND TEMPLATES · 7 PROTOCOLS SUPPORTED`}
+        title="Profiles."
+        subtitle="One profile is a logical inbound — protocol, obfuscation, DPI shape. Bind it to N nodes; one user picks it up via subscription."
+        right={
+          <Group gap={8}>
+            <Tooltip label={t('common.refresh')}>
+              <ActionIcon
+                variant="subtle"
+                size="lg"
+                loading={profilesQuery.isFetching}
+                onClick={() => qc.invalidateQueries({ queryKey: ['profiles'] })}
+                style={{ color: MIST }}
+              >
+                <IconRefresh size={18} />
+              </ActionIcon>
+            </Tooltip>
+            <Button
+              leftSection={<IconPlus size={14} />}
+              onClick={openCreate}
+              style={{
+                backgroundColor: CYAN,
+                color: GROUND,
+                fontWeight: 500,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                fontSize: 12,
+                height: 36,
+              }}
             >
-              <IconRefresh size={18} />
-            </ActionIcon>
-          </Tooltip>
-          <Button leftSection={<IconPlus size={16} />} onClick={openCreate}>
-            {t('profiles.create')}
-          </Button>
-        </Group>
-      </Group>
+              {t('profiles.create')}
+            </Button>
+          </Group>
+        }
+      />
 
       <TextInput
         placeholder={t('profiles.searchPlaceholder')}
-        leftSection={<IconSearch size={16} />}
+        leftSection={<IconSearch size={16} color={MIST} />}
         value={search}
         onChange={(e) => setSearch(e.currentTarget.value)}
+        styles={{
+          input: {
+            backgroundColor: CARD,
+            borderColor: HAIRLINE,
+            color: SNOW,
+          },
+        }}
       />
 
       <Group gap="xs" wrap="wrap">
         <ProtocolFilterChip
           label={t('common.all')}
-          color="blue"
+          accent={CYAN}
           active={protocolFilter === 'all'}
           onClick={() => setProtocolFilter('all')}
         />
@@ -218,7 +244,7 @@ export function ProfilesPage() {
           <ProtocolFilterChip
             key={p}
             label={PROTOCOL_LABELS[p]}
-            color={PROTOCOL_COLORS[p] ?? 'gray'}
+            accent={PROTOCOL_ACCENT[p] ?? MIST}
             active={protocolFilter === p}
             onClick={() => setProtocolFilter(p)}
           />
@@ -226,12 +252,17 @@ export function ProfilesPage() {
       </Group>
 
       {filtered.length === 0 ? (
-        <Card withBorder padding="xl" radius="md">
+        <Card withBorder padding="xl" radius="md" style={{ backgroundColor: CARD, borderColor: HAIRLINE }}>
           <Stack align="center" gap="sm">
-            <ThemeIcon size={48} radius="md" variant="light" color="gray">
+            <ThemeIcon
+              size={48}
+              radius="md"
+              variant="light"
+              style={{ backgroundColor: `${MIST}1A`, color: MIST, border: `1px solid ${MIST}33` }}
+            >
               <IconBolt size={24} />
             </ThemeIcon>
-            <Text c="dimmed" size="sm">
+            <Text size="sm" style={{ color: MIST }}>
               {profiles.length === 0
                 ? t('profiles.emptyAll')
                 : t('profiles.emptyFiltered')}
@@ -261,8 +292,6 @@ export function ProfilesPage() {
         loading={createMutation.isPending}
         onSubmit={async (input) => {
           await createMutation.mutateAsync(input as CreateProfileInput);
-          // Close create-modal once mutation succeeds — onSuccess in the
-          // mutation handler already opens DeployModal for the next step.
           closeCreate();
         }}
       />
@@ -294,25 +323,31 @@ export function ProfilesPage() {
 
 function ProtocolFilterChip({
   label,
-  color,
+  accent,
   active,
   onClick,
 }: {
   label: string;
-  color: string;
+  accent: string;
   active: boolean;
   onClick: () => void;
 }) {
   return (
-    <Badge
-      variant={active ? 'filled' : 'light'}
-      color={color}
-      style={{ cursor: 'pointer', textTransform: 'none' }}
-      size="lg"
+    <UnstyledButton
       onClick={onClick}
+      style={{
+        padding: '6px 12px',
+        borderRadius: 999,
+        fontSize: 12,
+        fontWeight: 500,
+        backgroundColor: active ? accent : `${accent}1A`,
+        color: active ? GROUND : accent,
+        border: `1px solid ${active ? accent : `${accent}33`}`,
+        transition: 'all 120ms',
+      }}
     >
       {label}
-    </Badge>
+    </UnstyledButton>
   );
 }
 
@@ -332,29 +367,41 @@ function ProfileCard({
   onTest: () => void;
 }) {
   const { t } = useTranslation();
-  const color = PROTOCOL_COLORS[profile.protocol] ?? 'gray';
+  const accent = PROTOCOL_ACCENT[profile.protocol] ?? MIST;
   return (
     <Card
       withBorder
       padding="md"
       radius="md"
       style={{
+        backgroundColor: CARD,
+        borderColor: HAIRLINE,
         borderTopWidth: 3,
-        borderTopColor: `var(--mantine-color-${color}-6)`,
+        borderTopColor: accent,
         opacity: profile.enabled ? 1 : 0.65,
+        position: 'relative',
       }}
     >
       <Group justify="space-between" align="flex-start" wrap="nowrap" mb="md">
         <Group gap="sm" wrap="nowrap" style={{ minWidth: 0 }}>
-          <ThemeIcon size={36} radius="md" variant="light" color={color}>
+          <ThemeIcon
+            size={36}
+            radius="md"
+            variant="light"
+            style={{
+              backgroundColor: `${accent}1A`,
+              color: accent,
+              border: `1px solid ${accent}33`,
+            }}
+          >
             <IconBolt size={18} />
           </ThemeIcon>
           <Stack gap={0} style={{ minWidth: 0 }}>
-            <Text fw={700} size="sm" truncate>
+            <Text fw={600} size="sm" truncate style={{ color: SNOW }}>
               {profile.name}
             </Text>
             {profile.description && (
-              <Text size="xs" c="dimmed" lineClamp={1}>
+              <Text size="xs" lineClamp={1} style={{ color: MIST }}>
                 {profile.description}
               </Text>
             )}
@@ -362,11 +409,11 @@ function ProfileCard({
         </Group>
         <Menu shadow="md" position="bottom-end" withinPortal>
           <Menu.Target>
-            <ActionIcon variant="subtle" color="gray" size="sm">
+            <ActionIcon variant="subtle" size="sm" style={{ color: MIST }}>
               <IconDotsVertical size={14} />
             </ActionIcon>
           </Menu.Target>
-          <Menu.Dropdown>
+          <Menu.Dropdown style={{ backgroundColor: CARD, borderColor: HAIRLINE }}>
             <Menu.Item leftSection={<IconRocket size={14} />} onClick={onDeploy}>
               {t('profiles.deployToNodes')}
             </Menu.Item>
@@ -384,23 +431,44 @@ function ProfileCard({
       </Group>
 
       <Group gap="xs" mb="md">
-        <Badge variant="light" color={color} size="sm" tt="uppercase">
+        <Badge
+          variant="light"
+          size="sm"
+          style={{
+            backgroundColor: `${accent}1A`,
+            color: accent,
+            border: `1px solid ${accent}33`,
+            textTransform: 'uppercase',
+            fontFamily: "'JetBrains Mono', monospace",
+            letterSpacing: '0.08em',
+          }}
+        >
           {profile.protocol}
         </Badge>
         <Tooltip label={bindingCount === 0 ? t('profiles.bindingsTooltipNone') : t('profiles.bindingsTooltipDeployed')}>
-          <Badge
-            variant={bindingCount === 0 ? 'outline' : 'filled'}
-            color={bindingCount === 0 ? 'gray' : 'teal'}
-            size="sm"
-            leftSection={<IconServer2 size={11} />}
-            style={{ cursor: 'pointer' }}
+          <Box
             onClick={onDeploy}
+            style={{
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '2px 8px',
+              borderRadius: 999,
+              fontSize: 11,
+              fontWeight: 500,
+              backgroundColor: bindingCount === 0 ? 'transparent' : `${MOSS}1A`,
+              color: bindingCount === 0 ? MIST : MOSS,
+              border: `1px solid ${bindingCount === 0 ? HAIRLINE : `${MOSS}33`}`,
+              fontFamily: "'JetBrains Mono', monospace",
+            }}
           >
+            <IconServer2 size={11} />
             {bindingCount}
-          </Badge>
+          </Box>
         </Tooltip>
         {!profile.enabled && (
-          <Badge variant="default" color="gray" size="sm">
+          <Badge variant="default" size="sm" style={{ backgroundColor: `${MIST}1A`, color: MIST }}>
             off
           </Badge>
         )}
@@ -408,13 +476,18 @@ function ProfileCard({
 
       <Button
         variant="light"
-        color={color}
         fullWidth
         leftSection={<IconRocket size={14} />}
         onClick={onDeploy}
+        style={{
+          backgroundColor: `${accent}1A`,
+          color: accent,
+          border: `1px solid ${accent}33`,
+        }}
       >
         {t('profiles.deployToNodes')}
       </Button>
     </Card>
   );
 }
+

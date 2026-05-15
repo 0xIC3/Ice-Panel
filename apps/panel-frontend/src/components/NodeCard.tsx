@@ -26,24 +26,25 @@ import { useTranslation } from 'react-i18next';
 import type { DashboardOverview } from '../lib/api';
 import { countryFlag } from '../lib/countries';
 
+const HAIRLINE = '#1C2A3D';
+const CARD = '#0F1A28';
+const GROUND = '#08101A';
+const SNOW = '#C8D4E3';
+const MIST = '#7A8BA3';
+const CYAN = '#7DD3FC';
+const MOSS = '#A7D8B9';
+const AMBER = '#F5B14C';
+const RED = '#E07A5F';
+const VIOLET = '#A78BFA';
+
 type DashboardNode = DashboardOverview['nodes'][number];
 
-/**
- * Card props are a relaxed shape — only the fields the card actually
- * renders. NodesPage feeds either the full DashboardNode (when overview
- * has caught up) or a synthetic stub (when /api/dashboard hasn't returned
- * yet), so we don't insist on `address` / `protocol` here.
- */
 interface CardNode {
   id: string;
   name: string;
   status: string;
   countryCode: string | null;
-  // Slice 27.5 — region tag (resolved upstream so the card stays plain).
   regionLabel: string | null;
-  // Slice 27.5 — `currentUsers/maxUsers` utilization. currentUsers is
-  // approximate (sum across squads w/ access — overcounts cross-squad
-  // users); good enough for at-a-glance. NULL/0 = no bar.
   maxUsers: number | null;
   approxUsers: number;
   lastStatusChange: string | null;
@@ -61,18 +62,19 @@ interface Props {
   refreshLoading?: boolean;
 }
 
-/**
- * Rich node card. Differentiator vs Remnawave's single-row metric strip:
- *   - Progress bars for CPU/RAM/Disk (visual at a glance)
- *   - Live throughput (Mbps if avail, else B/s)
- *   - Status pulse (animated dot) on online
- *   - Per-node degraded reason surfaced inline (Remnawave hides it)
- *   - Country flag inline with name
- *   - Profile/inbound count visible without click
- *
- * Compact-mode toggle in NodesPage swaps card → row layout for admins
- * with 30+ nodes.
- */
+function statusAccent(status: string): string {
+  if (status === 'online') return MOSS;
+  if (status === 'disabled' || status === 'unknown') return MIST;
+  if (status === 'degraded') return AMBER;
+  return RED;
+}
+
+function thresholdColor(p: number): string {
+  if (p > 85) return RED;
+  if (p > 60) return AMBER;
+  return MOSS;
+}
+
 export function NodeCard({
   node,
   onEdit,
@@ -82,40 +84,36 @@ export function NodeCard({
 }: Props) {
   const { t } = useTranslation();
   const m = node.metrics;
-  const statusColor =
-    node.status === 'online'
-      ? 'teal'
-      : node.status === 'disabled'
-        ? 'gray'
-        : 'red';
+  const accent = statusAccent(node.status);
+  const isOffline = node.status === 'offline' || node.status === 'unreachable';
+  const isDegraded = node.status === 'degraded';
 
-  const isDegraded =
-    node.status === 'online' &&
-    typeof node.lastStatusChange === 'string' &&
-    false; // placeholder: we'd surface lastStatusMessage if we had it here
+  const bgTint = isOffline
+    ? `linear-gradient(180deg, ${RED}0D 0%, ${CARD} 60%)`
+    : isDegraded
+      ? `linear-gradient(180deg, ${AMBER}0D 0%, ${CARD} 60%)`
+      : CARD;
+
+  const borderColor = isOffline ? `${RED}55` : isDegraded ? `${AMBER}55` : HAIRLINE;
 
   return (
-    <Card withBorder padding="md" radius="md" style={{ position: 'relative' }}>
-      {/* Top accent stripe — colored by status, gives card a "vibe" */}
-      <Box
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          height: 3,
-          background: `var(--mantine-color-${statusColor}-6)`,
-          borderTopLeftRadius: 'var(--mantine-radius-md)',
-          borderTopRightRadius: 'var(--mantine-radius-md)',
-        }}
-      />
-
+    <Card
+      withBorder
+      padding="md"
+      radius="md"
+      style={{
+        position: 'relative',
+        background: bgTint,
+        borderColor,
+        borderTopWidth: 3,
+        borderTopColor: accent,
+      }}
+    >
       <Stack gap="sm">
-        {/* Header */}
         <Group justify="space-between" wrap="nowrap" align="flex-start">
           <Group gap="sm" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
             <Box style={{ position: 'relative' }}>
-              <IconServer2 size={20} style={{ color: 'var(--mantine-color-dimmed)' }} />
+              <IconServer2 size={20} style={{ color: MIST }} />
               {node.status === 'online' && (
                 <Box
                   style={{
@@ -125,9 +123,10 @@ export function NodeCard({
                     width: 8,
                     height: 8,
                     borderRadius: '50%',
-                    background: 'var(--mantine-color-teal-5)',
-                    border: '2px solid var(--mantine-color-dark-7)',
-                    animation: 'pulse 2s ease-in-out infinite',
+                    background: MOSS,
+                    boxShadow: `0 0 8px ${MOSS}99`,
+                    border: `2px solid ${GROUND}`,
+                    animation: 'floe-pulse 2s ease-in-out infinite',
                   }}
                 />
               )}
@@ -139,18 +138,32 @@ export function NodeCard({
                     {countryFlag(node.countryCode)}
                   </Text>
                 )}
-                <Text fw={700} size="sm" truncate>
+                <Text fw={600} size="sm" truncate style={{ color: SNOW }}>
                   {node.name}
                 </Text>
                 {node.regionLabel && (
-                  <Badge size="xs" variant="light" color="cyan" tt="uppercase">
+                  <Badge
+                    size="xs"
+                    variant="light"
+                    style={{
+                      backgroundColor: `${CYAN}1A`,
+                      color: CYAN,
+                      border: `1px solid ${CYAN}33`,
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0,
+                      fontFamily: "'JetBrains Mono', monospace",
+                      letterSpacing: '0.08em',
+                    }}
+                  >
                     {node.regionLabel}
                   </Badge>
                 )}
               </Group>
-              <Text size="xs" c="dimmed" ff="monospace" truncate>
-                {/* address пишется на странице, нету в dashboard — заменяем
-                    inboundCount и todayBytes показываем здесь */}
+              <Text
+                size="xs"
+                truncate
+                style={{ color: MIST, fontFamily: "'JetBrains Mono', monospace" }}
+              >
                 {t('nodes.cardSummary', {
                   count: node.inboundCount,
                   bytes: formatBytes(node.todayBytes),
@@ -159,43 +172,53 @@ export function NodeCard({
             </Stack>
           </Group>
           <Group gap={4} wrap="nowrap">
-            <Badge variant="light" color={statusColor} size="sm" tt="uppercase">
+            <Badge
+              variant="light"
+              size="sm"
+              style={{
+                backgroundColor: `${accent}1A`,
+                color: accent,
+                border: `1px solid ${accent}33`,
+                textTransform: 'uppercase',
+                fontFamily: "'JetBrains Mono', monospace",
+                letterSpacing: '0.08em',
+              }}
+            >
               {node.status}
             </Badge>
             <Menu position="bottom-end" withinPortal>
               <Menu.Target>
-                <ActionIcon variant="subtle" color="gray" size="sm">
+                <ActionIcon variant="subtle" size="sm" style={{ color: MIST }}>
                   <IconDotsVertical size={14} />
                 </ActionIcon>
               </Menu.Target>
-              <Menu.Dropdown>
+              <Menu.Dropdown style={{ backgroundColor: CARD, borderColor: HAIRLINE }}>
                 <Menu.Item
                   leftSection={<IconKey size={14} />}
                   onClick={onRefreshBootstrap}
                   disabled={refreshLoading}
                 >
-                  Перевыпустить bootstrap
+                  Re-bootstrap
                 </Menu.Item>
                 <Menu.Item leftSection={<IconEdit size={14} />} onClick={onEdit}>
-                  Редактировать
+                  Edit
                 </Menu.Item>
                 <Menu.Divider />
                 <Menu.Item leftSection={<IconTrash size={14} />} color="red" onClick={onDelete}>
-                  Удалить
+                  Delete
                 </Menu.Item>
               </Menu.Dropdown>
             </Menu>
           </Group>
         </Group>
 
-        {/* Metrics grid — 3 progress bars in a row */}
         {m ? (
           <Stack gap={6}>
             <MetricBar
               icon={<IconCpu size={12} />}
               label="CPU"
               value={m.cpu.usagePercent}
-              tooltip={`${m.cpu.cores} ядер · LA ${m.cpu.loadAvg1.toFixed(2)} / ${m.cpu.loadAvg5.toFixed(2)} / ${m.cpu.loadAvg15.toFixed(2)}`}
+              tooltip={`${m.cpu.cores} cores · LA ${m.cpu.loadAvg1.toFixed(2)} / ${m.cpu.loadAvg5.toFixed(2)} / ${m.cpu.loadAvg15.toFixed(2)}`}
             />
             <MetricBar
               icon={<IconDatabase size={12} />}
@@ -216,76 +239,76 @@ export function NodeCard({
             px="sm"
             style={{
               borderRadius: 6,
-              background: 'var(--mantine-color-dark-6)',
+              background: GROUND,
+              border: `1px solid ${HAIRLINE}`,
               textAlign: 'center',
             }}
           >
-            <Text size="xs" c="dimmed">
-              Метрики ещё не пришли — первый poll в течение 15 сек.
+            <Text size="xs" style={{ color: MIST }}>
+              Metrics pending — first poll within 15s
             </Text>
           </Box>
         )}
 
-        {/* Slice 27.5 — capacity gauge (approximate, see CardNode comment).
-            Hidden when admin hasn't set maxUsers (no opinion → no bar). */}
         {node.maxUsers && node.maxUsers > 0 && (
           <Box>
             <Group justify="space-between" mb={2}>
-              <Text size="xs" c="dimmed">
-                Загрузка
+              <Text size="xs" style={{ color: MIST }}>
+                Load
               </Text>
-              <Text size="xs" c="dimmed" ff="monospace">
+              <Text
+                size="xs"
+                style={{ color: SNOW, fontFamily: "'JetBrains Mono', monospace" }}
+              >
                 {node.approxUsers}/{node.maxUsers}
               </Text>
             </Group>
             <Progress
-              value={Math.min(
-                100,
-                Math.round((node.approxUsers / node.maxUsers) * 100),
-              )}
+              value={Math.min(100, Math.round((node.approxUsers / node.maxUsers) * 100))}
               size="xs"
-              color={
-                node.approxUsers >= node.maxUsers
-                  ? 'red'
-                  : node.approxUsers / node.maxUsers > 0.85
-                    ? 'yellow'
-                    : 'teal'
-              }
+              styles={{
+                root: { backgroundColor: HAIRLINE },
+                section: {
+                  backgroundColor:
+                    node.approxUsers >= node.maxUsers
+                      ? RED
+                      : node.approxUsers / node.maxUsers > 0.85
+                        ? AMBER
+                        : MOSS,
+                },
+              }}
             />
           </Box>
         )}
 
-        {/* Throughput placeholders — we'd wire live up/down rate from a
-            sparkline stream in slice 27.5. For now the card is metrics-rich
-            enough to differentiate from Remnawave's single-row strip. */}
-        <Group gap="xs" wrap="nowrap">
-          <Tooltip label="Сегодня скачано (общее за день)">
+        <Group gap="sm" wrap="nowrap" pt={2} style={{ borderTop: `1px solid ${HAIRLINE}` }}>
+          <Tooltip label="Traffic today">
             <Group gap={4} wrap="nowrap">
-              <IconDownload size={12} style={{ color: 'var(--mantine-color-blue-5)' }} />
-              <Text size="xs" c="dimmed">
+              <IconDownload size={12} style={{ color: CYAN }} />
+              <Text
+                size="xs"
+                style={{ color: SNOW, fontFamily: "'JetBrains Mono', monospace" }}
+              >
                 {formatBytes(node.todayBytes)}
               </Text>
             </Group>
           </Tooltip>
-          <Tooltip label="Bindings (инбаундов на ноде)">
+          <Tooltip label="Inbound bindings on this node">
             <Group gap={4} wrap="nowrap">
-              <IconUpload size={12} style={{ color: 'var(--mantine-color-grape-5)' }} />
-              <Text size="xs" c="dimmed">
+              <IconUpload size={12} style={{ color: VIOLET }} />
+              <Text
+                size="xs"
+                style={{ color: SNOW, fontFamily: "'JetBrains Mono', monospace" }}
+              >
                 {node.inboundCount} bindings
               </Text>
             </Group>
           </Tooltip>
-          {isDegraded && (
-            <Badge variant="light" color="yellow" size="xs">
-              degraded
-            </Badge>
-          )}
         </Group>
       </Stack>
 
-      {/* Pulse keyframes — scoped via inline style tag */}
       <style>{`
-        @keyframes pulse {
+        @keyframes floe-pulse {
           0%, 100% { opacity: 1; transform: scale(1); }
           50% { opacity: 0.7; transform: scale(1.3); }
         }
@@ -305,22 +328,43 @@ function MetricBar({
   value: number;
   tooltip: string;
 }) {
-  const color = value > 85 ? 'red' : value > 60 ? 'yellow' : 'teal';
+  const color = thresholdColor(value);
   return (
     <Tooltip label={tooltip} withArrow>
       <Box>
         <Group gap={6} mb={2} wrap="nowrap">
-          <Box style={{ color: `var(--mantine-color-${color}-5)`, display: 'flex' }}>
-            {icon}
-          </Box>
-          <Text size="xs" c="dimmed" fw={500} style={{ flex: 1 }}>
+          <Box style={{ color, display: 'flex' }}>{icon}</Box>
+          <Text
+            size="xs"
+            fw={500}
+            style={{
+              flex: 1,
+              color: MIST,
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 10,
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+            }}
+          >
             {label}
           </Text>
-          <Text size="xs" fw={600}>
+          <Text
+            size="xs"
+            fw={600}
+            style={{ color: SNOW, fontFamily: "'JetBrains Mono', monospace" }}
+          >
             {value.toFixed(0)}%
           </Text>
         </Group>
-        <Progress value={value} color={color} size="xs" radius="xs" />
+        <Progress
+          value={value}
+          size="xs"
+          radius="xs"
+          styles={{
+            root: { backgroundColor: HAIRLINE },
+            section: { backgroundColor: color },
+          }}
+        />
       </Box>
     </Tooltip>
   );

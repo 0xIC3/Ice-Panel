@@ -4,7 +4,6 @@ import {
   Badge,
   Card,
   Group,
-  Paper,
   Progress,
   ScrollArea,
   SimpleGrid,
@@ -20,7 +19,6 @@ import {
   IconActivity,
   IconArrowDownRight,
   IconArrowUpRight,
-  IconCalendar,
   IconChartArea,
   IconClock,
   IconCpu,
@@ -34,20 +32,49 @@ import {
   IconWifi,
 } from '@tabler/icons-react';
 import { getDashboardOverview, type DashboardOverview } from '../lib/api';
+import { PageHero } from '../components/PageHero';
+
+const HAIRLINE = '#1C2A3D';
+const CARD = '#0F1A28';
+const SNOW = '#C8D4E3';
+const MIST = '#7A8BA3';
+const CYAN = '#7DD3FC';
+const MOSS = '#A7D8B9';
+const AMBER = '#F5B14C';
+const RED = '#E07A5F';
+const VIOLET = '#A78BFA';
+
+const MONO_LABEL = {
+  fontFamily: "'JetBrains Mono', monospace",
+  fontSize: 10,
+  letterSpacing: '0.12em',
+  textTransform: 'uppercase' as const,
+  color: MIST,
+};
+
+const DISPLAY = {
+  fontFamily: "'Space Grotesk', Inter, sans-serif",
+};
+
+const cardStyle = {
+  backgroundColor: CARD,
+  borderColor: HAIRLINE,
+};
 
 const NODE_STATUS_COLOR: Record<string, string> = {
-  online: 'teal',
-  offline: 'red',
-  unreachable: 'red',
-  unknown: 'gray',
-  disabled: 'gray',
+  online: MOSS,
+  offline: RED,
+  unreachable: RED,
+  unknown: MIST,
+  disabled: MIST,
+  degraded: AMBER,
 };
 
 const EVENT_COLOR: Record<string, string> = {
-  'user.created': 'teal',
-  'user.updated': 'blue',
-  'user.deleted': 'red',
-  'user.status-changed': 'yellow',
+  'user.created': MOSS,
+  'user.updated': CYAN,
+  'user.deleted': RED,
+  'user.status-changed': AMBER,
 };
 
 function formatBytes(n: number): string {
@@ -56,6 +83,15 @@ function formatBytes(n: number): string {
   const i = Math.min(Math.floor(Math.log2(Math.max(1, n)) / 10), units.length - 1);
   const v = n / 1024 ** i;
   return `${v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2)} ${units[i]}`;
+}
+
+function splitBytes(n: number): { value: string; unit: string } {
+  if (n === 0) return { value: '0', unit: 'B' };
+  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB'];
+  const i = Math.min(Math.floor(Math.log2(Math.max(1, n)) / 10), units.length - 1);
+  const v = n / 1024 ** i;
+  const value = v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2);
+  return { value, unit: units[i] };
 }
 
 function formatDelta(value: number, base: number): { text: string; positive: boolean } {
@@ -76,33 +112,58 @@ function relativeTime(iso: string): string {
   return `${Math.round(hr / 24)}d ago`;
 }
 
+function thresholdColor(p: number, warn = 60, crit = 85): string {
+  if (p > crit) return RED;
+  if (p > warn) return AMBER;
+  return MOSS;
+}
+
 interface StatCardProps {
   icon: ReactNode;
   label: string;
   value: string;
+  unit?: string;
   hint?: string;
-  hintColor?: 'teal' | 'red' | 'gray';
-  iconColor: string;
+  hintColor?: string;
+  accent: string;
 }
 
-function StatCard({ icon, label, value, hint, hintColor = 'gray', iconColor }: StatCardProps) {
+function StatCard({ icon, label, value, unit, hint, hintColor = MIST, accent }: StatCardProps) {
   return (
-    <Card withBorder padding="lg" radius="md">
+    <Card withBorder padding="lg" radius="md" style={cardStyle}>
       <Group justify="space-between" align="flex-start" wrap="nowrap">
-        <Stack gap={4}>
-          <Text size="xs" c="dimmed" tt="uppercase" fw={600} lts={0.6}>
-            {label}
-          </Text>
-          <Text size="xl" fw={700} lh={1.1}>
-            {value}
-          </Text>
+        <Stack gap={6} style={{ minWidth: 0 }}>
+          <Text style={MONO_LABEL}>{label}</Text>
+          <Group gap={6} align="baseline" wrap="nowrap">
+            <Text
+              style={{ ...DISPLAY, fontSize: 44, fontWeight: 500, color: SNOW, lineHeight: 1.05 }}
+            >
+              {value}
+            </Text>
+            {unit && (
+              <Text
+                style={{ ...DISPLAY, fontSize: 20, fontWeight: 500, color: MIST }}
+              >
+                {unit}
+              </Text>
+            )}
+          </Group>
           {hint && (
-            <Text size="xs" c={hintColor}>
+            <Text size="xs" style={{ color: hintColor }}>
               {hint}
             </Text>
           )}
         </Stack>
-        <ThemeIcon size={42} radius="md" variant="light" color={iconColor}>
+        <ThemeIcon
+          size={40}
+          radius="md"
+          variant="light"
+          style={{
+            backgroundColor: `${accent}1A`,
+            color: accent,
+            border: `1px solid ${accent}33`,
+          }}
+        >
           {icon}
         </ThemeIcon>
       </Group>
@@ -115,7 +176,7 @@ function Sparkline({ data, height = 110 }: { data: { hour: string; bytes: number
   if (data.length < 2) {
     return (
       <Group justify="center" h={height}>
-        <Text c="dimmed" size="sm">
+        <Text size="sm" style={{ color: MIST }}>
           {t('dashboard.traffic.noChartData')}
         </Text>
       </Group>
@@ -132,12 +193,12 @@ function Sparkline({ data, height = 110 }: { data: { hour: string; bytes: number
     <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} preserveAspectRatio="none">
       <defs>
         <linearGradient id="sparkGrad" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor="var(--mantine-color-teal-5)" stopOpacity="0.45" />
-          <stop offset="100%" stopColor="var(--mantine-color-teal-5)" stopOpacity="0" />
+          <stop offset="0%" stopColor={CYAN} stopOpacity="0.45" />
+          <stop offset="100%" stopColor={CYAN} stopOpacity="0" />
         </linearGradient>
       </defs>
       <path d={area} fill="url(#sparkGrad)" />
-      <path d={line} fill="none" stroke="var(--mantine-color-teal-4)" strokeWidth={2} />
+      <path d={line} fill="none" stroke={CYAN} strokeWidth={2} />
     </svg>
   );
 }
@@ -154,7 +215,7 @@ export function DashboardPage() {
     return (
       <Stack>
         <Title order={2}>{t('dashboard.title')}</Title>
-        <Text c="dimmed">{t('common.loading')}</Text>
+        <Text style={{ color: MIST }}>{t('common.loading')}</Text>
       </Stack>
     );
   }
@@ -162,7 +223,7 @@ export function DashboardPage() {
     return (
       <Stack>
         <Title order={2}>{t('dashboard.title')}</Title>
-        <Text c="red">{t('dashboard.health.noData')}</Text>
+        <Text style={{ color: RED }}>{t('dashboard.health.noData')}</Text>
       </Stack>
     );
   }
@@ -174,23 +235,35 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
   const { t } = useTranslation();
   const { users, traffic, system, nodes, byProtocol, topUsersToday, recentEvents } = data;
   const todayDelta = formatDelta(traffic.todayBytes, traffic.yesterdayBytes);
+  const todaySplit = splitBytes(traffic.todayBytes);
+
+  const now = new Date();
+  const timeLabel = now.toLocaleString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).toUpperCase();
+  const heroHeadline =
+    users.onlineNow <= users.total * 0.3
+      ? 'Quiet day on the line.'
+      : users.onlineNow >= users.total * 0.7
+        ? 'Busy fleet today.'
+        : 'Steady traffic.';
 
   return (
     <Stack gap="lg">
-      <Group justify="space-between" align="flex-end">
-        <Stack gap={2}>
-          <Title order={2}>{t('dashboard.title')}</Title>
-          <Text c="dimmed" size="sm">
-            {t('dashboard.subtitle')}
-          </Text>
-        </Stack>
-      </Group>
+      <PageHero
+        eyebrow={`LIVE · AUTO-REFRESH 10S · ${timeLabel}`}
+        title={heroHeadline}
+        subtitle={`${system.onlineNodeCount} nodes online, ${users.byStatus.active ?? 0} users active. Aggregated traffic and live host telemetry below — pulled fresh every ten seconds.`}
+      />
 
       {/* Hero row */}
       <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="md">
         <StatCard
-          icon={<IconWifi size={22} />}
-          iconColor="teal"
+          icon={<IconWifi size={20} />}
+          accent={MOSS}
           label={t('dashboard.hero.onlineNow')}
           value={`${users.onlineNow}`}
           hint={t('dashboard.hero.onlineHint', {
@@ -199,44 +272,53 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
           })}
         />
         <StatCard
-          icon={<IconChartArea size={22} />}
-          iconColor="cyan"
+          icon={<IconChartArea size={20} />}
+          accent={CYAN}
           label={t('dashboard.hero.trafficToday')}
-          value={formatBytes(traffic.todayBytes)}
+          value={todaySplit.value}
+          unit={todaySplit.unit}
           hint={t('dashboard.hero.trafficVsYesterday', { delta: todayDelta.text })}
-          hintColor={todayDelta.positive ? 'teal' : 'red'}
+          hintColor={todayDelta.positive ? MOSS : RED}
         />
         <StatCard
-          icon={<IconUserCheck size={22} />}
-          iconColor="violet"
+          icon={<IconUserCheck size={20} />}
+          accent={VIOLET}
           label={t('dashboard.hero.activeUsers')}
           value={`${users.byStatus.active ?? 0}`}
           hint={t('dashboard.hero.ofTotal', { total: users.total })}
         />
         <StatCard
-          icon={<IconServer2 size={22} />}
-          iconColor="indigo"
+          icon={<IconServer2 size={20} />}
+          accent={system.onlineNodeCount === system.totalNodeCount ? MOSS : AMBER}
           label={t('dashboard.hero.nodesOnline')}
-          value={`${system.onlineNodeCount} / ${system.totalNodeCount}`}
+          value={`${system.onlineNodeCount}`}
+          unit={`/ ${system.totalNodeCount}`}
           hint={
             system.onlineNodeCount === system.totalNodeCount
               ? t('dashboard.hero.allNodesUp')
               : t('dashboard.hero.someNodesDown')
           }
-          hintColor={system.onlineNodeCount === system.totalNodeCount ? 'teal' : 'red'}
+          hintColor={system.onlineNodeCount === system.totalNodeCount ? MOSS : AMBER}
         />
       </SimpleGrid>
 
       {/* Traffic sparkline */}
-      <Card withBorder padding="lg" radius="md">
-        <Group justify="space-between" mb="xs">
+      <Card withBorder padding="lg" radius="md" style={cardStyle}>
+        <Group justify="space-between" mb="xs" wrap="wrap">
           <Group gap="xs">
-            <ThemeIcon size={28} radius="md" variant="light" color="teal">
+            <ThemeIcon
+              size={28}
+              radius="md"
+              variant="light"
+              style={{ backgroundColor: `${CYAN}1A`, color: CYAN, border: `1px solid ${CYAN}33` }}
+            >
               <IconTrendingUp size={16} />
             </ThemeIcon>
             <Stack gap={0}>
-              <Text fw={600}>{t('dashboard.traffic.title')}</Text>
-              <Text size="xs" c="dimmed">
+              <Text fw={600} style={{ color: SNOW }}>
+                {t('dashboard.traffic.title')}
+              </Text>
+              <Text size="xs" style={{ color: MIST }}>
                 {t('dashboard.traffic.subtitle')}
               </Text>
             </Stack>
@@ -253,19 +335,26 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
       </Card>
 
       {/* User status breakdown */}
-      <Card withBorder padding="lg" radius="md">
+      <Card withBorder padding="lg" radius="md" style={cardStyle}>
         <Group gap="xs" mb="md">
-          <ThemeIcon size={28} radius="md" variant="light" color="violet">
+          <ThemeIcon
+            size={28}
+            radius="md"
+            variant="light"
+            style={{ backgroundColor: `${VIOLET}1A`, color: VIOLET, border: `1px solid ${VIOLET}33` }}
+          >
             <IconUsers size={16} />
           </ThemeIcon>
-          <Text fw={600}>{t('dashboard.userStatus.title')}</Text>
+          <Text fw={600} style={{ color: SNOW }}>
+            {t('dashboard.userStatus.title')}
+          </Text>
         </Group>
         <SimpleGrid cols={{ base: 2, sm: 3, lg: 5 }} spacing="sm">
-          <StatusChip label={t('dashboard.userStatus.total')} value={users.total} color="blue" />
-          <StatusChip label={t('dashboard.userStatus.active')} value={users.byStatus.active ?? 0} color="teal" />
-          <StatusChip label={t('dashboard.userStatus.expired')} value={users.byStatus.expired ?? 0} color="red" />
-          <StatusChip label={t('dashboard.userStatus.limited')} value={users.byStatus.limited ?? 0} color="yellow" />
-          <StatusChip label={t('dashboard.userStatus.disabled')} value={users.byStatus.disabled ?? 0} color="gray" />
+          <StatusChip label={t('dashboard.userStatus.total')} value={users.total} dot={CYAN} />
+          <StatusChip label={t('dashboard.userStatus.active')} value={users.byStatus.active ?? 0} dot={MOSS} />
+          <StatusChip label={t('dashboard.userStatus.expired')} value={users.byStatus.expired ?? 0} dot={RED} />
+          <StatusChip label={t('dashboard.userStatus.limited')} value={users.byStatus.limited ?? 0} dot={AMBER} />
+          <StatusChip label={t('dashboard.userStatus.disabled')} value={users.byStatus.disabled ?? 0} dot={MIST} />
         </SimpleGrid>
       </Card>
 
@@ -274,18 +363,25 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
 
       {/* Two-column row: nodes + protocols */}
       <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="md">
-        <Card withBorder padding="lg" radius="md">
+        <Card withBorder padding="lg" radius="md" style={cardStyle}>
           <Group gap="xs" mb="md">
-            <ThemeIcon size={28} radius="md" variant="light" color="indigo">
+            <ThemeIcon
+              size={28}
+              radius="md"
+              variant="light"
+              style={{ backgroundColor: `${CYAN}1A`, color: CYAN, border: `1px solid ${CYAN}33` }}
+            >
               <IconServer2 size={16} />
             </ThemeIcon>
-            <Text fw={600}>{t('dashboard.nodes.title')}</Text>
-            <Badge variant="light" color="gray">
+            <Text fw={600} style={{ color: SNOW }}>
+              {t('dashboard.nodes.title')}
+            </Text>
+            <Badge variant="light" color="gray" style={{ backgroundColor: `${MIST}1A`, color: MIST }}>
               {nodes.length}
             </Badge>
           </Group>
           {nodes.length === 0 ? (
-            <Text c="dimmed" size="sm">
+            <Text size="sm" style={{ color: MIST }}>
               {t('dashboard.nodes.empty')}
             </Text>
           ) : (
@@ -293,13 +389,13 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
               <Table verticalSpacing="xs" highlightOnHover>
                 <Table.Thead>
                   <Table.Tr>
-                    <Table.Th>{t('dashboard.nodes.cols.name')}</Table.Th>
-                    <Table.Th>{t('dashboard.nodes.cols.status')}</Table.Th>
-                    <Table.Th>{t('dashboard.health.cpu')}</Table.Th>
-                    <Table.Th>{t('dashboard.health.ram')}</Table.Th>
-                    <Table.Th>{t('dashboard.health.disk')}</Table.Th>
-                    <Table.Th ta="right">{t('dashboard.nodes.cols.profiles')}</Table.Th>
-                    <Table.Th ta="right">{t('dashboard.nodes.cols.today')}</Table.Th>
+                    <Table.Th style={MONO_LABEL}>{t('dashboard.nodes.cols.name')}</Table.Th>
+                    <Table.Th style={MONO_LABEL}>{t('dashboard.nodes.cols.status')}</Table.Th>
+                    <Table.Th style={MONO_LABEL}>{t('dashboard.health.cpu')}</Table.Th>
+                    <Table.Th style={MONO_LABEL}>{t('dashboard.health.ram')}</Table.Th>
+                    <Table.Th style={MONO_LABEL}>{t('dashboard.health.disk')}</Table.Th>
+                    <Table.Th ta="right" style={MONO_LABEL}>{t('dashboard.nodes.cols.profiles')}</Table.Th>
+                    <Table.Th ta="right" style={MONO_LABEL}>{t('dashboard.nodes.cols.today')}</Table.Th>
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
@@ -307,11 +403,11 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
                     <Table.Tr key={n.id}>
                       <Table.Td>
                         <Stack gap={0}>
-                          <Text size="sm" fw={500}>
+                          <Text size="sm" fw={500} style={{ color: SNOW }}>
                             {n.countryCode ? `${flagEmoji(n.countryCode)} ` : ''}
                             {n.name}
                           </Text>
-                          <Text size="xs" c="dimmed">
+                          <Text size="xs" style={{ color: MIST, fontFamily: "'JetBrains Mono', monospace" }}>
                             {n.address}
                           </Text>
                         </Stack>
@@ -324,9 +420,7 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
                               : t('dashboard.nodes.statusUnknown')
                           }
                         >
-                          <Badge color={NODE_STATUS_COLOR[n.status] ?? 'gray'} variant="light">
-                            {n.status}
-                          </Badge>
+                          <StatusDot color={NODE_STATUS_COLOR[n.status] ?? MIST} label={n.status} />
                         </Tooltip>
                       </Table.Td>
                       <Table.Td>
@@ -334,7 +428,7 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
                           percent={n.metrics?.cpu.usagePercent ?? null}
                           tooltip={
                             n.metrics
-                              ? `${n.metrics.cpu.cores} ядер · LA ${n.metrics.cpu.loadAvg1.toFixed(2)}/${n.metrics.cpu.loadAvg5.toFixed(2)}/${n.metrics.cpu.loadAvg15.toFixed(2)}`
+                              ? `${n.metrics.cpu.cores} cores · LA ${n.metrics.cpu.loadAvg1.toFixed(2)}/${n.metrics.cpu.loadAvg5.toFixed(2)}/${n.metrics.cpu.loadAvg15.toFixed(2)}`
                               : t('dashboard.nodes.metricsMissing')
                           }
                         />
@@ -359,8 +453,16 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
                           }
                         />
                       </Table.Td>
-                      <Table.Td ta="right">{n.inboundCount}</Table.Td>
-                      <Table.Td ta="right">{formatBytes(n.todayBytes)}</Table.Td>
+                      <Table.Td ta="right">
+                        <Text size="sm" style={{ color: SNOW, fontFamily: "'JetBrains Mono', monospace" }}>
+                          {n.inboundCount}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td ta="right">
+                        <Text size="sm" style={{ color: SNOW, fontFamily: "'JetBrains Mono', monospace" }}>
+                          {formatBytes(n.todayBytes)}
+                        </Text>
+                      </Table.Td>
                     </Table.Tr>
                   ))}
                 </Table.Tbody>
@@ -369,43 +471,59 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
           )}
         </Card>
 
-        <Card withBorder padding="lg" radius="md">
+        <Card withBorder padding="lg" radius="md" style={cardStyle}>
           <Group gap="xs" mb="md">
-            <ThemeIcon size={28} radius="md" variant="light" color="cyan">
+            <ThemeIcon
+              size={28}
+              radius="md"
+              variant="light"
+              style={{ backgroundColor: `${MOSS}1A`, color: MOSS, border: `1px solid ${MOSS}33` }}
+            >
               <IconNetwork size={16} />
             </ThemeIcon>
-            <Text fw={600}>{t('dashboard.protocols.title')}</Text>
-            <Badge variant="light" color="gray">
+            <Text fw={600} style={{ color: SNOW }}>
+              {t('dashboard.protocols.title')}
+            </Text>
+            <Badge variant="light" style={{ backgroundColor: `${MIST}1A`, color: MIST }}>
               {byProtocol.length}
             </Badge>
           </Group>
           {byProtocol.length === 0 ? (
-            <Text c="dimmed" size="sm">
+            <Text size="sm" style={{ color: MIST }}>
               {t('dashboard.protocols.empty')}
             </Text>
           ) : (
             <Stack gap="xs">
               {byProtocol.map((p) => (
-                <Paper key={p.protocol} withBorder p="sm" radius="sm">
+                <Card
+                  key={p.protocol}
+                  withBorder
+                  p="sm"
+                  radius="sm"
+                  style={{ backgroundColor: '#08101A', borderColor: HAIRLINE }}
+                >
                   <Group justify="space-between">
                     <Group gap="sm">
-                      <Badge variant="light" color="cyan">
+                      <Badge
+                        variant="light"
+                        style={{ backgroundColor: `${CYAN}1A`, color: CYAN, border: `1px solid ${CYAN}33` }}
+                      >
                         {p.protocol}
                       </Badge>
-                      <Text size="sm" c="dimmed">
+                      <Text size="sm" style={{ color: MIST }}>
                         {t('dashboard.protocols.profilesCount', { count: p.inboundCount })}
                       </Text>
                     </Group>
-                    <Group gap={4}>
-                      <Text size="sm" fw={600}>
+                    <Group gap={4} align="baseline">
+                      <Text size="sm" fw={600} style={{ color: SNOW, fontFamily: "'JetBrains Mono', monospace" }}>
                         {p.enabledUserCount}
                       </Text>
-                      <Text size="xs" c="dimmed">
+                      <Text size="xs" style={{ color: MIST }}>
                         {t('dashboard.protocols.users')}
                       </Text>
                     </Group>
                   </Group>
-                </Paper>
+                </Card>
               ))}
             </Stack>
           )}
@@ -414,15 +532,22 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
 
       {/* Two-column row: top users + recent events */}
       <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="md">
-        <Card withBorder padding="lg" radius="md">
+        <Card withBorder padding="lg" radius="md" style={cardStyle}>
           <Group gap="xs" mb="md">
-            <ThemeIcon size={28} radius="md" variant="light" color="orange">
+            <ThemeIcon
+              size={28}
+              radius="md"
+              variant="light"
+              style={{ backgroundColor: `${AMBER}1A`, color: AMBER, border: `1px solid ${AMBER}33` }}
+            >
               <IconActivity size={16} />
             </ThemeIcon>
-            <Text fw={600}>{t('dashboard.topUsers.title')}</Text>
+            <Text fw={600} style={{ color: SNOW }}>
+              {t('dashboard.topUsers.title')}
+            </Text>
           </Group>
           {topUsersToday.length === 0 ? (
-            <Text c="dimmed" size="sm">
+            <Text size="sm" style={{ color: MIST }}>
               {t('dashboard.topUsers.empty')}
             </Text>
           ) : (
@@ -430,14 +555,23 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
               {topUsersToday.map((u, i) => (
                 <Group key={u.id} justify="space-between">
                   <Group gap="sm">
-                    <ThemeIcon size={24} radius="xl" variant="light" color={i === 0 ? 'yellow' : 'gray'}>
+                    <ThemeIcon
+                      size={22}
+                      radius="xl"
+                      variant="light"
+                      style={{
+                        backgroundColor: i === 0 ? `${AMBER}1A` : `${MIST}1A`,
+                        color: i === 0 ? AMBER : MIST,
+                        border: `1px solid ${i === 0 ? AMBER : MIST}33`,
+                      }}
+                    >
                       <Text size="xs" fw={700}>
                         {i + 1}
                       </Text>
                     </ThemeIcon>
-                    <Text size="sm">{u.username}</Text>
+                    <Text size="sm" style={{ color: SNOW }}>{u.username}</Text>
                   </Group>
-                  <Text size="sm" fw={600} ff="monospace">
+                  <Text size="sm" fw={600} style={{ color: SNOW, fontFamily: "'JetBrains Mono', monospace" }}>
                     {formatBytes(u.bytes)}
                   </Text>
                 </Group>
@@ -446,15 +580,22 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
           )}
         </Card>
 
-        <Card withBorder padding="lg" radius="md">
+        <Card withBorder padding="lg" radius="md" style={cardStyle}>
           <Group gap="xs" mb="md">
-            <ThemeIcon size={28} radius="md" variant="light" color="grape">
+            <ThemeIcon
+              size={28}
+              radius="md"
+              variant="light"
+              style={{ backgroundColor: `${VIOLET}1A`, color: VIOLET, border: `1px solid ${VIOLET}33` }}
+            >
               <IconClock size={16} />
             </ThemeIcon>
-            <Text fw={600}>{t('dashboard.events.title')}</Text>
+            <Text fw={600} style={{ color: SNOW }}>
+              {t('dashboard.events.title')}
+            </Text>
           </Group>
           {recentEvents.length === 0 ? (
-            <Text c="dimmed" size="sm">
+            <Text size="sm" style={{ color: MIST }}>
               {t('dashboard.events.empty')}
             </Text>
           ) : (
@@ -462,6 +603,7 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
               {recentEvents.map((e) => {
                 const isCreate = e.eventType === 'user.created';
                 const Icon = isCreate ? IconArrowUpRight : IconArrowDownRight;
+                const accent = EVENT_COLOR[e.eventType] ?? MIST;
                 return (
                   <Group key={e.id} justify="space-between" wrap="nowrap">
                     <Group gap="xs" wrap="nowrap">
@@ -469,19 +611,23 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
                         size={22}
                         radius="xl"
                         variant="light"
-                        color={EVENT_COLOR[e.eventType] ?? 'gray'}
+                        style={{
+                          backgroundColor: `${accent}1A`,
+                          color: accent,
+                          border: `1px solid ${accent}33`,
+                        }}
                       >
                         <Icon size={12} />
                       </ThemeIcon>
                       <Stack gap={0}>
-                        <Text size="sm">{e.eventType}</Text>
-                        <Text size="xs" c="dimmed">
+                        <Text size="sm" style={{ color: SNOW }}>{e.eventType}</Text>
+                        <Text size="xs" style={{ color: MIST, fontFamily: "'JetBrains Mono', monospace" }}>
                           {e.username ?? e.userId.slice(0, 8)}
                         </Text>
                       </Stack>
                     </Group>
                     <Tooltip label={new Date(e.createdAt).toLocaleString()}>
-                      <Text size="xs" c="dimmed">
+                      <Text size="xs" style={{ color: MIST }}>
                         {relativeTime(e.createdAt)}
                       </Text>
                     </Tooltip>
@@ -494,15 +640,39 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
       </SimpleGrid>
 
       {/* Footer summary */}
-      <Group justify="space-between" gap="xs">
-        <Group gap="xs">
-          <IconCalendar size={14} stroke={1.5} color="var(--mantine-color-dimmed)" />
-          <Text size="xs" c="dimmed">
-            {t('dashboard.footer.neverOnline', { count: users.neverOnline })}
+      <Group
+        justify="space-between"
+        gap="xs"
+        pt="md"
+        mt="md"
+        style={{ borderTop: `1px solid ${HAIRLINE}` }}
+      >
+        <Group gap={8}>
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              backgroundColor: users.neverOnline > 0 ? AMBER : MOSS,
+              boxShadow: `0 0 6px ${(users.neverOnline > 0 ? AMBER : MOSS)}99`,
+            }}
+          />
+          <Text style={{ ...MONO_LABEL, color: users.neverOnline > 0 ? AMBER : MIST }}>
+            {users.neverOnline > 0
+              ? `${users.neverOnline} USER${users.neverOnline === 1 ? '' : 'S'} NEVER ONLINE · REVIEW PROVISIONING`
+              : 'ALL USERS PROVISIONED'}
           </Text>
         </Group>
-        <Text size="xs" c="dimmed">
-          {new Date().toLocaleString()}
+        <Text style={{ ...MONO_LABEL }}>
+          {new Date().toLocaleString('en-GB', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+          }).toUpperCase()}
+          {' '}MSK · V1.0.0-RC.2
         </Text>
       </Group>
     </Stack>
@@ -512,26 +682,26 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
 function SystemHealth({ host }: { host: DashboardOverview['host'] }) {
   const { t } = useTranslation();
   const cpuPct = host.cpu.samplePercent;
-  const cpuColor = cpuPct > 85 ? 'red' : cpuPct > 60 ? 'yellow' : 'teal';
-  const memColor =
-    host.memory.usedPercent > 90 ? 'red' : host.memory.usedPercent > 75 ? 'yellow' : 'teal';
-  const diskColor = host.disk
-    ? host.disk.usedPercent > 90
-      ? 'red'
-      : host.disk.usedPercent > 80
-        ? 'yellow'
-        : 'teal'
-    : 'gray';
+  const cpuColor = thresholdColor(cpuPct);
+  const memColor = thresholdColor(host.memory.usedPercent, 75, 90);
+  const diskColor = host.disk ? thresholdColor(host.disk.usedPercent, 80, 90) : MIST;
 
   return (
-    <Card withBorder padding="lg" radius="md">
+    <Card withBorder padding="lg" radius="md" style={cardStyle}>
       <Group gap="xs" mb="md">
-        <ThemeIcon size={28} radius="md" variant="light" color="blue">
+        <ThemeIcon
+          size={28}
+          radius="md"
+          variant="light"
+          style={{ backgroundColor: `${CYAN}1A`, color: CYAN, border: `1px solid ${CYAN}33` }}
+        >
           <IconDeviceDesktopAnalytics size={16} />
         </ThemeIcon>
         <Stack gap={0}>
-          <Text fw={600}>{t('dashboard.health.title')}</Text>
-          <Text size="xs" c="dimmed">
+          <Text fw={600} style={{ color: SNOW }}>
+            {t('dashboard.health.title')}
+          </Text>
+          <Text size="xs" style={{ color: MIST }}>
             {t('dashboard.health.subtitle', { uptime: formatUptime(host.process.uptimeSeconds) })}
           </Text>
         </Stack>
@@ -539,7 +709,7 @@ function SystemHealth({ host }: { host: DashboardOverview['host'] }) {
 
       <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="md">
         <UsageBar
-          icon={<IconCpu size={18} />}
+          icon={<IconCpu size={16} />}
           color={cpuColor}
           label={t('dashboard.health.cpu')}
           percent={cpuPct}
@@ -552,7 +722,7 @@ function SystemHealth({ host }: { host: DashboardOverview['host'] }) {
           })}
         />
         <UsageBar
-          icon={<IconDatabase size={18} />}
+          icon={<IconDatabase size={16} />}
           color={memColor}
           label={t('dashboard.health.ram')}
           percent={host.memory.usedPercent}
@@ -560,7 +730,7 @@ function SystemHealth({ host }: { host: DashboardOverview['host'] }) {
           secondary={t('dashboard.health.memHint', { percent: host.memory.usedPercent.toFixed(1) })}
         />
         <UsageBar
-          icon={<IconServer2 size={18} />}
+          icon={<IconServer2 size={16} />}
           color={diskColor}
           label={t('dashboard.health.disk')}
           percent={host.disk?.usedPercent ?? 0}
@@ -576,8 +746,8 @@ function SystemHealth({ host }: { host: DashboardOverview['host'] }) {
           }
         />
         <UsageBar
-          icon={<IconActivity size={18} />}
-          color="violet"
+          icon={<IconActivity size={16} />}
+          color={VIOLET}
           label={t('dashboard.health.processMem')}
           percent={(host.process.heapUsedBytes / Math.max(1, host.process.heapTotalBytes)) * 100}
           primary={`RSS ${formatBytes(host.process.rssBytes)}`}
@@ -606,31 +776,45 @@ function UsageBar({
   secondary: string;
   color: string;
 }) {
+  const clamped = Math.min(100, Math.max(0, percent));
   return (
-    <Paper withBorder p="md" radius="sm">
+    <Card withBorder p="md" radius="sm" style={{ backgroundColor: '#08101A', borderColor: HAIRLINE }}>
       <Group justify="space-between" mb="xs">
-        <Group gap="xs">
-          <ThemeIcon size={22} radius="md" variant="light" color={color}>
+        <Group gap={8}>
+          <ThemeIcon
+            size={22}
+            radius="md"
+            variant="light"
+            style={{ backgroundColor: `${color}1A`, color, border: `1px solid ${color}33` }}
+          >
             {icon}
           </ThemeIcon>
-          <Text size="sm" fw={500}>
+          <Text size="sm" fw={500} style={{ color: SNOW }}>
             {label}
           </Text>
         </Group>
-        <Text size="xs" c="dimmed" ff="monospace">
+        <Text size="xs" style={{ color: MIST, fontFamily: "'JetBrains Mono', monospace" }}>
           {percent.toFixed(0)}%
         </Text>
       </Group>
-      <Progress value={Math.min(100, Math.max(0, percent))} color={color} size="sm" radius="xl" />
+      <Progress
+        value={clamped}
+        size="sm"
+        radius="xl"
+        styles={{
+          root: { backgroundColor: HAIRLINE },
+          section: { backgroundColor: color },
+        }}
+      />
       <Stack gap={0} mt="xs">
-        <Text size="sm" fw={600} ff="monospace">
+        <Text size="sm" fw={600} style={{ color: SNOW, fontFamily: "'JetBrains Mono', monospace" }}>
           {primary}
         </Text>
-        <Text size="xs" c="dimmed">
+        <Text size="xs" style={{ color: MIST }}>
           {secondary}
         </Text>
       </Stack>
-    </Paper>
+    </Card>
   );
 }
 
@@ -650,17 +834,25 @@ function NodeMiniBar({
 }) {
   if (percent === null) {
     return (
-      <Text size="xs" c="dimmed">
+      <Text size="xs" style={{ color: MIST }}>
         —
       </Text>
     );
   }
-  const color = percent > 90 ? 'red' : percent > 75 ? 'yellow' : 'teal';
+  const color = thresholdColor(percent, 75, 90);
   return (
     <Tooltip label={tooltip}>
       <Stack gap={2} miw={90}>
-        <Progress value={Math.min(100, percent)} color={color} size="sm" radius="xl" />
-        <Text size="xs" c="dimmed" ff="monospace">
+        <Progress
+          value={Math.min(100, percent)}
+          size="sm"
+          radius="xl"
+          styles={{
+            root: { backgroundColor: HAIRLINE },
+            section: { backgroundColor: color },
+          }}
+        />
+        <Text size="xs" style={{ color: MIST, fontFamily: "'JetBrains Mono', monospace" }}>
           {percent.toFixed(0)}%
         </Text>
       </Stack>
@@ -668,36 +860,60 @@ function NodeMiniBar({
   );
 }
 
+function StatusDot({ color, label }: { color: string; label: string }) {
+  return (
+    <Group gap={6} wrap="nowrap">
+      <span
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: '50%',
+          backgroundColor: color,
+          boxShadow: `0 0 8px ${color}99`,
+          flexShrink: 0,
+        }}
+      />
+      <Text size="xs" style={{ color: SNOW, textTransform: 'capitalize' }}>
+        {label}
+      </Text>
+    </Group>
+  );
+}
+
 function TrafficStat({ label, value }: { label: string; value: string }) {
   return (
     <Stack gap={0} align="flex-end">
-      <Text size="xs" c="dimmed" tt="uppercase" lts={0.5}>
-        {label}
-      </Text>
-      <Text size="sm" fw={600} ff="monospace">
+      <Text style={MONO_LABEL}>{label}</Text>
+      <Text size="sm" fw={600} style={{ color: SNOW, fontFamily: "'JetBrains Mono', monospace" }}>
         {value}
       </Text>
     </Stack>
   );
 }
 
-function StatusChip({ label, value, color }: { label: string; value: number; color: string }) {
+function StatusChip({ label, value, dot }: { label: string; value: number; dot: string }) {
   return (
-    <Paper withBorder p="sm" radius="sm">
-      <Stack gap={2}>
-        <Text size="xs" c="dimmed" tt="uppercase" lts={0.5}>
-          {label}
-        </Text>
-        <Group justify="space-between" align="baseline">
-          <Text size="xl" fw={700}>
-            {value}
-          </Text>
-          <Badge variant="light" color={color} size="xs">
-            ●
-          </Badge>
+    <Card withBorder p="sm" radius="sm" style={{ backgroundColor: '#08101A', borderColor: HAIRLINE }}>
+      <Stack gap={6}>
+        <Group gap={6}>
+          <span
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              backgroundColor: dot,
+              boxShadow: `0 0 6px ${dot}99`,
+            }}
+          />
+          <Text style={MONO_LABEL}>{label}</Text>
         </Group>
+        <Text
+          style={{ ...DISPLAY, fontSize: 28, fontWeight: 500, color: SNOW, lineHeight: 1 }}
+        >
+          {value}
+        </Text>
       </Stack>
-    </Paper>
+    </Card>
   );
 }
 
