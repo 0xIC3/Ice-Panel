@@ -69,7 +69,7 @@ export function DeployProfileModal({ profile, onClose }: Props) {
   }, [profile]);
 
   // Port admin chooses for NEW bindings created in this modal session.
-  // Existing bindings keep their port — admin edits them inline in
+  // Existing bindings keep their port - admin edits them inline in
   // Nodes → Edit. Initialized to the profile default on each open.
   const [port, setPort] = useState<number>(defaultPort);
   useEffect(() => {
@@ -174,7 +174,7 @@ export function DeployProfileModal({ profile, onClose }: Props) {
           label={t('profiles.deploy.port')}
           description={
             profile?.protocol === 'amneziawg'
-              ? 'Для AmneziaWG: ≤ 9999, например 443 или 1234. 51820 не используй.'
+              ? t('profileForm.deployHintAwgPort')
               : undefined
           }
           min={1}
@@ -234,6 +234,7 @@ function NodeRow({
   checked: boolean;
   onToggle: () => void;
 }) {
+  const { t } = useTranslation();
   const statusColor =
     node.status === 'online' ? 'teal' : node.status === 'disabled' ? 'gray' : 'red';
   // Compatibility hint: install-node.sh installs binaries for ONE protocol
@@ -278,8 +279,11 @@ function NodeRow({
           <Tooltip
             label={
               protocolMismatch
-                ? `Нода провижена под "${node.protocol}" — бинарь "${profileProtocol}" не установлен. Binding создастся, но клиенты не подключатся пока не запустишь install-node заново с --protocol ${profileProtocol}.`
-                : `Нода поддерживает "${node.protocol}"`
+                ? t('profileForm.nodeMismatchTooltip', {
+                    nodeProtocol: node.protocol,
+                    profileProtocol,
+                  })
+                : t('profileForm.nodeSupportsTooltip', { protocol: node.protocol })
             }
             multiline
             w={280}

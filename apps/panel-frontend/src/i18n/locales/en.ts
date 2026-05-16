@@ -1,7 +1,7 @@
 /**
- * English — secondary locale. Mirrors ru.ts shape; missing keys fall back
+ * English - secondary locale. Mirrors ru.ts shape; missing keys fall back
  * to the key itself (i18next default), which we'd see as "untranslated.key"
- * in QA — easy to spot.
+ * in QA - easy to spot.
  */
 export default {
   common: {
@@ -26,7 +26,7 @@ export default {
     search: 'Search',
     copy: 'Copy',
     copied: 'Copied',
-    none: '—',
+    none: '-',
     all: 'All',
     nothingFound: 'Nothing found',
     saved: 'Saved',
@@ -51,8 +51,8 @@ export default {
     logout: 'Log out',
   },
   login: {
-    bootstrapTitle: '{{brand}} — create first admin',
-    signInTitle: '{{brand}} — sign in',
+    bootstrapTitle: '{{brand}} - create first admin',
+    signInTitle: '{{brand}} - sign in',
     bootstrapHint:
       'No admins exist yet. The first registration creates the bootstrap account.',
     username: 'Username',
@@ -73,9 +73,9 @@ export default {
       'The node will be soft-deleted. Existing users stop being synced to it. The mTLS payload becomes invalid; provisioning a replacement requires a new node.',
     refreshBootstrapTitle: 'Re-issue bootstrap for "{{name}}"?',
     refreshBootstrapBody:
-      'The current bootstrap token becomes invalid. Safe on a running agent — it keeps working with the existing cert. The fresh token is for reinstall or after an address change.',
+      'The current bootstrap token becomes invalid. Safe on a running agent - it keeps working with the existing cert. The fresh token is for reinstall or after an address change.',
     refreshBootstrap: 'Re-issue bootstrap',
-    metricsLoading: 'Metrics not yet collected — first poll within 15s.',
+    metricsLoading: 'Metrics not yet collected - first poll within 15s.',
     bindingsCount: '{{count}} bindings',
     todayLabel: 'today',
     table: {
@@ -97,7 +97,7 @@ export default {
       protocol: 'Protocol',
       protocolDesc: 'main core of the node',
       address: 'Address',
-      addressDesc: 'IP or DNS — panel-mTLS endpoint',
+      addressDesc: 'IP or DNS - panel-mTLS endpoint',
       port: 'Node Port',
       portDesc: 'mTLS, default 8443',
       country: 'Country',
@@ -112,7 +112,7 @@ export default {
       mismatchHint:
         'Binding will be created, but clients won\'t connect until install-node provisions the matching binary',
       noProfiles:
-        'No profiles in the system yet — skip this step and create the node without bindings.',
+        'No profiles in the system yet - skip this step and create the node without bindings.',
       submitCreate: 'Create node',
       submitWithBindings: 'Create node + {{count}} bindings',
       submitEdit: 'Save',
@@ -124,7 +124,7 @@ export default {
       bindingsCount: 'Bindings ({{count}})',
       noBindings:
         'Nothing deployed on this node yet. Use "Deploy to nodes" in a profile card, or quick-deploy below.',
-      quickDeployHint: 'Quick-deploy — compatible profiles:',
+      quickDeployHint: 'Quick-deploy - compatible profiles:',
       removeBindingTooltip: 'Undeploy from this node',
       uptime: 'uptime {{value}}',
       coresLabel: 'Cores',
@@ -175,7 +175,7 @@ export default {
   },
   dashboard: {
     title: 'Home',
-    subtitle: 'Panel summary — refreshed every 10 seconds',
+    subtitle: 'Panel summary - refreshed every 10 seconds',
     hero: {
       onlineNow: 'Online now',
       onlineHint: '{{today}} today · {{week}} this week',
@@ -197,7 +197,7 @@ export default {
         month: 'Month',
         year: 'Year',
       },
-      noChartData: 'Not enough data — chart fills after the first hour of traffic',
+      noChartData: 'Not enough data - chart fills after the first hour of traffic',
     },
     userStatus: {
       title: 'Users by status',
@@ -218,11 +218,11 @@ export default {
       memHint: '{{percent}}% used',
       diskUnavailable: 'statfs unavailable',
       processSecondary: 'Heap {{used}} / {{total}}',
-      noData: "Metrics unavailable — backend hasn't connected to /metrics yet.",
+      noData: "Metrics unavailable - backend hasn't connected to /metrics yet.",
     },
     nodes: {
       title: 'Nodes',
-      empty: 'No nodes yet — add your first one under Nodes.',
+      empty: 'No nodes yet - add your first one under Nodes.',
       cols: {
         name: 'Name',
         status: 'Status',
@@ -258,18 +258,18 @@ export default {
   },
   profiles: {
     title: 'Profiles',
-    subtitle: 'Inbound templates — one profile can be deployed to multiple nodes',
+    subtitle: 'Inbound templates - one profile can be deployed to multiple nodes',
     create: 'Create',
     refresh: 'Refresh',
     searchPlaceholder: 'Search by name or description…',
-    emptyAll: 'No profiles yet — click "Create".',
+    emptyAll: 'No profiles yet - click "Create".',
     emptyFiltered: 'Nothing matches the filter.',
     deployToNodes: 'Deploy to nodes',
-    bindingsTooltipNone: 'Not deployed — click to deploy',
-    bindingsTooltipDeployed: 'Deployed on nodes — click to manage',
+    bindingsTooltipNone: 'Not deployed - click to deploy',
+    bindingsTooltipDeployed: 'Deployed on nodes - click to manage',
     deleteTitle: 'Delete profile "{{name}}"?',
     deleteWithBindings: 'Profile is deployed to {{count}} nodes. Deleting will remove it from all nodes (cascade) and invalidate this protocol\'s subscriptions for affected users.',
-    deleteSafe: 'Profile is not bound to any node — safe to delete.',
+    deleteSafe: 'Profile is not bound to any node - safe to delete.',
     notify: {
       created: 'Profile created',
       createdOpenDeploy: 'Profile created. Pick nodes + port to deploy →',
@@ -287,19 +287,19 @@ export default {
       submitEdit: 'Save',
       cfg: {
         salamanderObfsDesc: 'Optional. Empty = no obfuscation.',
-        realityDestDesc: 'host:port — fronting decoy',
+        realityDestDesc: 'host:port - fronting decoy',
         realityServerNamesDesc: 'comma-separated',
         realityShortIdsDesc: 'hex, comma-separated',
         realityFingerprintDesc: 'client TLS fingerprint',
         realityPrivateKeyDesc: "curve25519 base64. Click Generate or paste from `xray x25519`.",
         realityPublicKeyDesc: 'auto-derived from private',
-        realitySubprotocolDesc: 'VLESS — Vision-ready. Trojan — password auth.',
+        realitySubprotocolDesc: 'VLESS - Vision-ready. Trojan - password auth.',
         realitySubprotocolVless: 'VLESS (canonical)',
         realitySubprotocolTrojan: 'Trojan (no Vision)',
         realityFlowDesc: 'Vision only works with raw',
-        realityFlowNone: '(none) — no flow',
+        realityFlowNone: '(none) - no flow',
         realityNetworkDesc: 'REALITY supports raw / xhttp / grpc',
-        realityNetworkRaw: 'raw (TCP) — Vision-compatible',
+        realityNetworkRaw: 'raw (TCP) - Vision-compatible',
         xhttpPathDesc: 'HTTP path for the xhttp transport',
         hostHeaderDesc: 'optional, defaults to SNI',
         grpcServiceNameDesc: 'gRPC service name',
@@ -309,21 +309,21 @@ export default {
         awgJDesc: 'pairwise-unique',
         awgHDesc: '> 4 and unique',
         awgHWarning:
-          'H1-H4 must be pairwise-unique — there are duplicates. Click Re-roll to regenerate.',
+          'H1-H4 must be pairwise-unique - there are duplicates. Click Re-roll to regenerate.',
         ssCipherLabel: 'Cipher method',
         ssNote:
           "Per-user password = the user's xrayUuid. Enable the shadowsocks protocol on the user.",
         mtprotoDomain: 'Masquerade domain',
         mtprotoDomainNote:
-          'Changing the domain rotates secrets for ALL users — existing subscriptions stop working.',
+          'Changing the domain rotates secrets for ALL users - existing subscriptions stop working.',
         mieruMtu: 'MTU',
       },
     },
     deploy: {
       title: 'Deploy "{{name}}" to nodes',
-      hint: 'Tick the nodes you want this profile on. Unticking deletes existing bindings (cascade — users lose URLs for that node). Port for new bindings: {{port}}.',
+      hint: 'Tick the nodes you want this profile on. Unticking deletes existing bindings (cascade - users lose URLs for that node). Port for new bindings: {{port}}.',
       port: 'Port for new bindings',
-      noNodes: 'No nodes — create one under Nodes first.',
+      noNodes: 'No nodes - create one under Nodes first.',
       saved: 'Deployed: +{{added}} / removed: -{{removed}}',
       noChanges: 'No changes',
       submit: 'Save',
@@ -363,17 +363,17 @@ export default {
       username: 'Username',
       usernameDesc: 'unique, no spaces',
       trafficLimit: 'Traffic limit (GB)',
-      trafficLimitDesc: 'Empty — unlimited',
+      trafficLimitDesc: 'Empty - unlimited',
       resetStrategy: 'Reset strategy',
       resetStrategyDesc: 'How often to zero usage',
       expireDays: 'Expires in (days)',
-      expireDaysDesc: 'Empty — no expiry',
+      expireDaysDesc: 'Empty - no expiry',
       email: 'Email',
       telegramId: 'Telegram ID',
       telegramIdPlaceholder: 'optional',
       hwidLimit: 'HWID device limit',
       hwidLimitDesc:
-        "Empty — no limit. Only enforced for clients that send the x-hwid header (Hiddify, Streisand, Happ).",
+        "Empty - no limit. Only enforced for clients that send the x-hwid header (Hiddify, Streisand, Happ).",
       tag: 'Tag',
       tagPlaceholder: 'vip / trial / ...',
       description: 'Description',
@@ -382,7 +382,7 @@ export default {
         '"All" is a system-managed fallback (auto-added only if no other squad is selected).',
       devicesTitle: 'Registered devices ({{count}})',
       devicesEmpty: 'No HWID-aware client has connected yet, or no limit is set.',
-      deviceDelete: 'Free this slot — user can log in from a different device',
+      deviceDelete: 'Free this slot - user can log in from a different device',
       deviceLastSeen: 'last seen: {{when}}',
       submitCreate: 'Create',
       submitEdit: 'Save',
@@ -397,7 +397,7 @@ export default {
   },
   squads: {
     title: 'Internal squads',
-    subtitle: "Group ACL — which inbounds each user sees in their subscription",
+    subtitle: "Group ACL - which inbounds each user sees in their subscription",
     create: 'Create',
     refresh: 'Refresh',
     open: 'Open',
@@ -439,14 +439,14 @@ export default {
       title: 'Authentication methods',
       description: 'Manage how admins sign in to the panel',
       password: 'Password',
-      passwordHint: 'Username + password — primary method',
+      passwordHint: 'Username + password - primary method',
       passkey: 'Passkey',
-      passkeyHint: 'WebAuthn / FIDO2 — Phase 3',
+      passkeyHint: 'WebAuthn / FIDO2 - Phase 3',
       telegram: 'Telegram',
       telegramHint: 'Telegram OAuth login widget',
       genericOauth: 'Generic OAuth2',
       soonBadge: 'soon',
-      passwordDisabledTooltip: "Primary method — can't be disabled until another one is set up",
+      passwordDisabledTooltip: "Primary method - can't be disabled until another one is set up",
       comingSoonTooltip: 'Coming soon',
     },
     tokens: {
@@ -466,7 +466,7 @@ export default {
       modalName: 'Name',
       modalNamePlaceholder: 'telegram-bot / ci-deploy / ...',
       modalWarning:
-        'The plaintext token is shown **only once** after creation — copy it immediately. The panel stores only an SHA-256 hash and cannot return the plaintext later.',
+        'The plaintext token is shown **only once** after creation - copy it immediately. The panel stores only an SHA-256 hash and cannot return the plaintext later.',
       modalSubmit: 'Create',
       revealTitle: 'Copy the token now',
       revealHint: 'Close this dialog and the token is gone forever.',
@@ -478,13 +478,13 @@ export default {
     },
     customization: {
       title: 'Customization',
-      description: 'Brand and theme — stored centrally in DB',
+      description: 'Brand and theme - stored centrally in DB',
       brandName: 'Brand name',
       brandNameDesc: 'Login page title',
     },
     subscription: {
       title: 'Subscription metadata',
-      description: 'HTTP headers clients (Hiddify / Streisand / Happ / V2RayNG) read alongside the subscription — title, refresh cadence, quota gauge, announce banner',
+      description: 'HTTP headers clients (Hiddify / Streisand / Happ / V2RayNG) read alongside the subscription - title, refresh cadence, quota gauge, announce banner',
       profileTitle: 'Profile Title',
       profileTitleDesc: 'Subscription name in the client. Empty → falls back to brand name.',
       updateInterval: 'Update interval (hours)',
@@ -499,8 +499,8 @@ export default {
   regions: {
     title: 'Regions',
     description:
-      'Logical grouping of nodes (EU / RU / Asia / …) — used for filtering on /nodes and smart server-side selection (slice 28).',
-    empty: 'No regions yet. Create your first — e.g. "Europe" with code "EU".',
+      'Logical grouping of nodes (EU / RU / Asia / …) - used for filtering on /nodes and smart server-side selection (slice 28).',
+    empty: 'No regions yet. Create your first - e.g. "Europe" with code "EU".',
     name: 'Name',
     namePlaceholder: 'Europe',
     code: 'Code',
@@ -510,7 +510,7 @@ export default {
     add: 'Add',
     deleteTitle: 'Delete region "{{name}}"?',
     deleteWithNodes: '{{count}} nodes will remain but lose their region link (field cleared).',
-    deleteSafe: 'No node attached — safe to delete.',
+    deleteSafe: 'No node attached - safe to delete.',
     notify: {
       created: 'Region created',
       updated: 'Region updated',
@@ -527,20 +527,20 @@ export default {
     cards: {
       'xray-reality-vision-raw': {
         name: 'REALITY + Vision (raw)',
-        description: 'Canonical stealth — masquerades as a real HTTPS site',
+        description: 'Canonical stealth - masquerades as a real HTTPS site',
         details:
-          'VLESS + REALITY + Vision flow over raw TCP. To DPI the traffic looks like a normal HTTPS request to a major CDN site (Cloudflare/Apple/etc). Vision flow adds zero-copy splice — the fastest path with no masking overhead. Recommended default for most situations.',
+          'VLESS + REALITY + Vision flow over raw TCP. To DPI the traffic looks like a normal HTTPS request to a major CDN site (Cloudflare/Apple/etc). Vision flow adds zero-copy splice - the fastest path with no masking overhead. Recommended default for most situations.',
         notes: [
-          "Vision only works with raw — don't change the transport after applying",
+          "Vision only works with raw - don't change the transport after applying",
         ],
       },
       'xray-reality-xhttp': {
         name: 'REALITY + xhttp (HTTP/2 chunked)',
         description: 'For aggressive DPI that cuts VLESS+raw',
         details:
-          'VLESS + REALITY + xhttp transport. Traffic ships as HTTP/2 chunked-stream — looks like ordinary HTTP/2 to a CDN. ~10-15% slower than raw due to framing, but bypasses DPI that started cutting REALITY+raw in some ISPs. No Vision (xhttp does not support it).',
+          'VLESS + REALITY + xhttp transport. Traffic ships as HTTP/2 chunked-stream - looks like ordinary HTTP/2 to a CDN. ~10-15% slower than raw due to framing, but bypasses DPI that started cutting REALITY+raw in some ISPs. No Vision (xhttp does not support it).',
         notes: [
-          "The path is randomised — don't share it publicly",
+          "The path is randomised - don't share it publicly",
           "If REALITY+raw is blocked in your network, xhttp usually still works",
         ],
       },
@@ -548,27 +548,27 @@ export default {
         name: 'Trojan + REALITY',
         description: 'Password-auth instead of UUID, anti-probe defence',
         details:
-          "Trojan via xray-core + REALITY. Users authenticate with a password (we reuse user.xrayUuid as the password). On bad auth the server returns a real HTTPS response from the decoy site — anti-probe defence. No Vision (Trojan doesn't support it). Useful for legacy clients that don't understand VLESS.",
+          "Trojan via xray-core + REALITY. Users authenticate with a password (we reuse user.xrayUuid as the password). On bad auth the server returns a real HTTPS response from the decoy site - anti-probe defence. No Vision (Trojan doesn't support it). Useful for legacy clients that don't understand VLESS.",
       },
       'hysteria-default': {
         name: 'Hysteria 2 (clean)',
-        description: 'UDP, low latency, no obfs — for free regions',
+        description: 'UDP, low latency, no obfs - for free regions',
         details:
-          'Hysteria 2 over QUIC (UDP) without obfuscation. Lowest latency (UDP, no TCP handshake) and good throughput via Brutal CC. No obfs — DPI may flag QUIC traffic. Use in regions without active UDP-DPI.',
+          'Hysteria 2 over QUIC (UDP) without obfuscation. Lowest latency (UDP, no TCP handshake) and good throughput via Brutal CC. No obfs - DPI may flag QUIC traffic. Use in regions without active UDP-DPI.',
       },
       'hysteria-salamander': {
         name: 'Hysteria 2 + Salamander (RU mobile)',
         description: 'Obfuscation for UDP-DPI on Russian mobile carriers',
         details:
-          'Hysteria 2 with Salamander obfuscation password. Each UDP packet is XOR-encrypted with a key derived from the password — DPI sees no QUIC signature. On Russian mobile carriers (Megafon/MTS/Beeline) clean Hysteria is often throttled to tx:0; Salamander typically passes through. Brutal CC tuned for 100 Mbps peaks.',
+          'Hysteria 2 with Salamander obfuscation password. Each UDP packet is XOR-encrypted with a key derived from the password - DPI sees no QUIC signature. On Russian mobile carriers (Megafon/MTS/Beeline) clean Hysteria is often throttled to tx:0; Salamander typically passes through. Brutal CC tuned for 100 Mbps peaks.',
         notes: [
-          "Obfs password generated randomly — don't lose it, clients need it",
-          'Brutal CC 100/100 Mbps — adjust to your node\'s real bandwidth',
+          "Obfs password generated randomly - don't lose it, clients need it",
+          'Brutal CC 100/100 Mbps - adjust to your node\'s real bandwidth',
         ],
       },
       'awg-default': {
         name: 'AmneziaWG (default)',
-        description: 'Default obfs parameters — works for most ISPs',
+        description: 'Default obfs parameters - works for most ISPs',
         details:
           'AmneziaWG (a WireGuard fork with DPI bypass). Default Jc/Jmin/Jmax + S/H obfuscation hides the WireGuard signature. Fits most providers. For aggressive ISPs try the "Iran-tuned" recipe.',
       },
@@ -584,34 +584,34 @@ export default {
         details:
           "NaiveProxy via Caddy fork. Traffic moves over HTTP/2 as a normal HTTPS request with the correct Chrome JA3 fingerprint. ACME cert from Let's Encrypt automatically. One of the stealthiest options where xray and hysteria are already banned.",
         notes: [
-          'Fill hostname and tlsEmail manually — needs a real domain with an A-record on the node',
+          'Fill hostname and tlsEmail manually - needs a real domain with an A-record on the node',
         ],
       },
       'ss-2022-blake3': {
         name: 'SS-2022 (blake3-aes-256)',
-        description: 'Modern Shadowsocks — XChaCha20-level security',
+        description: 'Modern Shadowsocks - XChaCha20-level security',
         details:
-          'Shadowsocks 2022 with the 2022-blake3-aes-256-gcm cipher. Modern alternative AEAD — better performance and probe-resistance than legacy chacha20. Supported by all current SS clients (Outline, Shadowrocket, sing-box).',
+          'Shadowsocks 2022 with the 2022-blake3-aes-256-gcm cipher. Modern alternative AEAD - better performance and probe-resistance than legacy chacha20. Supported by all current SS clients (Outline, Shadowrocket, sing-box).',
       },
       'mtproto-default': {
         name: 'MTProto (Telegram)',
-        description: 'Telegram-only — a separate use case',
+        description: 'Telegram-only - a separate use case',
         details:
-          'MTProto proxy for Telegram. NOT a general-purpose VPN — Telegram traffic only. One shared secret across all users (upstream 9seconds/mtg limitation). Useful when Telegram is blocked but you want a fast pipe specifically for the messenger.',
+          'MTProto proxy for Telegram. NOT a general-purpose VPN - Telegram traffic only. One shared secret across all users (upstream 9seconds/mtg limitation). Useful when Telegram is blocked but you want a fast pipe specifically for the messenger.',
       },
       'mieru-default': {
         name: 'Mieru (Chinese GFW)',
-        description: 'Tuned against the Great Firewall — random padding',
+        description: 'Tuned against the Great Firewall - random padding',
         details:
-          "Mieru by enfein — a modern stealth protocol with aggressive padding, designed against the Chinese GFW. Traffic looks like noise — no signatures. Supported by sing-box. Use when other protocols are cut in mainland China.",
+          "Mieru by enfein - a modern stealth protocol with aggressive padding, designed against the Chinese GFW. Traffic looks like noise - no signatures. Supported by sing-box. Use when other protocols are cut in mainland China.",
       },
     },
   },
   hosts: {
     sectionLabel: 'Hosts ({{count}})',
     addButton: 'Add host',
-    empty: "This binding has zero hosts — users won't receive URLs. Add at least one.",
-    awgUnsupported: 'AmneziaWG uses a single endpoint per binding — host variants don\'t apply.',
+    empty: "This binding has zero hosts - users won't receive URLs. Add at least one.",
+    awgUnsupported: 'AmneziaWG uses a single endpoint per binding - host variants don\'t apply.',
     noOverrides: 'no overrides',
     disabledIn: 'disabled in:',
     enableTooltip: 'Emitted in subscription',
@@ -626,13 +626,13 @@ export default {
       remarkDesc: 'admin label (Direct, EU-CDN, Mobile)',
       enabledLabel: 'Emitted in subscription',
       addressOverride: 'Address override',
-      addressDesc: 'cdn.example.com — leave empty to fall back to node.address',
+      addressDesc: 'cdn.example.com - leave empty to fall back to node.address',
       portOverride: 'Port override',
       portDesc: 'empty = binding.port',
       sniOverride: 'SNI override',
       sniDesc: 'empty = realityServerNames[0]',
       fingerprint: 'Fingerprint',
-      fingerprintDefault: '— default —',
+      fingerprintDefault: '- default -',
       pathOverride: 'Path override',
       pathDesc: '/path for ws/xhttp',
       hostHeader: 'Host header',
@@ -651,5 +651,205 @@ export default {
       updated: 'Host updated',
       deleted: 'Host deleted',
     },
+  },
+
+  // ───── Floe redesign - new chrome keys (cycle #11) ─────
+  pageHero: {
+    usersEyebrow: '{{total}} accounts · {{online}} online{{limited}}',
+    usersEyebrowLimited: ' · {{count}} limited',
+    usersTitle: 'Users.',
+    usersSubtitle:
+      'Each user is one subscription URL. Disable, throttle, or revoke without touching the protocol layer.',
+    profilesEyebrow: 'Inbound templates · 7 protocols supported',
+    profilesTitle: 'Profiles.',
+    profilesSubtitle:
+      'One profile is a logical inbound - protocol, obfuscation, DPI shape. Bind it to N nodes; one user picks it up via subscription.',
+    nodesEyebrow: 'Fleet · {{vps}} VPS · {{countries}} countries',
+    nodesTitle: 'Nodes.',
+    nodesSubtitle:
+      'One node runs one protocol core. Panel pushes config over mTLS - agent applies and reports back.',
+    squadsEyebrow: 'Group ACL · {{count}} {{label}}',
+    squadsLabelOne: 'squad',
+    squadsLabelMany: 'squads',
+    srrEyebrow: 'UA routing · {{count}} {{label}}',
+    srrLabelOne: 'rule',
+    srrLabelMany: 'rules',
+    srrTitle: 'Subscription Rules.',
+    settingsEyebrow: 'Panel config · saved on commit',
+    dashboardEyebrow: 'Live · auto-refresh 10s · {{time}}',
+    dashboardHeadlineQuiet: 'Quiet day on the line.',
+    dashboardHeadlineBusy: 'Busy fleet today.',
+    dashboardHeadlineSteady: 'Steady traffic.',
+    dashboardSubtitle:
+      '{{nodes}} nodes online, {{users}} users active. Aggregated traffic and live host telemetry below - pulled fresh every ten seconds.',
+    dashboardFooterNeverOnline:
+      '{{count}} user never online · Review provisioning',
+    dashboardFooterNeverOnlinePlural:
+      '{{count}} users never online · Review provisioning',
+    dashboardFooterAllProvisioned: 'All users provisioned',
+    hostSystemSubtitle: 'panel server',
+    uptimeLabel: 'Uptime',
+    sampledLabel: 'Sampled',
+  },
+
+  modal: {
+    userNewTitle: 'New user',
+    userNewSubtitle: 'Subscription token + creds will mint on save',
+    userEditSubtitle: 'Edit · changes save on commit',
+    nodeNewTitle: 'New node',
+    nodeNewSubtitle: 'Register a VPS · 2-step wizard',
+    profileNewTitle: 'New profile',
+    profileNewSubtitle: 'Inbound template · bind to nodes after save',
+    profileEditSubtitle: 'Edit template · applies on next deploy',
+    squadNewTitle: 'New squad',
+    squadNewSubtitle: 'Access slice · group of users + profiles',
+    squadEditSubtitle: 'Edit membership · changes save on commit',
+    shortcutCreate: '⏎ Create · Esc Cancel',
+    shortcutSave: '⏎ Save · Esc Cancel',
+    shortcutTabNext: 'Tab Next field · Esc Cancel',
+    shortcutCreateBack: '⏎ Create · ← Back Edit params',
+    shortcutBuiltin: 'Built-in · read-only',
+    stepNext: 'Next: pick profiles →',
+    createWithBindings: 'Create node + {{count}} bindings',
+  },
+
+  loginPage: {
+    topbarVersion: 'V1.0 · Operator panel',
+    topbarStatus: 'All systems normal',
+    signInBadge: 'Sign in',
+    heroLine1: 'Operator',
+    heroLine2: 'console.',
+    heroDescription: 'One panel. Every protocol. Native cores. mTLS agents.',
+    feature1: '7 Protocols',
+    feature2: 'Native binaries',
+    feature3: 'mTLS push',
+    credentialsLabel: 'Credentials',
+    signInTo: 'Sign in to {{brand}}',
+    bootstrapTo: 'Bootstrap {{brand}}',
+    continueAction: 'Continue →',
+    createAdminAction: 'Create admin →',
+    passkeyHint: 'Passkey, Telegram, GitHub',
+    soonLabel: 'Soon',
+  },
+
+  validation: {
+    nameRequired: 'Name is required',
+    nameLatinOnly: 'Latin letters, digits, dot, _ and - only',
+    nameNoCyrillic: 'Latin letters, digits, dot, _ and - only. No spaces or Cyrillic.',
+    nameMin3: 'Min 3 characters',
+    usernameLatinOnly: 'Letters, digits, _ and - only',
+    squadNameAllowed: 'Letters, digits, space, _ and - only',
+    addressRequired: 'Address is required',
+    portRequired: 'Port is required',
+    portRange: 'Port must be 1–65535',
+    emailInvalid: 'Invalid email',
+    required: 'Required',
+  },
+
+  userForm: {
+    directLinksTitle: 'Direct per-protocol links',
+    directLinksLoading: 'Loading…',
+    directLinksEmpty:
+      "No active endpoints. Bind user to a squad with inbounds and deploy a profile to a node.",
+    copyUri: 'Copy URI',
+    copyWgconfHint:
+      'Copy wgconf URL (opens in AmneziaVPN: + → "Configuration file" → paste URL)',
+    copyToClipboard: 'Copy',
+    copiedShort: 'Copied',
+    tooltipUsers: 'Users',
+    tooltipProfiles: 'Profiles',
+    devicesTitle: 'HWID Devices',
+  },
+
+  nodeConfirm: {
+    reBootstrapTitle: 'Re-issue bootstrap for "{{name}}"?',
+    reBootstrapBody:
+      'The current bootstrap token and the node\'s mTLS certificate will become invalid. If the agent is already running with the previous cert, it keeps working (we don\'t revoke anything on live nodes), but a fresh token is needed if you reinstall install-node.sh or changed the `address` and need a new DNS SAN. Safe action on a running node; if you reinstall the agent with the fresh payload - you\'ll need to retrigger applyInbounds via toggling some profile.',
+    reBootstrapConfirm: 'Re-issue',
+    bindingsPartialTitle: 'Some bindings failed',
+    bindingsPartialMessage:
+      'Bound: {{ok}}, failed: {{fail}}. Try manually from the Profile card.',
+    bindingsAllOk: 'Node created + {{count}} bindings',
+  },
+
+  squadForm: {
+    builtinSystemTooltip: 'Built-in squad - auto-tracks all inbounds',
+    selectAll: 'Select all',
+    deselectAll: 'Deselect all',
+    deployedTooltip: 'Deployed on nodes',
+  },
+
+  profileForm: {
+    nameLatinOnly: 'Latin letters, digits, dot, _ and - only. No spaces or Cyrillic.',
+    awgImportantTitle: 'What you should know about AmneziaWG 2.0:',
+    awgImportant1:
+      'Client: AmneziaVPN ≥ 4.8.12.9 or Hiddify Next ≥ 2.4. Older versions won\'t connect.',
+    awgImportant2:
+      'Pick a port on the next step ("Deploy to nodes"). Recommendation: ≤ 9999, e.g. 443 or 1234. Don\'t use 51820 - well-known WG-default, ISPs throttle it.',
+    awgImportant3:
+      'Migrating from AmneziaWG 1.0 - you need to regenerate all peer keys; old keys won\'t work.',
+    deployHintAwgPort: 'For AmneziaWG: ≤ 9999, e.g. 443 or 1234. Don\'t use 51820.',
+    nodeMismatchTooltip:
+      'Node provisioned for "{{nodeProtocol}}" - binary "{{profileProtocol}}" is not installed. Binding will be created, but clients won\'t connect until you re-run install-node with --protocol {{profileProtocol}}.',
+    nodeSupportsTooltip: 'Node supports "{{protocol}}"',
+  },
+
+  hostsManager: {
+    enabledInSubscription: 'Enabled in subscription',
+    moveUp: 'Move up',
+    moveDown: 'Move down',
+    edit: 'Edit',
+    remove: 'Remove',
+    remarkDesc: 'Label in admin (Direct, EU-CDN, Mobile)',
+    remarkPlaceholder: '',
+    portPlaceholder: 'empty = binding.port',
+    sniPlaceholder: 'empty = realityServerNames[0]',
+    disableForFormatsLabel: 'Disable for formats',
+    titleNew: 'New host',
+    titleEdit: 'Edit host "{{name}}"',
+    submitCreate: 'Create',
+    submitSave: 'Save',
+    remarkRequired: 'required',
+  },
+
+  userStatus: {
+    online: 'Online',
+    offline: 'Offline',
+    limited: 'Limited',
+    expired: 'Expired',
+    disabled: 'Disabled',
+  },
+
+  usersTable: {
+    paused: '- paused',
+    pausedHintQuota: 'quota hit',
+    pausedHintExpired: 'expired',
+    pausedHintGrace: 'grace {{days}}d',
+    footerShowing: 'Showing {{shown}} of {{total}}',
+    footerCount: '{{count}} {{label}}',
+    footerPage: 'Page {{page}}',
+    actionOpenSub: 'Open subscription',
+    actionCopySubUrl: 'Copy subscription URL',
+    actionEdit: 'Edit',
+    actionDelete: 'Delete',
+    rowsPerPage: 'Rows per page',
+    of: 'of',
+  },
+
+  userTime: {
+    never: 'never',
+    noExpiry: 'no expiry',
+    expiresToday: 'expires today',
+    expiredAgo: 'expired {{days}}d ago',
+    daysLeft: '{{days}}d left',
+    sAgo: '{{n}}s ago',
+    mAgo: '{{n}}m ago',
+    hAgo: '{{n}}h ago',
+    dAgo: '{{n}}d ago',
+  },
+
+  settingsNotify: {
+    savedOk: 'Saved - will refresh for all admins after reload',
+    saveErrorTitle: 'Failed to save',
   },
 } as const;

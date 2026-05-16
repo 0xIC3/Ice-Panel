@@ -5,7 +5,7 @@ import ru from './locales/ru';
 import en from './locales/en';
 
 /**
- * i18next bootstrap — runs once at app startup before React mounts.
+ * i18next bootstrap - runs once at app startup before React mounts.
  *
  * Detection order:
  *   1. localStorage `ice-panel:lang` (admin's explicit choice)

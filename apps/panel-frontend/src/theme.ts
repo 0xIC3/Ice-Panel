@@ -2,7 +2,6 @@ import {
   Badge,
   Button,
   Card,
-  Modal,
   NumberInput,
   Paper,
   PasswordInput,
@@ -123,7 +122,7 @@ const violet: MantineColorsTuple = [
   '#130E26',
 ];
 
-const MONO = "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace";
+const MONO = "'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace";
 
 // Shared input label/input look — applied to TextInput/Select/NumberInput/Textarea/etc
 const inputStyles = {
@@ -160,7 +159,7 @@ export const theme = createTheme({
   white: SNOW,
   black: GROUND,
   fontFamily:
-    "Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    "Geist, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
   fontFamilyMonospace: MONO,
   headings: {
     fontFamily: "'Space Grotesk', Inter, sans-serif",
@@ -187,40 +186,11 @@ export const theme = createTheme({
     xl: rem(18),
   },
   components: {
-    Modal: Modal.extend({
-      defaultProps: { centered: true, radius: 'md', overlayProps: { blur: 4 } },
-      styles: {
-        content: {
-          backgroundColor: CARD,
-          borderColor: HAIRLINE,
-          border: `1px solid ${HAIRLINE}`,
-          boxShadow: `0 20px 60px ${GROUND}cc`,
-        },
-        header: {
-          backgroundColor: CARD,
-          borderBottom: `1px solid ${HAIRLINE}`,
-          padding: '14px 20px',
-        },
-        title: {
-          fontFamily: "'Space Grotesk', Inter, sans-serif",
-          fontWeight: 600,
-          fontSize: rem(16),
-          letterSpacing: '-0.01em',
-          color: SNOW,
-        },
-        body: {
-          backgroundColor: CARD,
-          padding: '18px 20px',
-        },
-      },
-    }),
     Paper: Paper.extend({
       defaultProps: { radius: 'md' },
-      styles: { root: { backgroundColor: CARD, borderColor: HAIRLINE } },
     }),
     Card: Card.extend({
-      defaultProps: { radius: 'md' },
-      styles: { root: { backgroundColor: CARD, borderColor: HAIRLINE } },
+      defaultProps: { radius: 'md', bg: CARD },
     }),
     TextInput: TextInput.extend({ styles: inputStyles }),
     PasswordInput: PasswordInput.extend({ styles: inputStyles }),

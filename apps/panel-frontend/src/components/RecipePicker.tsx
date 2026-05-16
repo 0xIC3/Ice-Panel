@@ -25,7 +25,7 @@ interface Props {
  * don't need to reason about REALITY/Vision/transport compatibility
  * matrices themselves.
  *
- * The chosen recipe stays highlighted but doesn't lock the form — admins
+ * The chosen recipe stays highlighted but doesn't lock the form - admins
  * can still tweak individual fields after applying.
  */
 /**

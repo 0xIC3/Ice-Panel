@@ -12,9 +12,10 @@ import {
   Text,
   TextInput,
   ThemeIcon,
-  Title,
   Tooltip,
 } from '@mantine/core';
+import { PageHero } from '../components/PageHero';
+import { PrimaryButton } from '../components/PrimaryButton';
 import { useDisclosure } from '@mantine/hooks';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
@@ -157,35 +158,41 @@ export function SquadsPage() {
 
   return (
     <Stack gap="lg">
-      <Group justify="space-between" align="flex-end">
-        <Stack gap={2}>
-          <Title order={2}>{t('squads.title')}</Title>
-          <Text c="dimmed" size="sm">
-            {t('squads.subtitle')}
-          </Text>
-        </Stack>
-        <Group>
-          <Tooltip label={t('common.refresh')}>
-            <ActionIcon
-              variant="subtle"
-              size="lg"
-              loading={squadsQuery.isFetching}
-              onClick={() => qc.invalidateQueries({ queryKey: ['squads'] })}
-            >
-              <IconRefresh size={18} />
-            </ActionIcon>
-          </Tooltip>
-          <Button leftSection={<IconPlus size={16} />} onClick={openCreate}>
-            {t('squads.create')}
-          </Button>
-        </Group>
-      </Group>
+      <PageHero
+        eyebrow={t('pageHero.squadsEyebrow', {
+          count: squads.length,
+          label: squads.length === 1 ? t('pageHero.squadsLabelOne') : t('pageHero.squadsLabelMany'),
+        })}
+        title={t('squads.title')}
+        subtitle={t('squads.subtitle')}
+        right={
+          <Group gap={8}>
+            <Tooltip label={t('common.refresh')}>
+              <ActionIcon
+                variant="subtle"
+                size="lg"
+                loading={squadsQuery.isFetching}
+                onClick={() => qc.invalidateQueries({ queryKey: ['squads'] })}
+                style={{ color: '#7A8BA3' }}
+              >
+                <IconRefresh size={18} />
+              </ActionIcon>
+            </Tooltip>
+            <PrimaryButton leftSection={<IconPlus size={14} />} onClick={openCreate}>
+              {t('squads.create')}
+            </PrimaryButton>
+          </Group>
+        }
+      />
 
       <TextInput
         placeholder={t('squads.searchPlaceholder')}
-        leftSection={<IconSearch size={16} />}
+        leftSection={<IconSearch size={16} color="#7A8BA3" />}
         value={search}
         onChange={(e) => setSearch(e.currentTarget.value)}
+        styles={{
+          input: { backgroundColor: '#0F1A28', borderColor: '#1C2A3D', color: '#C8D4E3' },
+        }}
       />
 
       {sortedSquads.length === 0 ? (
@@ -255,7 +262,7 @@ function SquadCard({
       padding="md"
       radius="md"
       style={{
-        // Top accent bar — teal for All, indigo for others
+        // Top accent bar - teal for All, indigo for others
         borderTopWidth: 3,
         borderTopColor: isAll
           ? 'var(--mantine-color-teal-6)'
@@ -278,7 +285,7 @@ function SquadCard({
                 {squad.name}
               </Text>
               {isAll && (
-                <Tooltip label="Системный сквад — auto-tracks все inbound'ы">
+                <Tooltip label={t('squadForm.builtinSystemTooltip')}>
                   <IconShieldLock size={13} color="var(--mantine-color-yellow-6)" />
                 </Tooltip>
               )}

@@ -64,7 +64,7 @@ interface Props {
   opened: boolean;
   onClose: () => void;
   squad: Squad | null;
-  /** Slice 27 — squad ACL operates on profiles, not per-node inbounds. */
+  /** Slice 27 - squad ACL operates on profiles, not per-node inbounds. */
   profiles: Profile[];
   /** Optional: count of bindings per profile, for the "deployed on N nodes"
    *  hint in each row. Computed by parent from listBindings(). */
@@ -92,7 +92,7 @@ export function SquadFormModal({
     validate: {
       name: (v) =>
         v.length < 1 || !/^[A-Za-z0-9 _-]+$/.test(v)
-          ? 'Только буквы, цифры, пробел, _ и -'
+          ? t('validation.squadNameAllowed')
           : null,
     },
   });
@@ -176,11 +176,37 @@ export function SquadFormModal({
         onClose();
       }}
       title={
-        <Group gap="sm">
-          <ThemeIcon variant="light" radius="md" size={32} color="indigo">
+        <Group gap="sm" align="center">
+          <Card
+            p={8}
+            radius="md"
+            style={{
+              backgroundColor: '#A78BFA1A',
+              border: '1px solid #A78BFA33',
+              color: '#A78BFA',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
             <IconLink size={18} />
-          </ThemeIcon>
-          <Text fw={600}>{isEdit ? t('squads.form.titleEdit') : t('squads.form.titleCreate')}</Text>
+          </Card>
+          <Stack gap={2}>
+            <Text style={{ fontFamily: "'Space Grotesk', Inter, sans-serif", fontWeight: 500, fontSize: 18, color: '#C8D4E3' }}>
+              {isEdit ? squad?.name ?? t('squads.form.titleEdit') : t('modal.squadNewTitle')}
+            </Text>
+            <Text
+              style={{
+                fontFamily: "'Geist Mono', monospace",
+                fontSize: 9,
+                letterSpacing: '0.16em',
+                textTransform: 'uppercase',
+                color: '#7A8BA3',
+              }}
+            >
+              {isEdit ? t('modal.squadEditSubtitle') : t('modal.squadNewSubtitle')}
+            </Text>
+          </Stack>
         </Group>
       }
       size="lg"
@@ -318,15 +344,37 @@ export function SquadFormModal({
 
           <Divider />
 
-          <Group justify="flex-end" gap="sm">
-            <Button variant="default" onClick={onClose} disabled={loading}>
-              {isAllSquad ? t('common.close') : t('common.cancel')}
-            </Button>
-            {!isAllSquad && (
-              <Button type="submit" loading={loading} leftSection={<IconCheck size={16} />}>
-                {isEdit ? t('squads.form.submitEdit') : t('squads.form.submitCreate')}
+          <Group justify="space-between" gap="sm">
+            <Text
+              style={{
+                fontFamily: "'Geist Mono', monospace",
+                fontSize: 10,
+                letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+                color: '#7A8BA3',
+              }}
+            >
+              {isAllSquad
+                ? t('modal.shortcutBuiltin')
+                : isEdit
+                  ? t('modal.shortcutSave')
+                  : t('modal.shortcutCreate')}
+            </Text>
+            <Group gap="sm">
+              <Button variant="default" onClick={onClose} disabled={loading}>
+                {isAllSquad ? t('common.close') : t('common.cancel')}
               </Button>
-            )}
+              {!isAllSquad && (
+                <Button
+                  type="submit"
+                  loading={loading}
+                  leftSection={<IconCheck size={16} />}
+                  style={{ backgroundColor: '#7DD3FC', color: '#08101A', fontWeight: 500 }}
+                >
+                  {isEdit ? t('squads.form.submitEdit') : t('squads.form.submitCreate')}
+                </Button>
+              )}
+            </Group>
           </Group>
         </Stack>
       </form>
@@ -353,13 +401,14 @@ function ProtocolGroup({
   onToggle: (id: string) => void;
   onToggleAll: () => void;
 }) {
+  const { t } = useTranslation();
   const ids = profiles.map((p) => p.id);
   const allSelected = ids.every((id) => selectedIds.has(id));
   const someSelected = ids.some((id) => selectedIds.has(id));
   const color = PROTOCOL_COLORS[protocol] ?? 'gray';
 
   return (
-    // Plain Box with border instead of Card — Card's internal grid + the
+    // Plain Box with border instead of Card - Card's internal grid + the
     // borderLeft style override makes content overflow the bottom edge by
     // ~3-4px in Mantine 7.x. Box gives full control over padding.
     <Box
@@ -385,7 +434,7 @@ function ProtocolGroup({
         >
           {ids.filter((id) => selectedIds.has(id)).length}/{ids.length}
         </Badge>
-        <Tooltip label={allSelected ? 'Снять все' : 'Выбрать все'}>
+        <Tooltip label={allSelected ? t('squadForm.deselectAll') : t('squadForm.selectAll')}>
           <Checkbox
             checked={allSelected}
             indeterminate={!allSelected && someSelected}
@@ -424,7 +473,8 @@ function ProfileRow({
   disabled?: boolean;
   onToggle: () => void;
 }) {
-  // Plain Group wrapped in a borderless container — nesting Paper inside
+  const { t } = useTranslation();
+  // Plain Group wrapped in a borderless container - nesting Paper inside
   // Card creates overflow clipping in Mantine 7.x because both wrap content
   // in `position: relative` boxes and the inner Stack ends up taller than
   // the parent Card thinks it is. Flat row keeps the same UX without the
@@ -467,7 +517,7 @@ function ProfileRow({
           )}
         </Stack>
       </Group>
-      <Tooltip label="Развёрнут на нодах">
+      <Tooltip label={t('squadForm.deployedTooltip')}>
         <Badge variant="outline" color="gray" size="sm">
           {bindingCount}
         </Badge>

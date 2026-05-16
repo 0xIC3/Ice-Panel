@@ -46,6 +46,7 @@ import { ProfileFormModal } from '../components/ProfileFormModal';
 import { DeployProfileModal } from '../components/DeployProfileModal';
 import { TestConnectModal } from '../components/TestConnectModal';
 import { PageHero } from '../components/PageHero';
+import { PrimaryButton } from '../components/PrimaryButton';
 
 const HAIRLINE = '#1C2A3D';
 const CARD = '#0F1A28';
@@ -184,9 +185,9 @@ export function ProfilesPage() {
   return (
     <Stack gap="lg">
       <PageHero
-        eyebrow={`INBOUND TEMPLATES · 7 PROTOCOLS SUPPORTED`}
-        title="Profiles."
-        subtitle="One profile is a logical inbound — protocol, obfuscation, DPI shape. Bind it to N nodes; one user picks it up via subscription."
+        eyebrow={t('pageHero.profilesEyebrow')}
+        title={t('pageHero.profilesTitle')}
+        subtitle={t('pageHero.profilesSubtitle')}
         right={
           <Group gap={8}>
             <Tooltip label={t('common.refresh')}>
@@ -200,21 +201,9 @@ export function ProfilesPage() {
                 <IconRefresh size={18} />
               </ActionIcon>
             </Tooltip>
-            <Button
-              leftSection={<IconPlus size={14} />}
-              onClick={openCreate}
-              style={{
-                backgroundColor: CYAN,
-                color: GROUND,
-                fontWeight: 500,
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-                fontSize: 12,
-                height: 36,
-              }}
-            >
+            <PrimaryButton leftSection={<IconPlus size={14} />} onClick={openCreate}>
               {t('profiles.create')}
-            </Button>
+            </PrimaryButton>
           </Group>
         }
       />
@@ -439,7 +428,7 @@ function ProfileCard({
             color: accent,
             border: `1px solid ${accent}33`,
             textTransform: 'uppercase',
-            fontFamily: "'JetBrains Mono', monospace",
+            fontFamily: "'Geist Mono', monospace",
             letterSpacing: '0.08em',
           }}
         >
@@ -460,7 +449,7 @@ function ProfileCard({
               backgroundColor: bindingCount === 0 ? 'transparent' : `${MOSS}1A`,
               color: bindingCount === 0 ? MIST : MOSS,
               border: `1px solid ${bindingCount === 0 ? HAIRLINE : `${MOSS}33`}`,
-              fontFamily: "'JetBrains Mono', monospace",
+              fontFamily: "'Geist Mono', monospace",
             }}
           >
             <IconServer2 size={11} />

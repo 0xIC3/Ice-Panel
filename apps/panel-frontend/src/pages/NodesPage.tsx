@@ -46,10 +46,10 @@ import { NodePayloadModal } from '../components/NodePayloadModal';
 import { NodeCard } from '../components/NodeCard';
 import { countryFlag } from '../lib/countries';
 import { PageHero } from '../components/PageHero';
+import { PrimaryButton } from '../components/PrimaryButton';
 
 const HAIRLINE = '#1C2A3D';
 const CARD = '#0F1A28';
-const GROUND = '#08101A';
 const SNOW = '#C8D4E3';
 const MIST = '#7A8BA3';
 const CYAN = '#7DD3FC';
@@ -57,7 +57,7 @@ const MOSS = '#A7D8B9';
 const AMBER = '#F5B14C';
 const RED = '#E07A5F';
 
-const MONO = { fontFamily: "'JetBrains Mono', monospace" };
+const MONO = { fontFamily: "'Geist Mono', monospace" };
 
 const STATUS_ACCENT: Record<string, string> = {
   online: MOSS,
@@ -99,7 +99,7 @@ export function NodesPage() {
     if (typeof window !== 'undefined') window.localStorage.setItem(LAYOUT_KEY, m);
   }
 
-  // Slice 27.5 — region filter (URL chip below header). 'all' = no filter.
+  // Slice 27.5 - region filter (URL chip below header). 'all' = no filter.
   const [regionFilter, setRegionFilter] = useState<string>('all');
 
   const nodesQuery = useQuery({
@@ -118,7 +118,7 @@ export function NodesPage() {
     return m;
   }, [regionsQuery.data]);
 
-  // Pull live metrics from dashboard endpoint — already provides cpu/ram/disk
+  // Pull live metrics from dashboard endpoint - already provides cpu/ram/disk
   // per node + today's traffic + inboundCount. Refetch every 15s to keep
   // cards in sync with the agent metrics-poll cron.
   const overviewQuery = useQuery({
@@ -144,7 +144,7 @@ export function NodesPage() {
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['nodes'] });
       notifications.show({ color: 'green', message: 'Node created' });
-      // Surface the one-time payload + bootstrap token — neither is shown
+      // Surface the one-time payload + bootstrap token - neither is shown
       // by the panel on subsequent reads.
       setPayload({
         name: data.name,
@@ -188,10 +188,10 @@ export function NodesPage() {
       }),
   });
 
-  // Re-issue a bootstrap token for an existing node — used when the original
+  // Re-issue a bootstrap token for an existing node - used when the original
   // expired / was lost, or when admin changed `node.address` and needs a new
   // cert with the matching SAN. Reuses the same NodePayloadModal as the create
-  // flow, but `payload` stays empty (panel never re-emits the cert payload —
+  // flow, but `payload` stays empty (panel never re-emits the cert payload -
   // only the install command + token).
   const refreshBootstrapMutation = useMutation({
     mutationFn: (node: Node) =>
@@ -214,19 +214,11 @@ export function NodesPage() {
 
   function handleRefreshBootstrap(node: Node) {
     modals.openConfirmModal({
-      title: `Перевыпустить bootstrap для «${node.name}»?`,
+      title: t('nodeConfirm.reBootstrapTitle', { name: node.name }),
       children: (
-        <Text size="sm">
-          Текущий bootstrap-токен и mTLS-сертификат ноды станут невалидными. Если
-          агент уже запущен с прежним сертом — он продолжит работать (мы не отзываем
-          ничего на действующих нодах), но свежий токен пригодится для переустановки
-          install-node.sh, или если ты сменил <code>address</code> и нужен новый
-          DNS-SAN. Действие безопасное на работающей ноде, но если ты переустановишь
-          агент со свежим payload'ом — потребуется retrigger applyInbounds через
-          toggle какого-нибудь профиля.
-        </Text>
+        <Text size="sm">{t('nodeConfirm.reBootstrapBody')}</Text>
       ),
-      labels: { confirm: 'Перевыпустить', cancel: 'Отмена' },
+      labels: { confirm: t('nodeConfirm.reBootstrapConfirm'), cancel: t('common.cancel') },
       confirmProps: { color: 'blue' },
       onConfirm: () => refreshBootstrapMutation.mutate(node),
     });
@@ -234,7 +226,7 @@ export function NodesPage() {
 
   function handleDelete(node: Node) {
     // Cleanup command shown post-delete so admins remember to wipe the
-    // VPS — otherwise the orphaned agent keeps occupying the mTLS port
+    // VPS - otherwise the orphaned agent keeps occupying the mTLS port
     // and an old server cert + CA pair sits around as future drift bait.
     const uninstallCmd =
       'bash <(curl -fsSL https://raw.githubusercontent.com/0xIC3/Ice-Panel/main/scripts/install-node.sh) --uninstall';
@@ -243,7 +235,7 @@ export function NodesPage() {
       children: (
         <Stack gap="sm">
           <Text size="sm">
-            The node will be soft-deleted. All bindings to this node are removed (cascade — users
+            The node will be soft-deleted. All bindings to this node are removed (cascade - users
             lose URLs for those profiles). The agent on the VPS keeps running until you manually
             stop it.
           </Text>
@@ -273,26 +265,17 @@ export function NodesPage() {
   return (
     <Stack>
       <PageHero
-        eyebrow={`FLEET · ${enrichedNodes.length} VPS · ${new Set(enrichedNodes.map((n) => n.countryCode).filter(Boolean)).size} COUNTRIES`}
-        title="Nodes."
-        subtitle="One node runs one protocol core. Panel pushes config over mTLS — agent applies and reports back."
+        eyebrow={t('pageHero.nodesEyebrow', {
+          vps: enrichedNodes.length,
+          countries: new Set(enrichedNodes.map((n) => n.countryCode).filter(Boolean)).size,
+        })}
+        title={t('pageHero.nodesTitle')}
+        subtitle={t('pageHero.nodesSubtitle')}
         right={
           <Group gap={8}>
-            <Button
-              leftSection={<IconPlus size={14} />}
-              onClick={openCreate}
-              style={{
-                backgroundColor: CYAN,
-                color: GROUND,
-                fontWeight: 500,
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-                fontSize: 12,
-                height: 36,
-              }}
-            >
+            <PrimaryButton leftSection={<IconPlus size={14} />} onClick={openCreate}>
               {t('nodes.create')}
-            </Button>
+            </PrimaryButton>
           </Group>
         }
       />
@@ -340,7 +323,7 @@ export function NodesPage() {
         </Group>
       </Group>
 
-      {/* Slice 27.5 — region filter row. Hidden when admin hasn't created
+      {/* Slice 27.5 - region filter row. Hidden when admin hasn't created
           any regions yet (no clutter on a fresh panel). */}
       {(regionsQuery.data?.regions ?? []).length > 0 && (
         <Group gap="xs" wrap="wrap">
@@ -375,7 +358,7 @@ export function NodesPage() {
       ) : layout === 'cards' ? (
         <SimpleGrid cols={{ base: 1, sm: 2, lg: 3, xl: 4 }} spacing="md">
           {enrichedNodes.map((n) => {
-            // Synthesise a DashboardNode shape if metrics haven't arrived yet —
+            // Synthesise a DashboardNode shape if metrics haven't arrived yet -
             // card still renders with status from /api/nodes, just shows
             // metrics placeholder.
             const dashNode = n.overview ?? {
@@ -402,7 +385,7 @@ export function NodesPage() {
                   // approxUsers: capacity bar source. Real per-node user
                   // counter lands with slice 28; here we reuse the today's
                   // bytes-driven inbound count as a placeholder so the bar
-                  // shows *something* meaningful — admins prefer "looks
+                  // shows *something* meaningful - admins prefer "looks
                   // approximately right" over "shows nothing".
                   approxUsers: dashNode.inboundCount ?? 0,
                 }}
@@ -471,7 +454,7 @@ export function NodesPage() {
                           <Text size="sm" style={{ ...MONO, color: MIST }}>{n.countryCode}</Text>
                         </Group>
                       ) : (
-                        <Text style={{ color: MIST }}>—</Text>
+                        <Text style={{ color: MIST }}>-</Text>
                       )}
                     </Table.Td>
                     <Table.Td>
@@ -497,7 +480,7 @@ export function NodesPage() {
                     </Table.Td>
                     <Table.Td>
                       <Text size="sm" style={{ ...MONO, color: SNOW }}>
-                        {n.overview ? formatBytes(n.overview.todayBytes) : '—'}
+                        {n.overview ? formatBytes(n.overview.todayBytes) : '-'}
                       </Text>
                     </Table.Td>
                     <Table.Td>
@@ -546,8 +529,8 @@ export function NodesPage() {
           // automatically via createMutation.onSuccess.
           const created = await createMutation.mutateAsync(input as CreateNodeInput);
           // Step 2: auto-create bindings for each picked profile. Done in
-          // sequence (low volume — admin won't pick 50 profiles at once)
-          // and tolerant — one binding failure doesn't block the rest.
+          // sequence (low volume - admin won't pick 50 profiles at once)
+          // and tolerant - one binding failure doesn't block the rest.
           if (profileIds.length > 0) {
             const ok: string[] = [];
             const fail: string[] = [];
@@ -564,13 +547,13 @@ export function NodesPage() {
             if (fail.length > 0) {
               notifications.show({
                 color: 'yellow',
-                title: 'Часть bindings не создалась',
-                message: `Привязано: ${ok.length}, упало: ${fail.length}. Попробуй вручную через карточку Profile.`,
+                title: t('nodeConfirm.bindingsPartialTitle'),
+                message: t('nodeConfirm.bindingsPartialMessage', { ok: ok.length, fail: fail.length }),
               });
             } else {
               notifications.show({
                 color: 'green',
-                message: `Нода создана + ${ok.length} bindings`,
+                message: t('nodeConfirm.bindingsAllOk', { count: ok.length }),
               });
             }
           }

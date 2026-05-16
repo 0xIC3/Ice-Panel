@@ -40,7 +40,7 @@ export function PageHero({ eyebrow, title, subtitle, right }: PageHeroProps) {
           />
           <Text
             style={{
-              fontFamily: "'JetBrains Mono', monospace",
+              fontFamily: "'Geist Mono', monospace",
               fontSize: 11,
               letterSpacing: '0.16em',
               textTransform: 'uppercase',

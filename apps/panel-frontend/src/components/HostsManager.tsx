@@ -40,7 +40,7 @@ import {
   type UpdateHostInput,
 } from '../lib/api';
 
-// AmneziaWG can't multi-host meaningfully — pubkey-pinned UDP single endpoint.
+// AmneziaWG can't multi-host meaningfully - pubkey-pinned UDP single endpoint.
 // Hide the manager entirely for that protocol.
 const PROTOCOLS_WITHOUT_HOSTS: ReadonlySet<ProtocolName> = new Set(['amneziawg']);
 
@@ -70,7 +70,7 @@ interface HostsManagerProps {
 
 /**
  * Inline manager for the hosts attached to a single binding. Slice 30
- * surface — list / add / edit / delete / reorder. Drag-and-drop is
+ * surface - list / add / edit / delete / reorder. Drag-and-drop is
  * deferred (slice 31), arrows are plenty for typical 2-4 host setups.
  */
 export function HostsManager({ bindingId, protocol }: HostsManagerProps) {
@@ -246,6 +246,7 @@ function HostRow({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useTranslation();
   const overrideBadges: { label: string; color: string }[] = [];
   if (host.sniOverride) overrideBadges.push({ label: `sni=${host.sniOverride}`, color: 'blue' });
   if (host.fingerprintOverride) overrideBadges.push({ label: `fp=${host.fingerprintOverride}`, color: 'grape' });
@@ -296,14 +297,14 @@ function HostRow({
           )}
         </Stack>
         <Group gap={4} wrap="nowrap">
-          <Tooltip label="Включён в подписке">
+          <Tooltip label={t('hostsManager.enabledInSubscription')}>
             <Switch
               size="xs"
               checked={host.enabled}
               onChange={(e) => onToggle(e.currentTarget.checked)}
             />
           </Tooltip>
-          <Tooltip label="Вверх">
+          <Tooltip label={t('hostsManager.moveUp')}>
             <ActionIcon
               variant="subtle"
               color="gray"
@@ -314,7 +315,7 @@ function HostRow({
               <IconArrowUp size={14} />
             </ActionIcon>
           </Tooltip>
-          <Tooltip label="Вниз">
+          <Tooltip label={t('hostsManager.moveDown')}>
             <ActionIcon
               variant="subtle"
               color="gray"
@@ -325,7 +326,7 @@ function HostRow({
               <IconArrowDown size={14} />
             </ActionIcon>
           </Tooltip>
-          <Tooltip label="Редактировать">
+          <Tooltip label={t('hostsManager.edit')}>
             <ActionIcon
               variant="subtle"
               color="blue"
@@ -335,7 +336,7 @@ function HostRow({
               <IconEdit size={14} />
             </ActionIcon>
           </Tooltip>
-          <Tooltip label="Удалить">
+          <Tooltip label={t('hostsManager.remove')}>
             <ActionIcon
               variant="subtle"
               color="red"
@@ -398,13 +399,14 @@ function HostFormModal({
   loading: boolean;
   onSubmit: (input: CreateHostInput) => void;
 }) {
+  const { t } = useTranslation();
   const isXray = protocol === 'xray';
   const supportsPath = isXray;
 
   const form = useForm<HostFormValues>({
     initialValues: emptyValues(),
     validate: {
-      remark: (v) => (v.trim().length === 0 ? 'обязательно' : null),
+      remark: (v) => (v.trim().length === 0 ? t('hostsManager.remarkRequired') : null),
     },
   });
 
@@ -431,7 +433,7 @@ function HostFormModal({
     });
   }
 
-  // Effect-free sync — Mantine modal calls `onClose` then re-mounts on
+  // Effect-free sync - Mantine modal calls `onClose` then re-mounts on
   // re-open via key change isn't reliable here, so we sync on first render
   // when `opened` flips. Cheap because it only sets state.
   const [lastOpenedFor, setLastOpenedFor] = useState<string | null | undefined>(undefined);
@@ -466,31 +468,31 @@ function HostFormModal({
     <Modal
       opened={opened}
       onClose={onClose}
-      title={host ? `Редактировать host «${host.remark}»` : 'Новый host'}
+      title={host ? t('hostsManager.titleEdit', { name: host.remark }) : t('hostsManager.titleNew')}
       size="lg"
     >
       <form onSubmit={form.onSubmit(handleSubmit)}>
         <Stack gap="sm">
           <TextInput
             label="Remark"
-            description="метка в админке (Direct, EU-CDN, Mobile)"
+            description={t('hostsManager.remarkDesc')}
             required
             {...form.getInputProps('remark')}
           />
           <Switch
-            label="Включён в подписке"
+            label={t('hostsManager.enabledInSubscription')}
             {...form.getInputProps('enabled', { type: 'checkbox' })}
           />
 
           <Group grow>
             <TextInput
               label="Address override"
-              placeholder="cdn.example.com — оставь пустым чтобы использовать node.address"
+              placeholder="cdn.example.com - оставь пустым чтобы использовать node.address"
               {...form.getInputProps('addressOverride')}
             />
             <NumberInput
               label="Port override"
-              placeholder="пусто = binding.port"
+              placeholder={t('hostsManager.portPlaceholder')}
               min={1}
               max={65535}
               {...form.getInputProps('portOverride')}
@@ -502,12 +504,12 @@ function HostFormModal({
               <Group grow>
                 <TextInput
                   label="SNI override"
-                  placeholder="пусто = realityServerNames[0]"
+                  placeholder={t('hostsManager.sniPlaceholder')}
                   {...form.getInputProps('sniOverride')}
                 />
                 <Select
                   label="Fingerprint"
-                  data={[{ value: '', label: '— по умолчанию —' }, ...FINGERPRINT_OPTIONS]}
+                  data={[{ value: '', label: '- по умолчанию -' }, ...FINGERPRINT_OPTIONS]}
                   {...form.getInputProps('fingerprintOverride')}
                 />
               </Group>
@@ -556,7 +558,7 @@ function HostFormModal({
           </Group>
 
           <MultiSelect
-            label="Не эмитить в форматах"
+            label={t('hostsManager.disableForFormatsLabel')}
             description="host пропускается при выдаче этих форматов подписки"
             data={FORMAT_OPTIONS}
             searchable
@@ -569,7 +571,7 @@ function HostFormModal({
               Отмена
             </Button>
             <Button type="submit" loading={loading}>
-              {host ? 'Сохранить' : 'Создать'}
+              {host ? t('hostsManager.submitSave') : t('hostsManager.submitCreate')}
             </Button>
           </Group>
         </Stack>

@@ -37,7 +37,7 @@ const CYAN2 = '#67E8F9';
 const MOSS = '#A7D8B9';
 
 const MONO_LABEL = {
-  fontFamily: "'JetBrains Mono', monospace",
+  fontFamily: "'Geist Mono', monospace",
   fontSize: 10,
   letterSpacing: '0.16em',
   textTransform: 'uppercase' as const,
@@ -94,7 +94,7 @@ function NavItem({ to, href, end, label, icon: Icon, count, shortcut, countDot }
       {shortcut && (
         <Box
           style={{
-            fontFamily: "'JetBrains Mono', monospace",
+            fontFamily: "'Geist Mono', monospace",
             fontSize: 10,
             color: MIST,
             border: `1px solid ${HAIRLINE}`,
@@ -112,7 +112,7 @@ function NavItem({ to, href, end, label, icon: Icon, count, shortcut, countDot }
             display: 'inline-flex',
             alignItems: 'center',
             gap: 4,
-            fontFamily: "'JetBrains Mono', monospace",
+            fontFamily: "'Geist Mono', monospace",
             fontSize: 11,
             color: countDot ? MOSS : MIST,
           }}
@@ -250,7 +250,7 @@ export function AppLayout() {
             rightSection={
               <Box
                 style={{
-                  fontFamily: "'JetBrains Mono', monospace",
+                  fontFamily: "'Geist Mono', monospace",
                   fontSize: 10,
                   color: MIST,
                   border: `1px solid ${HAIRLINE}`,

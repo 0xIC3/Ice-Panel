@@ -18,9 +18,9 @@ import {
   Textarea,
   TextInput,
   ThemeIcon,
-  Title,
   Tooltip,
 } from '@mantine/core';
+import { PageHero } from '../components/PageHero';
 import { useDisclosure } from '@mantine/hooks';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
@@ -60,8 +60,12 @@ export function SettingsPage() {
   const { t } = useTranslation();
   return (
     <Stack gap="lg">
-      <Stack gap={2}>
-        <Title order={2}>{t('settings.title')}</Title>
+      <PageHero
+        eyebrow={t('pageHero.settingsEyebrow')}
+        title={t('settings.title')}
+        subtitle={t('settings.subtitle')}
+      />
+      <Stack gap={2} style={{ display: 'none' }}>
         <Text c="dimmed" size="sm">
           {t('settings.subtitle')}
         </Text>
@@ -83,7 +87,7 @@ export function SettingsPage() {
 
 interface AuthMethod {
   id: string;
-  // Stable label-key — picks up settings.auth.<key> from i18n. The id
+  // Stable label-key - picks up settings.auth.<key> from i18n. The id
   // and key are usually the same; only `oauth2` diverges (genericOauth).
   labelKey: string;
   icon: React.ReactNode;
@@ -150,7 +154,7 @@ function AuthMethodsCard() {
 
       <Stack gap="xs">
         {AUTH_METHODS.map((m) => {
-          // GitHub doesn't get a translated label/hint — it's a brand
+          // GitHub doesn't get a translated label/hint - it's a brand
           // name, same in both locales.
           const label = m.id === 'github' ? 'GitHub' : t(`settings.auth.${m.labelKey}`);
           const hint = m.hintKey ? t(`settings.auth.${m.hintKey}`) : undefined;
@@ -493,13 +497,13 @@ function CustomizationCard() {
       qc.invalidateQueries({ queryKey: ['settings'] });
       notifications.show({
         color: 'green',
-        message: 'Сохранено — обновится у всех админов после refresh',
+        message: t('settingsNotify.savedOk'),
       });
     },
     onError: (err) =>
       notifications.show({
         color: 'red',
-        title: 'Не получилось сохранить',
+        title: t('settingsNotify.saveErrorTitle'),
         message: err instanceof Error ? err.message : String(err),
       }),
   });
@@ -549,12 +553,12 @@ function CustomizationCard() {
 // ───── Subscription metadata (slice S1) ─────
 
 /**
- * Admin-facing editor for the headers `/sub/:token` emits to client apps —
+ * Admin-facing editor for the headers `/sub/:token` emits to client apps -
  * Profile-Title (display name), Profile-Update-Interval (refresh cadence),
  * Support-URL, and an Announce template with `{{TRAFFIC_LEFT}}`,
  * `{{DAYS_LEFT}}`, `{{SUPPORT_URL}}` placeholders rendered per request.
  *
- * Subscription-Userinfo (quota gauge) is auto-emitted from user state —
+ * Subscription-Userinfo (quota gauge) is auto-emitted from user state -
  * not configurable here.
  */
 function SubscriptionMetadataCard() {
@@ -676,7 +680,7 @@ function SubscriptionMetadataCard() {
 // ───── Regions (slice 27.5) ─────
 
 /**
- * Plain CRUD for `regions` — admins create/rename/delete logical groups
+ * Plain CRUD for `regions` - admins create/rename/delete logical groups
  * ("EU", "RU", "Asia") and then attach nodes to them via NodeFormModal.
  * Slice 28 will read region.code against GeoIP at /sub/:token; here we
  * just give admins the chair to maintain the table.

@@ -8,7 +8,7 @@ const LANGS = [
 ] as const;
 
 /**
- * Compact language picker for the topbar — flag + 2-letter code, opens
+ * Compact language picker for the topbar - flag + 2-letter code, opens
  * dropdown with full names. Persists to localStorage via i18next's
  * LanguageDetector cache.
  */

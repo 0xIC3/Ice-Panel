@@ -32,11 +32,11 @@ interface Props {
 /**
  * Shown exactly once after a successful node create. Two flows are offered:
  *
- *   1. Bootstrap-token (recommended) — short command that the admin pastes
+ *   1. Bootstrap-token (recommended) - short command that the admin pastes
  *      on the node; install-script curls the panel for the full payload.
  *      Sidesteps the 4 KB Linux TTY paste limit.
  *
- *   2. Manual / file (fallback) — full base64 payload shown for download.
+ *   2. Manual / file (fallback) - full base64 payload shown for download.
  *      Admin scp's the file to the node and runs install-script with
  *      `--payload-file /path/to/file`. Useful for air-gapped setups or
  *      when the node can't reach the panel HTTP endpoint at install time.
@@ -74,13 +74,13 @@ export function NodePayloadModal({ opened, onClose, nodeName, payload, bootstrap
       onClose={onClose}
       closeOnClickOutside={false}
       closeOnEscape={false}
-      title={`Node "${nodeName}" — provisioning`}
+      title={`Node "${nodeName}" - provisioning`}
       size="lg"
     >
       <Stack>
         <Alert color="yellow" icon={<IconAlertTriangle size={18} />}>
           This token grants the node-installer one-time access to mint a private
-          mTLS key. The panel won't surface it again on subsequent reads —
+          mTLS key. The panel won't surface it again on subsequent reads -
           if the token expires before you redeem it, click{' '}
           <em>Refresh bootstrap</em> on the node row.
         </Alert>
@@ -100,7 +100,7 @@ export function NodePayloadModal({ opened, onClose, nodeName, payload, bootstrap
             <Stack gap={4}>
               <Text fw={600}>Run on the node</Text>
               <Text size="xs" c="dimmed">
-                Paste on the node over SSH. The installer will prompt for a protocol —
+                Paste on the node over SSH. The installer will prompt for a protocol -
                 or append <Code>--protocol xray</Code> (or <Code>hysteria</Code>,{' '}
                 <Code>amneziawg</Code>, <Code>naive</Code>) to skip the prompt.
               </Text>

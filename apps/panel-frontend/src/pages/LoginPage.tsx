@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { fetchAuthStatus, login, register, type LoginResponse } from '../lib/api';
 import { useAuth } from '../stores/auth';
 import { useBrandName } from '../hooks/useBrandName';
+import { LanguageSwitcher } from '../components/LanguageSwitcher';
 
 const HAIRLINE = '#1C2A3D';
 const CARD = '#0F1A28';
@@ -19,7 +20,7 @@ const MOSS = '#A7D8B9';
 
 const DISPLAY = { fontFamily: "'Space Grotesk', Inter, sans-serif" };
 const MONO_LABEL = {
-  fontFamily: "'JetBrains Mono', monospace",
+  fontFamily: "'Geist Mono', monospace",
   fontSize: 10,
   letterSpacing: '0.16em',
   textTransform: 'uppercase' as const,
@@ -82,7 +83,7 @@ export function LoginPage() {
       backgroundColor: GROUND,
       borderColor: HAIRLINE,
       color: SNOW,
-      fontFamily: "'JetBrains Mono', monospace",
+      fontFamily: "'Geist Mono', monospace",
       fontSize: 14,
       height: 46,
     },
@@ -123,7 +124,7 @@ export function LoginPage() {
           </Text>
         </Box>
         <Box style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-          <Text style={MONO_LABEL}>V1.0 · OPERATOR PANEL</Text>
+          <Text style={MONO_LABEL}>{t('loginPage.topbarVersion')}</Text>
           <Box style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span
               style={{
@@ -134,8 +135,9 @@ export function LoginPage() {
                 boxShadow: `0 0 6px ${MOSS}99`,
               }}
             />
-            <Text style={MONO_LABEL}>ALL SYSTEMS NORMAL</Text>
+            <Text style={MONO_LABEL}>{t('loginPage.topbarStatus')}</Text>
           </Box>
+          <LanguageSwitcher />
         </Box>
       </Box>
 
@@ -162,7 +164,7 @@ export function LoginPage() {
                 boxShadow: `0 0 6px ${CYAN}99`,
               }}
             />
-            <Text style={MONO_LABEL}>SIGN IN</Text>
+            <Text style={MONO_LABEL}>{t('loginPage.signInBadge')}</Text>
           </Box>
           <Text
             style={{
@@ -175,9 +177,9 @@ export function LoginPage() {
               marginBottom: 32,
             }}
           >
-            Operator
+            {t('loginPage.heroLine1')}
             <br />
-            console.
+            {t('loginPage.heroLine2')}
           </Text>
           <Text
             style={{
@@ -185,23 +187,44 @@ export function LoginPage() {
               fontSize: 16,
               lineHeight: 1.55,
               maxWidth: 520,
-              marginBottom: 60,
+              marginBottom: 56,
             }}
           >
-            A multi-protocol panel that runs each protocol binary natively. Hysteria 2, Xray REALITY,
-            AmneziaWG, NaiveProxy, MTProto, Shadowsocks 2022, Mieru — one operator dashboard.
+            {t('loginPage.heroDescription')}
           </Text>
-          <Box style={{ borderTop: `1px solid ${HAIRLINE}`, paddingTop: 24, maxWidth: 520 }}>
-            <Box style={{ display: 'grid', gridTemplateColumns: '120px 1fr', rowGap: 10 }}>
-              <Text style={MONO_LABEL}>BUILD</Text>
-              <Text style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: SNOW }}>
-                v0.9.4 · 2026.05.14
-              </Text>
-              <Text style={MONO_LABEL}>REGION</Text>
-              <Text style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: SNOW }}>
-                SE · Aeza Stockholm
-              </Text>
-            </Box>
+          <Box
+            style={{
+              display: 'flex',
+              gap: 32,
+              paddingTop: 24,
+              borderTop: `1px solid ${HAIRLINE}`,
+              maxWidth: 520,
+            }}
+          >
+            {[t('loginPage.feature1'), t('loginPage.feature2'), t('loginPage.feature3')].map((label) => (
+              <Box key={label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    backgroundColor: CYAN,
+                    boxShadow: `0 0 6px ${CYAN}99`,
+                  }}
+                />
+                <Text
+                  style={{
+                    fontFamily: "'Geist Mono', monospace",
+                    fontSize: 10,
+                    letterSpacing: '0.14em',
+                    textTransform: 'uppercase',
+                    color: SNOW,
+                  }}
+                >
+                  {label}
+                </Text>
+              </Box>
+            ))}
           </Box>
         </Box>
 
@@ -216,7 +239,7 @@ export function LoginPage() {
               boxShadow: `0 20px 60px ${GROUND}cc`,
             }}
           >
-            <Text style={{ ...MONO_LABEL, marginBottom: 8 }}>CREDENTIALS</Text>
+            <Text style={{ ...MONO_LABEL, marginBottom: 8 }}>{t('loginPage.credentialsLabel')}</Text>
             <Text
               style={{
                 ...DISPLAY,
@@ -228,8 +251,8 @@ export function LoginPage() {
               }}
             >
               {isBootstrap
-                ? t('login.bootstrapTitle', { brand: brandName })
-                : `Sign in to ${brandName}`}
+                ? t('loginPage.bootstrapTo', { brand: brandName })
+                : t('loginPage.signInTo', { brand: brandName })}
             </Text>
 
             <form onSubmit={form.onSubmit((vals) => submitMutation.mutate(vals))}>
@@ -263,7 +286,7 @@ export function LoginPage() {
                     marginTop: 4,
                   }}
                 >
-                  {isBootstrap ? t('login.submitRegister') : 'CONTINUE →'}
+                  {isBootstrap ? t('loginPage.createAdminAction') : t('loginPage.continueAction')}
                 </Button>
               </Stack>
             </form>
@@ -276,8 +299,8 @@ export function LoginPage() {
                 marginTop: 20,
               }}
             >
-              <Text style={{ color: MIST, fontSize: 12 }}>Passkey, Telegram, GitHub</Text>
-              <Text style={MONO_LABEL}>SOON</Text>
+              <Text style={{ color: MIST, fontSize: 12 }}>{t('loginPage.passkeyHint')}</Text>
+              <Text style={MONO_LABEL}>{t('loginPage.soonLabel')}</Text>
             </Box>
           </Box>
         </Box>

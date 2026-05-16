@@ -132,7 +132,7 @@ export function InboundsPage() {
 
       {(nodesQuery.data?.nodes.length ?? 0) === 0 && (
         <Text c="dimmed" size="sm">
-          No nodes yet — create a Node first, then attach inbounds to it.
+          No nodes yet - create a Node first, then attach inbounds to it.
         </Text>
       )}
 

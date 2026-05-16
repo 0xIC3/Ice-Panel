@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ActionIcon,
   Badge,
@@ -10,9 +11,10 @@ import {
   Table,
   Text,
   TextInput,
-  Title,
   Tooltip,
 } from '@mantine/core';
+import { PageHero } from '../components/PageHero';
+import { PrimaryButton } from '../components/PrimaryButton';
 import { useDisclosure } from '@mantine/hooks';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
@@ -40,6 +42,7 @@ const FORMAT_COLORS: Record<string, string> = {
 };
 
 export function SrrPage() {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const [createOpen, { open: openCreate, close: closeCreate }] = useDisclosure(false);
   const [editing, setEditing] = useState<SrrRule | null>(null);
@@ -114,29 +117,39 @@ export function SrrPage() {
 
   return (
     <Stack>
-      <Group justify="space-between">
-        <Title order={2}>Subscription Response Rules</Title>
-        <Group>
-          <Tooltip label="Refresh">
-            <ActionIcon
-              variant="subtle"
-              size="lg"
-              onClick={() => qc.invalidateQueries({ queryKey: ['srr'] })}
-              loading={rulesQuery.isFetching}
-            >
-              <IconRefresh size={18} />
-            </ActionIcon>
-          </Tooltip>
-          <Button leftSection={<IconPlus size={16} />} onClick={openCreate}>
-            Create rule
-          </Button>
-        </Group>
-      </Group>
-
-      <Text c="dimmed" size="sm">
-        Rules run in <Code>priority ASC</Code> order. The first rule whose regex matches the
-        client's <Code>User-Agent</Code> wins. Default catch-all priority is <Code>900</Code>.
-      </Text>
+      <PageHero
+        eyebrow={t('pageHero.srrEyebrow', {
+          count: rulesQuery.data?.rules.length ?? 0,
+          label:
+            (rulesQuery.data?.rules.length ?? 0) === 1
+              ? t('pageHero.srrLabelOne')
+              : t('pageHero.srrLabelMany'),
+        })}
+        title={t('pageHero.srrTitle')}
+        subtitle={
+          <>
+            Rules run in <Code>priority ASC</Code> order. The first rule whose regex matches the client's <Code>User-Agent</Code> wins. Default catch-all priority is <Code>900</Code>.
+          </>
+        }
+        right={
+          <Group gap={8}>
+            <Tooltip label="Refresh">
+              <ActionIcon
+                variant="subtle"
+                size="lg"
+                onClick={() => qc.invalidateQueries({ queryKey: ['srr'] })}
+                loading={rulesQuery.isFetching}
+                style={{ color: '#7A8BA3' }}
+              >
+                <IconRefresh size={18} />
+              </ActionIcon>
+            </Tooltip>
+            <PrimaryButton leftSection={<IconPlus size={14} />} onClick={openCreate}>
+              Create rule
+            </PrimaryButton>
+          </Group>
+        }
+      />
 
       <Table.ScrollContainer minWidth={800}>
         <Table verticalSpacing="sm" highlightOnHover withTableBorder>
@@ -176,7 +189,7 @@ export function SrrPage() {
                     {r.format}
                   </Badge>
                 </Table.Td>
-                <Table.Td>{r.enabled ? '✓' : '—'}</Table.Td>
+                <Table.Td>{r.enabled ? '✓' : '-'}</Table.Td>
                 <Table.Td>
                   <Group gap={4} wrap="nowrap">
                     <Tooltip label="Edit">
@@ -221,7 +234,7 @@ export function SrrPage() {
           {testResult && (
             <Text size="sm">
               {testResult.format === null ? (
-                <>No rule matched — falls back to <Code>plain</Code>.</>
+                <>No rule matched - falls back to <Code>plain</Code>.</>
               ) : (
                 <>
                   Matches → <Badge color={FORMAT_COLORS[testResult.format] ?? 'gray'}>{testResult.format}</Badge>

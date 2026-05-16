@@ -1,5 +1,5 @@
 /**
- * Русский — base/native locale. Maps `keys.in.dot.notation` → strings.
+ * Русский - base/native locale. Maps `keys.in.dot.notation` → strings.
  *
  * Convention: namespace by feature area (sidebar.users, nodes.create.title,
  * etc) so we can split files later without rename. Keep keys descriptive
@@ -28,7 +28,7 @@ export default {
     search: 'Поиск',
     copy: 'Копировать',
     copied: 'Скопировано',
-    none: '—',
+    none: '-',
     all: 'Все',
     nothingFound: 'Ничего не найдено',
     saved: 'Сохранено',
@@ -53,8 +53,8 @@ export default {
     logout: 'Выйти',
   },
   login: {
-    bootstrapTitle: '{{brand}} — создать первого админа',
-    signInTitle: '{{brand}} — вход',
+    bootstrapTitle: '{{brand}} - создать первого админа',
+    signInTitle: '{{brand}} - вход',
     bootstrapHint:
       'Админов ещё нет. Первая регистрация создаёт bootstrap-аккаунт.',
     username: 'Имя пользователя',
@@ -75,9 +75,9 @@ export default {
       'Нода будет soft-deleted. Существующие пользователи перестанут синхронизироваться с ней. mTLS-payload станет невалидным; для замены нужна новая нода.',
     refreshBootstrapTitle: 'Перевыпустить bootstrap для «{{name}}»?',
     refreshBootstrapBody:
-      'Текущий bootstrap-токен станет невалидным. На работающем агенте действие безопасное — он продолжит работать с прежним сертом. Свежий токен пригодится для переустановки или после смены адреса.',
+      'Текущий bootstrap-токен станет невалидным. На работающем агенте действие безопасное - он продолжит работать с прежним сертом. Свежий токен пригодится для переустановки или после смены адреса.',
     refreshBootstrap: 'Перевыпустить bootstrap',
-    metricsLoading: 'Метрики ещё не пришли — первый poll в течение 15 сек.',
+    metricsLoading: 'Метрики ещё не пришли - первый poll в течение 15 сек.',
     bindingsCount: '{{count}} bindings',
     todayLabel: 'сегодня',
     table: {
@@ -99,7 +99,7 @@ export default {
       protocol: 'Протокол',
       protocolDesc: 'основной core ноды',
       address: 'Адрес',
-      addressDesc: 'IP или DNS — panel-mTLS endpoint',
+      addressDesc: 'IP или DNS - panel-mTLS endpoint',
       port: 'Node Port',
       portDesc: 'mTLS, по умолчанию 8443',
       country: 'Страна',
@@ -114,7 +114,7 @@ export default {
       mismatchHint:
         'Binding создастся, но клиенты не подключатся пока install-node не поставит соответствующий бинарь',
       noProfiles:
-        'Профилей в системе пока нет — пропусти этот шаг и создай ноду без bindings.',
+        'Профилей в системе пока нет - пропусти этот шаг и создай ноду без bindings.',
       submitCreate: 'Создать ноду',
       submitWithBindings: 'Создать ноду + {{count}} bindings',
       submitEdit: 'Сохранить',
@@ -126,7 +126,7 @@ export default {
       bindingsCount: 'Bindings ({{count}})',
       noBindings:
         'На эту ноду пока ничего не задеплоено. Используй «Развернуть на нодах» в карточке Profile, или quick-deploy ниже.',
-      quickDeployHint: 'Quick-deploy — совместимые профили:',
+      quickDeployHint: 'Quick-deploy - совместимые профили:',
       removeBindingTooltip: 'Снять с этой ноды',
       uptime: 'uptime {{value}}',
       coresLabel: 'Cores',
@@ -177,7 +177,7 @@ export default {
   },
   dashboard: {
     title: 'Главная',
-    subtitle: 'Сводка по панели — обновляется каждые 10 секунд',
+    subtitle: 'Сводка по панели - обновляется каждые 10 секунд',
     hero: {
       onlineNow: 'В сети сейчас',
       onlineHint: '{{today}} за сегодня · {{week}} за неделю',
@@ -199,7 +199,7 @@ export default {
         month: 'Месяц',
         year: 'Год',
       },
-      noChartData: 'Недостаточно данных для графика — соберём после первого часа трафика',
+      noChartData: 'Недостаточно данных для графика - соберём после первого часа трафика',
     },
     userStatus: {
       title: 'Пользователи по статусу',
@@ -220,11 +220,11 @@ export default {
       memHint: '{{percent}}% занято',
       diskUnavailable: 'statfs недоступен',
       processSecondary: 'Heap {{used}} / {{total}}',
-      noData: 'Метрики недоступны — backend ещё не подключился к /metrics.',
+      noData: 'Метрики недоступны - backend ещё не подключился к /metrics.',
     },
     nodes: {
       title: 'Ноды',
-      empty: 'Нод ещё нет — добавь первую в разделе Nodes.',
+      empty: 'Нод ещё нет - добавь первую в разделе Nodes.',
       cols: {
         name: 'Имя',
         status: 'Статус',
@@ -261,18 +261,18 @@ export default {
   },
   profiles: {
     title: 'Профили',
-    subtitle: 'Шаблоны inbound\'ов — один профиль может разворачиваться на нескольких нодах',
+    subtitle: 'Шаблоны inbound\'ов - один профиль может разворачиваться на нескольких нодах',
     create: 'Создать',
     refresh: 'Обновить',
     searchPlaceholder: 'Поиск по имени или описанию…',
-    emptyAll: 'Профилей нет — нажми «Создать».',
+    emptyAll: 'Профилей нет - нажми «Создать».',
     emptyFiltered: 'Ничего не найдено по фильтру.',
     deployToNodes: 'Развернуть на нодах',
-    bindingsTooltipNone: 'Не развёрнут — клик чтобы задеплоить',
-    bindingsTooltipDeployed: 'Развёрнут на нодах — клик для управления',
+    bindingsTooltipNone: 'Не развёрнут - клик чтобы задеплоить',
+    bindingsTooltipDeployed: 'Развёрнут на нодах - клик для управления',
     deleteTitle: 'Удалить профиль «{{name}}»?',
     deleteWithBindings: 'Профиль развёрнут на {{count}} нодах. Удаление снимет его со всех нод (cascade) и аннулирует подписки на этот протокол у затронутых пользователей.',
-    deleteSafe: 'Профиль не привязан ни к одной ноде — действие безопасное.',
+    deleteSafe: 'Профиль не привязан ни к одной ноде - действие безопасное.',
     notify: {
       created: 'Профиль создан',
       createdOpenDeploy: 'Профиль создан. Выбери ноды + порт для деплоя →',
@@ -289,20 +289,20 @@ export default {
       submitCreate: 'Создать профиль',
       submitEdit: 'Сохранить',
       cfg: {
-        salamanderObfsDesc: 'Опционально. Пусто — без обфускации.',
-        realityDestDesc: 'host:port — fronting decoy',
+        salamanderObfsDesc: 'Опционально. Пусто - без обфускации.',
+        realityDestDesc: 'host:port - fronting decoy',
         realityServerNamesDesc: 'через запятую',
         realityShortIdsDesc: 'hex, через запятую',
         realityFingerprintDesc: 'TLS fingerprint клиента',
         realityPrivateKeyDesc: 'curve25519 base64. «Сгенерировать» или вставить из `xray x25519`.',
         realityPublicKeyDesc: 'auto-derived из private',
-        realitySubprotocolDesc: 'VLESS — Vision-ready. Trojan — password auth.',
+        realitySubprotocolDesc: 'VLESS - Vision-ready. Trojan - password auth.',
         realitySubprotocolVless: 'VLESS (canonical)',
         realitySubprotocolTrojan: 'Trojan (no Vision)',
         realityFlowDesc: 'Vision работает только с raw',
-        realityFlowNone: '(нет) — без flow',
+        realityFlowNone: '(нет) - без flow',
         realityNetworkDesc: 'REALITY: только raw / xhttp / grpc',
-        realityNetworkRaw: 'raw (TCP) — Vision-compatible',
+        realityNetworkRaw: 'raw (TCP) - Vision-compatible',
         xhttpPathDesc: 'HTTP path для xhttp transport',
         hostHeaderDesc: 'опционально, по умолчанию = SNI',
         grpcServiceNameDesc: 'имя gRPC сервиса',
@@ -312,21 +312,21 @@ export default {
         awgJDesc: 'попарно уникален',
         awgHDesc: '> 4 и уникальны',
         awgHWarning:
-          'H1-H4 должны быть попарно уникальны — сейчас есть дубликаты. Жми «Re-roll» чтобы сгенерировать заново.',
+          'H1-H4 должны быть попарно уникальны - сейчас есть дубликаты. Жми «Re-roll» чтобы сгенерировать заново.',
         ssCipherLabel: 'Cipher method',
         ssNote:
           'Per-user пароль = xrayUuid пользователя. Включи у юзера протокол shadowsocks в списке протоколов.',
         mtprotoDomain: 'Masquerade domain',
         mtprotoDomainNote:
-          'Смена домена ротирует секреты ВСЕХ юзеров — старые подписки перестанут работать.',
+          'Смена домена ротирует секреты ВСЕХ юзеров - старые подписки перестанут работать.',
         mieruMtu: 'MTU',
       },
     },
     deploy: {
       title: 'Развернуть «{{name}}» на нодах',
-      hint: 'Отметь ноды, на которых нужен этот профиль. Снятые галки удаляют существующие bindings (cascade — пользователи теряют URL\'ы для этой ноды). Порт для новых bindings: {{port}}.',
+      hint: 'Отметь ноды, на которых нужен этот профиль. Снятые галки удаляют существующие bindings (cascade - пользователи теряют URL\'ы для этой ноды). Порт для новых bindings: {{port}}.',
       port: 'Порт для новых bindings',
-      noNodes: 'Нод нет — сначала создай ноду в разделе Nodes.',
+      noNodes: 'Нод нет - сначала создай ноду в разделе Nodes.',
       saved: 'Развернут: +{{added}} / снят: -{{removed}}',
       noChanges: 'Изменений нет',
       submit: 'Сохранить',
@@ -366,26 +366,26 @@ export default {
       username: 'Username',
       usernameDesc: 'уникален, без пробелов',
       trafficLimit: 'Лимит трафика (ГБ)',
-      trafficLimitDesc: 'Оставь пустым — безлимит',
+      trafficLimitDesc: 'Оставь пустым - безлимит',
       resetStrategy: 'Стратегия сброса',
       resetStrategyDesc: 'Как часто обнулять расход',
       expireDays: 'Истекает через (дней)',
-      expireDaysDesc: 'Оставь пустым — без срока',
+      expireDaysDesc: 'Оставь пустым - без срока',
       email: 'Email',
       telegramId: 'Telegram ID',
       telegramIdPlaceholder: 'optional',
       hwidLimit: 'Лимит HWID-устройств',
       hwidLimitDesc:
-        'Оставь пустым — без ограничения. Учитывается только для клиентов отправляющих x-hwid header (Hiddify, Streisand, Happ).',
+        'Оставь пустым - без ограничения. Учитывается только для клиентов отправляющих x-hwid header (Hiddify, Streisand, Happ).',
       tag: 'Tag',
       tagPlaceholder: 'vip / trial / ...',
       description: 'Описание',
       descriptionPlaceholder: 'Внутренняя заметка',
       squadsDesc:
-        'В каких squad\'ах состоит пользователь. «All» — system-managed fallback (auto-add только если не выбран ни один другой squad).',
+        'В каких squad\'ах состоит пользователь. «All» - system-managed fallback (auto-add только если не выбран ни один другой squad).',
       devicesTitle: 'Зарегистрированные устройства ({{count}})',
       devicesEmpty: 'Юзер ещё не подключался с HWID-aware клиента, либо лимит не задан.',
-      deviceDelete: 'Сбросить слот — юзер сможет залогиниться с другого устройства',
+      deviceDelete: 'Сбросить слот - юзер сможет залогиниться с другого устройства',
       deviceLastSeen: 'last seen: {{when}}',
       submitCreate: 'Создать',
       submitEdit: 'Сохранить',
@@ -400,14 +400,14 @@ export default {
   },
   squads: {
     title: 'Внутренние сквады',
-    subtitle: 'Group ACL — кто какие inbound\'ы видит в подписке',
+    subtitle: 'Group ACL - кто какие inbound\'ы видит в подписке',
     create: 'Создать',
     refresh: 'Обновить',
     open: 'Открыть',
     searchPlaceholder: 'Поиск по имени или описанию…',
     empty: 'Сквадов нет.',
     deleteTitle: 'Удалить сквад «{{name}}»?',
-    deleteBody: 'Пользователи останутся, но потеряют доступ к привязанным к этому скваду профилям. Если других сквадов нет — будут перенесены в All.',
+    deleteBody: 'Пользователи останутся, но потеряют доступ к привязанным к этому скваду профилям. Если других сквадов нет - будут перенесены в All.',
     deleteAllProtected: 'Сквад «All» защищён системой и не удаляется.',
     notify: {
       created: 'Сквад создан',
@@ -432,7 +432,7 @@ export default {
       profilesSelectedBadge: 'Профилей выбрано',
       membersBadge: 'Участников',
       allAlert:
-        'All — системный сквад. Авто-привязывается к каждому новому профилю и каждому новому пользователю. Переименовать, изменить состав или удалить нельзя.',
+        'All - системный сквад. Авто-привязывается к каждому новому профилю и каждому новому пользователю. Переименовать, изменить состав или удалить нельзя.',
     },
   },
   settings: {
@@ -442,20 +442,20 @@ export default {
       title: 'Способы аутентификации',
       description: 'Управление способами входа в панель',
       password: 'Пароль',
-      passwordHint: 'Логин по username + password — основной метод',
+      passwordHint: 'Логин по username + password - основной метод',
       passkey: 'Passkey',
-      passkeyHint: 'WebAuthn / FIDO2 — Phase 3',
+      passkeyHint: 'WebAuthn / FIDO2 - Phase 3',
       telegram: 'Telegram',
       telegramHint: 'Telegram OAuth login widget',
       genericOauth: 'Generic OAuth2',
       soonBadge: 'soon',
-      passwordDisabledTooltip: 'Базовый метод — отключить нельзя пока не настроен другой',
+      passwordDisabledTooltip: 'Базовый метод - отключить нельзя пока не настроен другой',
       comingSoonTooltip: 'Coming soon',
     },
     tokens: {
       title: 'API-токены',
       description: 'Bearer-токены для интеграций (бот, скрипты)',
-      empty: 'Токенов ещё нет. Нажми «Создать» — выпустится новый.',
+      empty: 'Токенов ещё нет. Нажми «Создать» - выпустится новый.',
       createButton: 'Создать токен',
       tableName: 'Имя',
       tableLastUsed: 'Последний раз использован',
@@ -469,10 +469,10 @@ export default {
       modalName: 'Имя',
       modalNamePlaceholder: 'telegram-bot / ci-deploy / ...',
       modalWarning:
-        'После создания плейнтекст-токен будет показан **один раз** — скопируй его сразу. Панель хранит только SHA-256 hash и больше плейнтекст не вернёт.',
+        'После создания плейнтекст-токен будет показан **один раз** - скопируй его сразу. Панель хранит только SHA-256 hash и больше плейнтекст не вернёт.',
       modalSubmit: 'Создать',
       revealTitle: 'Скопируй токен сейчас',
-      revealHint: 'Закрой это окно — и токен будет потерян навсегда.',
+      revealHint: 'Закрой это окно - и токен будет потерян навсегда.',
       revealCopy: 'Скопировать',
       revealCopied: 'Скопировано',
       revealDone: 'Готово',
@@ -481,13 +481,13 @@ export default {
     },
     customization: {
       title: 'Кастомизация',
-      description: 'Бренд и оформление панели — хранится централизованно в БД',
+      description: 'Бренд и оформление панели - хранится централизованно в БД',
       brandName: 'Название бренда',
       brandNameDesc: 'Заголовок страницы входа',
     },
     subscription: {
       title: 'Метаданные подписки',
-      description: 'HTTP-заголовки которые клиенты (Hiddify / Streisand / Happ / V2RayNG) читают вместе с подпиской — название, частота обновления, квота, объявление',
+      description: 'HTTP-заголовки которые клиенты (Hiddify / Streisand / Happ / V2RayNG) читают вместе с подпиской - название, частота обновления, квота, объявление',
       profileTitle: 'Profile Title',
       profileTitleDesc: 'Название подписки в клиенте. Пусто → используется brand name.',
       updateInterval: 'Update interval (часы)',
@@ -502,8 +502,8 @@ export default {
   regions: {
     title: 'Регионы',
     description:
-      'Логическая группировка нод (EU / RU / Asia / …) — используется для фильтрации в /nodes и для smart server-side selection (slice 28).',
-    empty: 'Регионов нет. Создай первый — например, «Europe» с кодом «EU».',
+      'Логическая группировка нод (EU / RU / Asia / …) - используется для фильтрации в /nodes и для smart server-side selection (slice 28).',
+    empty: 'Регионов нет. Создай первый - например, «Europe» с кодом «EU».',
     name: 'Имя',
     namePlaceholder: 'Europe',
     code: 'Код',
@@ -514,7 +514,7 @@ export default {
     add: 'Добавить',
     deleteTitle: 'Удалить регион «{{name}}»?',
     deleteWithNodes: '{{count}} нод останутся, но потеряют привязку к региону (поле обнулится).',
-    deleteSafe: 'Ни одна нода не привязана — действие безопасное.',
+    deleteSafe: 'Ни одна нода не привязана - действие безопасное.',
     notify: {
       created: 'Регион создан',
       updated: 'Регион обновлён',
@@ -523,7 +523,7 @@ export default {
   },
   recipes: {
     title: 'Рецепты быстрой настройки',
-    subtitle: 'Клик — поля ниже заполнятся под выбранный сценарий. Ручная правка остаётся доступной.',
+    subtitle: 'Клик - поля ниже заполнятся под выбранный сценарий. Ручная правка остаётся доступной.',
     appliedBadge: 'RECIPE ПРИМЕНЁН',
     appliedAlert: 'Применён: {{name}}',
     dpiLabel: 'DPI',
@@ -531,48 +531,48 @@ export default {
     cards: {
       'xray-reality-vision-raw': {
         name: 'REALITY + Vision (raw)',
-        description: 'Канонический stealth — маскировка под HTTPS-сайт',
+        description: 'Канонический stealth - маскировка под HTTPS-сайт',
         details:
-          'VLESS + REALITY + Vision flow поверх raw TCP. Трафик выглядит для DPI как обычный HTTPS-запрос на крупный CDN-сайт (Cloudflare/Apple/etc). Vision flow добавляет zero-copy splice — самый быстрый путь без потери на маскировке. Это рекомендуемый дефолт для большинства ситуаций.',
+          'VLESS + REALITY + Vision flow поверх raw TCP. Трафик выглядит для DPI как обычный HTTPS-запрос на крупный CDN-сайт (Cloudflare/Apple/etc). Vision flow добавляет zero-copy splice - самый быстрый путь без потери на маскировке. Это рекомендуемый дефолт для большинства ситуаций.',
         notes: [
-          'Vision работает только с raw — не меняй транспорт после применения recipe',
+          'Vision работает только с raw - не меняй транспорт после применения recipe',
         ],
       },
       'xray-reality-xhttp': {
         name: 'REALITY + xhttp (HTTP/2 chunked)',
         description: 'Для жёсткого DPI который режет VLESS+raw',
         details:
-          'VLESS + REALITY + xhttp transport. Трафик уезжает в HTTP/2 chunked-stream — выглядит как обычный HTTP/2 запрос (выпадает в общую массу h2 трафика к CDN). Чуть медленнее raw (≈10-15% потери на framing), но обходит DPI который начал резать REALITY+raw в некоторых ISP. Без Vision — для xhttp Vision не работает.',
+          'VLESS + REALITY + xhttp transport. Трафик уезжает в HTTP/2 chunked-stream - выглядит как обычный HTTP/2 запрос (выпадает в общую массу h2 трафика к CDN). Чуть медленнее raw (≈10-15% потери на framing), но обходит DPI который начал резать REALITY+raw в некоторых ISP. Без Vision - для xhttp Vision не работает.',
         notes: [
-          'Path рандомизирован — не показывай его публично',
-          'Если REALITY+raw блокируется в твоей сети — xhttp обычно ещё работает',
+          'Path рандомизирован - не показывай его публично',
+          'Если REALITY+raw блокируется в твоей сети - xhttp обычно ещё работает',
         ],
       },
       'xray-trojan-reality': {
         name: 'Trojan + REALITY',
         description: 'Password-auth вместо UUID, anti-probe defense',
         details:
-          'Trojan через xray-core + REALITY. Пользователи аутентифицируются паролем (мы используем user.xrayUuid как пароль). При неверной аутентификации сервер возвращает реальный HTTPS-ответ с decoy-сайта — anti-probe защита. Без Vision (Trojan его не поддерживает). Полезно для legacy-клиентов которые не умеют VLESS.',
+          'Trojan через xray-core + REALITY. Пользователи аутентифицируются паролем (мы используем user.xrayUuid как пароль). При неверной аутентификации сервер возвращает реальный HTTPS-ответ с decoy-сайта - anti-probe защита. Без Vision (Trojan его не поддерживает). Полезно для legacy-клиентов которые не умеют VLESS.',
       },
       'hysteria-default': {
         name: 'Hysteria 2 (clean)',
-        description: 'UDP, низкая latency, без obfs — для свободных регионов',
+        description: 'UDP, низкая latency, без obfs - для свободных регионов',
         details:
-          'Hysteria 2 поверх QUIC (UDP) без обфускации. Самая низкая latency (UDP без TCP-handshake) и хорошая throughput через Brutal CC. Без obfs — DPI может обнаружить QUIC-трафик. Подходит для регионов без активного UDP-DPI.',
+          'Hysteria 2 поверх QUIC (UDP) без обфускации. Самая низкая latency (UDP без TCP-handshake) и хорошая throughput через Brutal CC. Без obfs - DPI может обнаружить QUIC-трафик. Подходит для регионов без активного UDP-DPI.',
       },
       'hysteria-salamander': {
         name: 'Hysteria 2 + Salamander (RU mobile)',
         description: 'Obfuscation для обхода UDP-DPI на РФ-мобиле',
         details:
-          'Hysteria 2 с Salamander obfuscation password. Каждый UDP-пакет XOR-шифруется производным от пароля ключом — DPI не видит QUIC-сигнатуру. На РФ мобильных (Megafon/MTS/Beeline) clean Hysteria часто throttled до tx:0; Salamander обычно проходит. Brutal CC параметры выставлены для пиков 100 Mbps.',
+          'Hysteria 2 с Salamander obfuscation password. Каждый UDP-пакет XOR-шифруется производным от пароля ключом - DPI не видит QUIC-сигнатуру. На РФ мобильных (Megafon/MTS/Beeline) clean Hysteria часто throttled до tx:0; Salamander обычно проходит. Brutal CC параметры выставлены для пиков 100 Mbps.',
         notes: [
-          'Obfs password сгенерирован случайно — не теряй его, нужен на клиентах',
-          'Brutal CC 100/100 Mbps — настрой под реальную пропускную способность ноды',
+          'Obfs password сгенерирован случайно - не теряй его, нужен на клиентах',
+          'Brutal CC 100/100 Mbps - настрой под реальную пропускную способность ноды',
         ],
       },
       'awg-default': {
         name: 'AmneziaWG (default)',
-        description: 'Дефолтные obfs параметры — для большинства ISP',
+        description: 'Дефолтные obfs параметры - для большинства ISP',
         details:
           'AmneziaWG (форк WireGuard с DPI-bypass). Дефолтный preset Jc/Jmin/Jmax + S/H обфускации скрывает WireGuard-сигнатуру. Подходит для большинства провайдеров. На особо жёстких ISP попробуй «Iran-tuned».',
       },
@@ -580,7 +580,7 @@ export default {
         name: 'AmneziaWG (Iran-tuned)',
         description: 'Обфускация под иранский DPI',
         details:
-          'AmneziaWG с параметрами обфускации, рекомендованными командой Amnezia для иранских ISP. Jc=4 (junk count), специфические S1-S4 паддинги, H1-H4 хедер-байты. На иранском DPI default-параметры не проходят, эти — да. Также часто помогают на корпоративных firewall.',
+          'AmneziaWG с параметрами обфускации, рекомендованными командой Amnezia для иранских ISP. Jc=4 (junk count), специфические S1-S4 паддинги, H1-H4 хедер-байты. На иранском DPI default-параметры не проходят, эти - да. Также часто помогают на корпоративных firewall.',
       },
       'naive-default': {
         name: 'NaiveProxy (Caddy)',
@@ -588,34 +588,34 @@ export default {
         details:
           'NaiveProxy через Caddy fork. Трафик идёт в HTTP/2 как обычный HTTPS-запрос с правильным Chrome JA3 fingerprint. ACME cert от Let\'s Encrypt автоматически. Один из самых stealth-вариантов для регионов где xray и hysteria уже забанены.',
         notes: [
-          'Hostname и tlsEmail заполни вручную — нужен реальный домен с A-записью на ноду',
+          'Hostname и tlsEmail заполни вручную - нужен реальный домен с A-записью на ноду',
         ],
       },
       'ss-2022-blake3': {
         name: 'SS-2022 (blake3-aes-256)',
-        description: 'Современный Shadowsocks — XChaCha20 уровень security',
+        description: 'Современный Shadowsocks - XChaCha20 уровень security',
         details:
-          'Shadowsocks 2022 с шифром 2022-blake3-aes-256-gcm. Современная alternative AEAD — лучше по производительности и резистентности к probe-attacks чем legacy chacha20. Поддерживается всеми актуальными SS-клиентами (Outline, Shadowrocket, sing-box).',
+          'Shadowsocks 2022 с шифром 2022-blake3-aes-256-gcm. Современная alternative AEAD - лучше по производительности и резистентности к probe-attacks чем legacy chacha20. Поддерживается всеми актуальными SS-клиентами (Outline, Shadowrocket, sing-box).',
       },
       'mtproto-default': {
         name: 'MTProto (Telegram)',
-        description: 'Только для Telegram-клиента — отдельный use case',
+        description: 'Только для Telegram-клиента - отдельный use case',
         details:
-          'MTProto-прокси для Telegram. Это НЕ general-purpose VPN — только Telegram-трафик. Один shared secret на все юзеры (upstream 9seconds/mtg ограничение). Полезно когда Telegram забанен но хочется быстрого канала именно для месседжера.',
+          'MTProto-прокси для Telegram. Это НЕ general-purpose VPN - только Telegram-трафик. Один shared secret на все юзеры (upstream 9seconds/mtg ограничение). Полезно когда Telegram забанен но хочется быстрого канала именно для месседжера.',
       },
       'mieru-default': {
         name: 'Mieru (Chinese GFW)',
-        description: 'Специально под Great Firewall — random padding',
+        description: 'Специально под Great Firewall - random padding',
         details:
-          'Mieru от enfein — современный stealth-протокол с агрессивным паддингом, разработан против Chinese GFW. Трафик выглядит как noise — нет сигнатур. Поддерживается sing-box. Используй когда другие протоколы режутся в CN-mainland.',
+          'Mieru от enfein - современный stealth-протокол с агрессивным паддингом, разработан против Chinese GFW. Трафик выглядит как noise - нет сигнатур. Поддерживается sing-box. Используй когда другие протоколы режутся в CN-mainland.',
       },
     },
   },
   hosts: {
     sectionLabel: 'Hosts ({{count}})',
     addButton: 'Добавить host',
-    empty: 'У этого binding\'а ноль host\'ов — юзеры не получат URL. Добавь хотя бы один.',
-    awgUnsupported: 'AmneziaWG использует одну точку входа на binding — host-варианты отсутствуют.',
+    empty: 'У этого binding\'а ноль host\'ов - юзеры не получат URL. Добавь хотя бы один.',
+    awgUnsupported: 'AmneziaWG использует одну точку входа на binding - host-варианты отсутствуют.',
     noOverrides: 'no overrides',
     disabledIn: 'выключен в:',
     enableTooltip: 'Включён в подписке',
@@ -630,13 +630,13 @@ export default {
       remarkDesc: 'метка в админке (Direct, EU-CDN, Mobile)',
       enabledLabel: 'Включён в подписке',
       addressOverride: 'Address override',
-      addressDesc: 'cdn.example.com — оставь пустым чтобы использовать node.address',
+      addressDesc: 'cdn.example.com - оставь пустым чтобы использовать node.address',
       portOverride: 'Port override',
       portDesc: 'пусто = binding.port',
       sniOverride: 'SNI override',
       sniDesc: 'пусто = realityServerNames[0]',
       fingerprint: 'Fingerprint',
-      fingerprintDefault: '— по умолчанию —',
+      fingerprintDefault: '- по умолчанию -',
       pathOverride: 'Path override',
       pathDesc: '/path для ws/xhttp',
       hostHeader: 'Host header',
@@ -655,5 +655,205 @@ export default {
       updated: 'Host обновлён',
       deleted: 'Host удалён',
     },
+  },
+
+  // ───── Floe redesign - new chrome keys (cycle #11) ─────
+  pageHero: {
+    usersEyebrow: '{{total}} аккаунтов · {{online}} онлайн{{limited}}',
+    usersEyebrowLimited: ' · {{count}} ограничено',
+    usersTitle: 'Пользователи.',
+    usersSubtitle:
+      'Каждый пользователь - одна subscription-ссылка. Отключить, ограничить или отозвать без трогания протокольного слоя.',
+    profilesEyebrow: 'Шаблоны inbound\'ов · 7 протоколов поддерживается',
+    profilesTitle: 'Профили.',
+    profilesSubtitle:
+      'Один профиль - это логический inbound: протокол, обфускация, форма DPI. Привязал к N нодам - пользователь подхватит через подписку.',
+    nodesEyebrow: 'Флот · {{vps}} VPS · {{countries}} стран',
+    nodesTitle: 'Ноды.',
+    nodesSubtitle:
+      'Одна нода - одно ядро протокола. Панель пушит конфиг по mTLS, агент применяет и отчитывается обратно.',
+    squadsEyebrow: 'Группа ACL · {{count}} {{label}}',
+    squadsLabelOne: 'сквад',
+    squadsLabelMany: 'сквадов',
+    srrEyebrow: 'UA маршрутизация · {{count}} {{label}}',
+    srrLabelOne: 'правило',
+    srrLabelMany: 'правил',
+    srrTitle: 'Subscription Rules.',
+    settingsEyebrow: 'Конфиг панели · сохраняется на коммит',
+    dashboardEyebrow: 'Live · авто-обновление 10с · {{time}}',
+    dashboardHeadlineQuiet: 'Тихий день на линии.',
+    dashboardHeadlineBusy: 'Загруженный флот сегодня.',
+    dashboardHeadlineSteady: 'Стабильный трафик.',
+    dashboardSubtitle:
+      '{{nodes}} нод онлайн, {{users}} активных пользователей. Агрегированный трафик и живая телеметрия хоста ниже - обновляется каждые десять секунд.',
+    dashboardFooterNeverOnline:
+      '{{count}} пользователь ни разу не был онлайн · Проверь provisioning',
+    dashboardFooterNeverOnlinePlural:
+      '{{count}} пользователей ни разу не были онлайн · Проверь provisioning',
+    dashboardFooterAllProvisioned: 'Все пользователи подняты',
+    hostSystemSubtitle: 'хост-сервер',
+    uptimeLabel: 'Uptime',
+    sampledLabel: 'Sampled',
+  },
+
+  modal: {
+    userNewTitle: 'Новый пользователь',
+    userNewSubtitle: 'Subscription-токен + креды зачеканятся при сохранении',
+    userEditSubtitle: 'Редактирование · изменения сохраняются на коммит',
+    nodeNewTitle: 'Новая нода',
+    nodeNewSubtitle: 'Зарегистрировать VPS · мастер из 2 шагов',
+    profileNewTitle: 'Новый профиль',
+    profileNewSubtitle: 'Inbound-шаблон · привяжи к нодам после сохранения',
+    profileEditSubtitle: 'Редактирование шаблона · применится при следующем деплое',
+    squadNewTitle: 'Новый сквад',
+    squadNewSubtitle: 'Срез доступа · группа пользователей + профилей',
+    squadEditSubtitle: 'Редактирование состава · сохраняется на коммит',
+    shortcutCreate: '⏎ Создать · Esc Отмена',
+    shortcutSave: '⏎ Сохранить · Esc Отмена',
+    shortcutTabNext: 'Tab следующее поле · Esc Отмена',
+    shortcutCreateBack: '⏎ Создать · ← Назад править параметры',
+    shortcutBuiltin: 'Системный · только чтение',
+    stepNext: 'Дальше: выбрать профили →',
+    createWithBindings: 'Создать ноду + {{count}} bindings',
+  },
+
+  loginPage: {
+    topbarVersion: 'V1.0 · Operator panel',
+    topbarStatus: 'Все системы в норме',
+    signInBadge: 'Вход',
+    heroLine1: 'Консоль',
+    heroLine2: 'оператора.',
+    heroDescription: 'Одна панель. Все протоколы. Нативные ядра. mTLS-агенты.',
+    feature1: '7 протоколов',
+    feature2: 'Нативные бинарники',
+    feature3: 'mTLS push',
+    credentialsLabel: 'Креды',
+    signInTo: 'Войти в {{brand}}',
+    bootstrapTo: 'Bootstrap {{brand}}',
+    continueAction: 'Продолжить →',
+    createAdminAction: 'Создать админа →',
+    passkeyHint: 'Passkey, Telegram, GitHub',
+    soonLabel: 'Скоро',
+  },
+
+  validation: {
+    nameRequired: 'Имя обязательно',
+    nameLatinOnly: 'Только латиница, цифры, точка, _ и -',
+    nameNoCyrillic: 'Только латиница, цифры, точка, _ и -. Без пробелов и кириллицы.',
+    nameMin3: 'Минимум 3 символа',
+    usernameLatinOnly: 'Только буквы, цифры, _ и -',
+    squadNameAllowed: 'Только буквы, цифры, пробел, _ и -',
+    addressRequired: 'Адрес обязателен',
+    portRequired: 'Порт обязателен',
+    portRange: 'Порт от 1 до 65535',
+    emailInvalid: 'Некорректный email',
+    required: 'Обязательно',
+  },
+
+  userForm: {
+    directLinksTitle: 'Прямые ссылки по протоколам',
+    directLinksLoading: 'Загрузка…',
+    directLinksEmpty:
+      'Нет активных endpoint\'ов. Привяжи юзера к squad с inbound\'ами и разверни профиль на ноду.',
+    copyUri: 'Скопировать URI',
+    copyWgconfHint:
+      'Скопировать wgconf URL (открывается в AmneziaVPN: + → "Файл с настройками подключения" → вставить URL)',
+    copyToClipboard: 'Скопировать',
+    copiedShort: 'Скопировано',
+    tooltipUsers: 'Пользователей',
+    tooltipProfiles: 'Профилей',
+    devicesTitle: 'HWID Устройства',
+  },
+
+  nodeConfirm: {
+    reBootstrapTitle: 'Перевыпустить bootstrap для «{{name}}»?',
+    reBootstrapBody:
+      'Текущий bootstrap-токен и mTLS-сертификат ноды станут невалидными. Если агент уже запущен с прежним сертом - он продолжит работать (мы не отзываем ничего на действующих нодах), но свежий токен пригодится для переустановки install-node.sh, или если ты сменил `address` и нужен новый DNS-SAN. Действие безопасное на работающей ноде, но если ты переустановишь агент со свежим payload\'ом - потребуется retrigger applyInbounds через toggle какого-нибудь профиля.',
+    reBootstrapConfirm: 'Перевыпустить',
+    bindingsPartialTitle: 'Часть bindings не создалась',
+    bindingsPartialMessage:
+      'Привязано: {{ok}}, упало: {{fail}}. Попробуй вручную через карточку Profile.',
+    bindingsAllOk: 'Нода создана + {{count}} bindings',
+  },
+
+  squadForm: {
+    builtinSystemTooltip: 'Системный сквад - auto-tracks все inbound\'ы',
+    selectAll: 'Выбрать все',
+    deselectAll: 'Снять все',
+    deployedTooltip: 'Развёрнут на нодах',
+  },
+
+  profileForm: {
+    nameLatinOnly: 'Только латиница, цифры, точка, _ и -. Без пробелов и кириллицы.',
+    awgImportantTitle: 'Что важно знать про AmneziaWG 2.0:',
+    awgImportant1:
+      'Клиент: AmneziaVPN ≥ 4.8.12.9 или Hiddify Next ≥ 2.4. Старые не подключатся.',
+    awgImportant2:
+      'Порт выберешь на следующем шаге («Развернуть на нодах»). Рекомендация: ≤ 9999, например 443 или 1234. Не используй 51820 - известный WG-default, ISP его режут.',
+    awgImportant3:
+      'При миграции со старого AmneziaWG 1.0 - все ключи peer\'ов нужно перегенерить, со старыми не работает.',
+    deployHintAwgPort: 'Для AmneziaWG: ≤ 9999, например 443 или 1234. 51820 не используй.',
+    nodeMismatchTooltip:
+      'Нода провижена под "{{nodeProtocol}}" - бинарь "{{profileProtocol}}" не установлен. Binding создастся, но клиенты не подключатся пока не запустишь install-node заново с --protocol {{profileProtocol}}.',
+    nodeSupportsTooltip: 'Нода поддерживает "{{protocol}}"',
+  },
+
+  hostsManager: {
+    enabledInSubscription: 'Включён в подписке',
+    moveUp: 'Вверх',
+    moveDown: 'Вниз',
+    edit: 'Редактировать',
+    remove: 'Удалить',
+    remarkDesc: 'метка в админке (Direct, EU-CDN, Mobile)',
+    remarkPlaceholder: '',
+    portPlaceholder: 'пусто = binding.port',
+    sniPlaceholder: 'пусто = realityServerNames[0]',
+    disableForFormatsLabel: 'Не эмитить в форматах',
+    titleNew: 'Новый host',
+    titleEdit: 'Редактировать host «{{name}}»',
+    submitCreate: 'Создать',
+    submitSave: 'Сохранить',
+    remarkRequired: 'обязательно',
+  },
+
+  userStatus: {
+    online: 'Онлайн',
+    offline: 'Офлайн',
+    limited: 'Ограничен',
+    expired: 'Истёк',
+    disabled: 'Отключён',
+  },
+
+  usersTable: {
+    paused: '- пауза',
+    pausedHintQuota: 'квота исчерпана',
+    pausedHintExpired: 'срок истёк',
+    pausedHintGrace: 'grace {{days}}д',
+    footerShowing: 'Показано {{shown}} из {{total}}',
+    footerCount: '{{count}} {{label}}',
+    footerPage: 'Страница {{page}}',
+    actionOpenSub: 'Открыть подписку',
+    actionCopySubUrl: 'Скопировать subscription URL',
+    actionEdit: 'Редактировать',
+    actionDelete: 'Удалить',
+    rowsPerPage: 'Строк на странице',
+    of: 'из',
+  },
+
+  userTime: {
+    never: 'никогда',
+    noExpiry: 'без срока',
+    expiresToday: 'истекает сегодня',
+    expiredAgo: 'истёк {{days}}д назад',
+    daysLeft: '{{days}}д осталось',
+    sAgo: '{{n}}с назад',
+    mAgo: '{{n}}м назад',
+    hAgo: '{{n}}ч назад',
+    dAgo: '{{n}}д назад',
+  },
+
+  settingsNotify: {
+    savedOk: 'Сохранено - обновится у всех админов после refresh',
+    saveErrorTitle: 'Не получилось сохранить',
   },
 } as const;

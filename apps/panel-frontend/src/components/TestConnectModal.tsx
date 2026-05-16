@@ -28,16 +28,16 @@ interface Props {
 }
 
 /**
- * Slice 31 — admin clicks "Test connect" in a profile card and the panel
+ * Slice 31 - admin clicks "Test connect" in a profile card and the panel
  * fires outbound probes against every binding × host. Results appear as a
  * list of green / red rows with TLS handshake CN, latency, or the probe
  * error string. UDP-based protocols (Hysteria/AmneziaWG/Mieru) get a
- * yellow caveat — the TCP-port probe doesn't actually validate them.
+ * yellow caveat - the TCP-port probe doesn't actually validate them.
  *
  * Differentiator vs Remnawave / Marzban: those panels make the admin SSH
  * to the node and run a curl/openssl manually to verify a fresh inbound.
  * Here it's one click and the panel does the network IO from its
- * container — same network path the subscription generator runs from.
+ * container - same network path the subscription generator runs from.
  */
 export function TestConnectModal({ profile, onClose }: Props) {
   const [results, setResults] = useState<TestConnectResult[] | null>(null);
@@ -78,7 +78,7 @@ export function TestConnectModal({ profile, onClose }: Props) {
       <Stack gap="sm">
         <Alert color="blue" variant="light" icon={<IconShieldLock size={14} />}>
           Probe runs from panel container's network. Validates DNS / firewall
-          / TLS handshake — but NOT end-user reachability (their ISP may
+          / TLS handshake - but NOT end-user reachability (their ISP may
           still block).
         </Alert>
 
@@ -98,7 +98,7 @@ export function TestConnectModal({ profile, onClose }: Props) {
 
         {results && results.length === 0 && (
           <Text size="sm" c="dimmed" ta="center" py="xl">
-            У этого профиля нет включённых bindings — нечего проверять.
+            У этого профиля нет включённых bindings - нечего проверять.
           </Text>
         )}
 
@@ -171,7 +171,7 @@ function ResultRow({ result }: { result: TestConnectResult }) {
               </Tooltip>
             )}
             {result.certCn && (
-              <Tooltip label="Peer cert subject CN — for REALITY this should be the masquerade target, not your domain">
+              <Tooltip label="Peer cert subject CN - for REALITY this should be the masquerade target, not your domain">
                 <Code style={{ fontSize: 11 }}>cert={result.certCn}</Code>
               </Tooltip>
             )}

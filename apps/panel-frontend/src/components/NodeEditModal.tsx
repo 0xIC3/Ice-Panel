@@ -63,20 +63,20 @@ const PROTOCOL_OPTIONS: { value: NodeProtocol; label: string }[] = [
   { value: 'mieru', label: 'Mieru (stealth proxy)' },
 ];
 
-// Hard-coded mTLS port from install-node.sh — also the default in the
+// Hard-coded mTLS port from install-node.sh - also the default in the
 // create wizard. Edit modal lets admin tweak per-node.
 const DEFAULT_NODE_PORT = 8443;
 
 interface FormValues {
   name: string;
-  // host + port — split for clearer UX (Remnawave-style). Recombined
+  // host + port - split for clearer UX (Remnawave-style). Recombined
   // into `host:port` on submit.
   host: string;
   port: number | '';
   protocol: NodeProtocol;
   countryCode: string;
   consumptionMultiplier: number | '';
-  // Slice 27.5 — region grouping + capacity hint.
+  // Slice 27.5 - region grouping + capacity hint.
   regionId: string;
   maxUsers: number | '';
 }
@@ -153,7 +153,7 @@ export function NodeEditModal({
     enabled: opened,
   });
 
-  // Live host-metrics + traffic — same source the cards on /nodes use.
+  // Live host-metrics + traffic - same source the cards on /nodes use.
   // Auto-refetch every 10s while modal is open so admin sees fresh data
   // without manual reload.
   const overviewQuery = useQuery({
@@ -164,7 +164,7 @@ export function NodeEditModal({
   });
   const overviewNode = overviewQuery.data?.nodes.find((n) => n.id === node?.id);
 
-  // Bindings deployed on this node (with profile info inlined — `listBindings`
+  // Bindings deployed on this node (with profile info inlined - `listBindings`
   // doesn't include profile name, so we cross-reference with `listProfiles`).
   const bindingsQuery = useQuery({
     queryKey: ['bindings', { nodeId: node?.id }],
@@ -177,7 +177,7 @@ export function NodeEditModal({
     enabled: opened,
   });
 
-  // Squads — used to count users that can reach THIS node via squad → profile
+  // Squads - used to count users that can reach THIS node via squad → profile
   // → binding chain. Approximate (we sum memberCount across squads, can
   // overcount a user who's in multiple squads bound to the same node).
   // Good enough for an at-a-glance number; ground truth is dashboard's
@@ -192,7 +192,7 @@ export function NodeEditModal({
     return { binding: b, profile: p };
   });
 
-  // Approximate "user reach" — squads that have at least one of this node's
+  // Approximate "user reach" - squads that have at least one of this node's
   // profiles, summed by memberCount. Overcounts cross-squad shared users.
   const reachingUsersApprox = (() => {
     const profileIds = new Set(bindingsWithProfile.map((bp) => bp.binding.profileId));
@@ -222,7 +222,7 @@ export function NodeEditModal({
       }),
   });
 
-  // Update binding port — saves the new port via PUT /api/bindings/:id,
+  // Update binding port - saves the new port via PUT /api/bindings/:id,
   // panel auto-re-pushes applyInbound to the node (worker fires on
   // binding change events). Avoids the "SQL UPDATE" dance admins
   // resorted to before this inline edit existed (cycle #6 2026-05-13).
@@ -241,7 +241,7 @@ export function NodeEditModal({
       }),
   });
 
-  // Local draft state for per-binding port input — keyed on binding.id.
+  // Local draft state for per-binding port input - keyed on binding.id.
   // Initialized lazily on first edit; cleared after save.
   const [portDrafts, setPortDrafts] = useState<Record<string, number>>({});
 
@@ -298,24 +298,45 @@ export function NodeEditModal({
       opened={opened}
       onClose={onClose}
       title={
-        <Group gap="sm">
-          <ThemeIcon variant="light" color={statusColor} size="md">
-            <IconActivity size={16} />
-          </ThemeIcon>
-          <Stack gap={0}>
-            <Group gap={6}>
+        <Group gap="sm" align="center">
+          <Card
+            p={8}
+            radius="md"
+            style={{
+              backgroundColor: '#7DD3FC1A',
+              border: '1px solid #7DD3FC33',
+              color: '#7DD3FC',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <IconActivity size={18} />
+          </Card>
+          <Stack gap={4}>
+            <Group gap={8} align="center">
               {node.countryCode && (
                 <Text size="md" lh={1}>
                   {countryFlag(node.countryCode)}
                 </Text>
               )}
-              <Text fw={700}>{node.name}</Text>
-              <Badge variant="light" color={statusColor} size="sm" tt="uppercase">
+              <Text style={{ fontFamily: "'Space Grotesk', Inter, sans-serif", fontWeight: 500, fontSize: 18, color: '#C8D4E3' }}>
+                {node.name}
+              </Text>
+              <Badge variant="light" color={statusColor} size="sm" tt="uppercase" style={{ letterSpacing: '0.08em', fontFamily: "'Geist Mono', monospace" }}>
                 {node.status}
               </Badge>
             </Group>
-            <Text size="xs" c="dimmed" ff="monospace">
-              {node.address}
+            <Text
+              style={{
+                fontFamily: "'Geist Mono', monospace",
+                fontSize: 9,
+                letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+                color: '#7A8BA3',
+              }}
+            >
+              {node.address} · ID {node.id.slice(0, 8)}
             </Text>
           </Stack>
         </Group>
@@ -323,7 +344,7 @@ export function NodeEditModal({
       size="xl"
     >
       <Stack>
-        {/* Status row — parse `degraded: {...}` JSON and surface per-core
+        {/* Status row - parse `degraded: {...}` JSON and surface per-core
             status as readable badges instead of raw JSON noise. */}
         {node.lastStatusMessage &&
           (() => {
@@ -343,10 +364,10 @@ export function NodeEditModal({
               };
               if (!parsed.cores) throw new Error('no cores');
               // Show only the core that matches this node's installed
-              // protocol — agent reports all 7 adapter slots and most
+              // protocol - agent reports all 7 adapter slots and most
               // are stubs ("✓ HYSTERIA" on an xray-only node is noise).
               // If the node is online and the relevant core is also
-              // running, drop the alert entirely — no actionable
+              // running, drop the alert entirely - no actionable
               // information for the admin.
               const relevant = parsed.cores.filter(
                 (c) => c.name.toLowerCase() === node.protocol.toLowerCase(),
@@ -387,7 +408,7 @@ export function NodeEditModal({
           })()}
 
         <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-          {/* LEFT — параметры */}
+          {/* LEFT - параметры */}
           <Card withBorder padding="md" radius="md">
             <Group gap="sm" mb="md">
               <ThemeIcon size={32} radius="md" variant="light" color="blue">
@@ -477,7 +498,7 @@ export function NodeEditModal({
             </Stack>
           </Card>
 
-          {/* RIGHT — система (live metrics) */}
+          {/* RIGHT - система (live metrics) */}
           <Card withBorder padding="md" radius="md">
             <Group justify="space-between" mb="md">
               <Group gap="sm">
@@ -537,7 +558,7 @@ export function NodeEditModal({
                     {t('nodes.edit.reachingUsers')}
                   </Text>
                   <Text size="sm" fw={600}>
-                    {reachingUsersApprox === 0 ? '—' : `~${reachingUsersApprox}`}
+                    {reachingUsersApprox === 0 ? '-' : `~${reachingUsersApprox}`}
                   </Text>
                 </Group>
               </Stack>
@@ -549,7 +570,7 @@ export function NodeEditModal({
           </Card>
         </SimpleGrid>
 
-        {/* Bindings — what's deployed on this node */}
+        {/* Bindings - what's deployed on this node */}
         <Card withBorder padding="md" radius="md">
           <Group justify="space-between" mb="sm">
             <Group gap="sm">
@@ -587,7 +608,7 @@ export function NodeEditModal({
                           <Badge variant="light" color="cyan" size="xs" tt="uppercase">
                             {profile?.protocol ?? '?'}
                           </Badge>
-                          {/* Inline port edit — admin types new port and clicks save.
+                          {/* Inline port edit - admin types new port and clicks save.
                               Was the #1 UX pain point pre-cycle-6 (admins SQL'd the
                               port directly because UI had no edit affordance). */}
                           <Group gap={2} wrap="nowrap">

@@ -1,13 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActionIcon,
   Badge,
-  Button,
   Card,
   Group,
+  Menu,
   Progress,
   SegmentedControl,
+  Select,
   SimpleGrid,
   Stack,
   Table,
@@ -22,12 +23,14 @@ import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  IconCheck,
+  IconChevronLeft,
+  IconChevronRight,
   IconCircleCheck,
   IconCircleMinus,
   IconCircleOff,
   IconClockHour4,
   IconCopy,
+  IconDotsVertical,
   IconEdit,
   IconExternalLink,
   IconPlus,
@@ -50,6 +53,7 @@ import {
 } from '../lib/api';
 import { UserFormModal } from '../components/UserFormModal';
 import { PageHero } from '../components/PageHero';
+import { PrimaryButton } from '../components/PrimaryButton';
 
 // ───── Helpers ─────
 
@@ -65,7 +69,7 @@ const RED = '#E07A5F';
 const VIOLET = '#A78BFA';
 
 const DISPLAY = { fontFamily: "'Space Grotesk', Inter, sans-serif" };
-const MONO = { fontFamily: "'JetBrains Mono', monospace" };
+const MONO = { fontFamily: "'Geist Mono', monospace" };
 const MONO_LABEL = {
   ...MONO,
   fontSize: 10,
@@ -74,11 +78,29 @@ const MONO_LABEL = {
   color: MIST,
 };
 
-const STATUS_ACCENT: Record<string, string> = {
-  active: MOSS,
-  disabled: MIST,
-  expired: RED,
+/**
+ * Computed status shown in the row pill. Paper's design surfaces *connection*
+ * state ("ONLINE/OFFLINE") instead of lifecycle, with lifecycle states
+ * (LIMITED/EXPIRED/DISABLED) overriding the pill when they apply. Order of
+ * precedence: lifecycle override → connection inferred from lastOnlineAt.
+ */
+type ComputedStatus = 'online' | 'offline' | 'limited' | 'expired' | 'disabled';
+
+function computedStatus(u: User): ComputedStatus {
+  if (u.status === 'expired') return 'expired';
+  if (u.status === 'limited') return 'limited';
+  if (u.status === 'disabled') return 'disabled';
+  if (!u.lastOnlineAt) return 'offline';
+  const sinceMs = Date.now() - new Date(u.lastOnlineAt).getTime();
+  return sinceMs < 5 * 60 * 1000 ? 'online' : 'offline';
+}
+
+const COMPUTED_STATUS_ACCENT: Record<ComputedStatus, string> = {
+  online: MOSS,
+  offline: MIST,
   limited: AMBER,
+  expired: RED,
+  disabled: MIST,
 };
 
 function formatBytes(n: number): string {
@@ -94,78 +116,36 @@ function trafficPercent(used: number, limit: number | null): number | null {
   return Math.min(100, (used / limit) * 100);
 }
 
-function relativeTime(iso: string | null): { text: string; tone: 'fresh' | 'stale' | 'never' } {
-  if (!iso) return { text: 'никогда', tone: 'never' };
+type TFn = (key: string, opts?: Record<string, unknown>) => string;
+
+function relativeTime(
+  iso: string | null,
+  t: TFn,
+): { text: string; tone: 'fresh' | 'stale' | 'never' } {
+  if (!iso) return { text: t('userTime.never'), tone: 'never' };
   const diffMs = Date.now() - new Date(iso).getTime();
   const sec = Math.round(diffMs / 1000);
   const tone: 'fresh' | 'stale' = sec < 5 * 60 ? 'fresh' : 'stale';
-  if (sec < 60) return { text: `${sec}с назад`, tone };
+  if (sec < 60) return { text: t('userTime.sAgo', { n: sec }), tone };
   const min = Math.round(sec / 60);
-  if (min < 60) return { text: `${min}м назад`, tone };
+  if (min < 60) return { text: t('userTime.mAgo', { n: min }), tone };
   const hr = Math.round(min / 60);
-  if (hr < 24) return { text: `${hr}ч назад`, tone };
+  if (hr < 24) return { text: t('userTime.hAgo', { n: hr }), tone };
   const days = Math.round(hr / 24);
-  return { text: `${days}д назад`, tone };
+  return { text: t('userTime.dAgo', { n: days }), tone };
 }
 
-function expireRelative(iso: string | null): { text: string; tone: 'good' | 'warn' | 'bad' | 'never' } {
-  if (!iso) return { text: 'без срока', tone: 'never' };
+function expireRelative(
+  iso: string | null,
+  t: TFn,
+): { text: string; tone: 'good' | 'warn' | 'bad' | 'never' } {
+  if (!iso) return { text: t('userTime.noExpiry'), tone: 'never' };
   const diffMs = new Date(iso).getTime() - Date.now();
   const days = Math.round(diffMs / (1000 * 60 * 60 * 24));
-  if (days < 0) return { text: `истёк ${-days}д назад`, tone: 'bad' };
-  if (days === 0) return { text: 'истекает сегодня', tone: 'bad' };
-  if (days <= 7) return { text: `${days}д осталось`, tone: 'warn' };
-  return { text: `${days}д осталось`, tone: 'good' };
-}
-
-// ───── Subscription URL cell ─────
-
-function SubscriptionCell({ url }: { url: string }) {
-  const { t } = useTranslation();
-  const [copied, setCopied] = useState(false);
-  async function handleCopy() {
-    try {
-      await copyToClipboard(url);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    } catch (err) {
-      notifications.show({
-        color: 'red',
-        title: 'Copy failed',
-        message: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
-
-  return (
-    <Group gap={2} wrap="nowrap">
-      <Tooltip label={copied ? t('common.copied') : t('common.copy')}>
-        <ActionIcon
-          variant="subtle"
-          color={copied ? 'teal' : 'gray'}
-          onClick={handleCopy}
-          aria-label="Copy subscription URL"
-          size="sm"
-        >
-          {copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
-        </ActionIcon>
-      </Tooltip>
-      <Tooltip label={t('users.table.subscription')}>
-        <ActionIcon
-          variant="subtle"
-          color="gray"
-          component="a"
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="Open subscription URL"
-          size="sm"
-        >
-          <IconExternalLink size={14} />
-        </ActionIcon>
-      </Tooltip>
-    </Group>
-  );
+  if (days < 0) return { text: t('userTime.expiredAgo', { days: -days }), tone: 'bad' };
+  if (days === 0) return { text: t('userTime.expiresToday'), tone: 'bad' };
+  if (days <= 7) return { text: t('userTime.daysLeft', { days }), tone: 'warn' };
+  return { text: t('userTime.daysLeft', { days }), tone: 'good' };
 }
 
 // ───── Stats card ─────
@@ -228,10 +208,12 @@ export function UsersPage() {
   const [editing, setEditing] = useState<User | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
 
   const usersQuery = useQuery({
     queryKey: ['users'],
-    queryFn: () => listUsers({ page: 1, limit: 200 }),
+    queryFn: () => listUsers({ page: 1, limit: 500 }),
   });
   const squadsQuery = useQuery({ queryKey: ['squads'], queryFn: listSquads });
   const squadNameById = useMemo(() => {
@@ -253,6 +235,12 @@ export function UsersPage() {
     return s;
   }, [allUsers]);
 
+  // Reset page whenever filter or search narrows the set — sticking on page
+  // 5 after filtering to 3 matches gives an empty table.
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, search, rowsPerPage]);
+
   const filteredUsers = useMemo(() => {
     const q = search.trim().toLowerCase();
     return allUsers.filter((u) => {
@@ -266,6 +254,15 @@ export function UsersPage() {
       );
     });
   }, [allUsers, search, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / rowsPerPage));
+  const safePage = Math.min(page, totalPages);
+  const pagedUsers = useMemo(
+    () => filteredUsers.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage),
+    [filteredUsers, safePage, rowsPerPage],
+  );
+  const rangeStart = filteredUsers.length === 0 ? 0 : (safePage - 1) * rowsPerPage + 1;
+  const rangeEnd = Math.min(safePage * rowsPerPage, filteredUsers.length);
 
   const createMutation = useMutation({
     mutationFn: createUser,
@@ -326,9 +323,16 @@ export function UsersPage() {
   return (
     <Stack gap="lg">
       <PageHero
-        eyebrow={`${stats.total} ACCOUNTS · ${stats.active} ONLINE${stats.limited > 0 ? ` · ${stats.limited} LIMITED` : ''}`}
-        title="Users."
-        subtitle="Each user is one subscription URL. Disable, throttle, or revoke without touching the protocol layer."
+        eyebrow={t('pageHero.usersEyebrow', {
+          total: stats.total,
+          online: stats.active,
+          limited:
+            stats.limited > 0
+              ? t('pageHero.usersEyebrowLimited', { count: stats.limited })
+              : '',
+        })}
+        title={t('pageHero.usersTitle')}
+        subtitle={t('pageHero.usersSubtitle')}
         right={
           <Group gap={8}>
             <Tooltip label={t('common.refresh')}>
@@ -342,26 +346,14 @@ export function UsersPage() {
                 <IconRefresh size={18} />
               </ActionIcon>
             </Tooltip>
-            <Button
-              leftSection={<IconPlus size={14} />}
-              onClick={openCreate}
-              style={{
-                backgroundColor: CYAN,
-                color: GROUND,
-                fontWeight: 500,
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-                fontSize: 12,
-                height: 36,
-              }}
-            >
+            <PrimaryButton leftSection={<IconPlus size={14} />} onClick={openCreate}>
               {t('users.create')}
-            </Button>
+            </PrimaryButton>
           </Group>
         }
       />
 
-      {/* Stats row — clickable as filters */}
+      {/* Stats row - clickable as filters */}
       <SimpleGrid cols={{ base: 2, sm: 3, lg: 5 }} spacing="sm">
         <StatChip
           icon={<IconUsers size={20} />}
@@ -465,9 +457,9 @@ export function UsersPage() {
                   </Table.Td>
                 </Table.Tr>
               )}
-              {filteredUsers.map((u) => {
-                const last = relativeTime(u.lastOnlineAt);
-                const exp = expireRelative(u.expireAt);
+              {pagedUsers.map((u) => {
+                const last = relativeTime(u.lastOnlineAt, t);
+                const exp = expireRelative(u.expireAt, t);
                 const trafficPct = trafficPercent(u.trafficUsedBytes, u.trafficLimitBytes);
                 const trafficColor =
                   trafficPct === null
@@ -477,16 +469,19 @@ export function UsersPage() {
                       : trafficPct >= 70
                         ? AMBER
                         : MOSS;
-                const statusAccent = STATUS_ACCENT[u.status] ?? MIST;
+                const compStatus = computedStatus(u);
+                const statusAccent = COMPUTED_STATUS_ACCENT[compStatus];
                 const rowTint =
-                  u.status === 'expired'
+                  compStatus === 'expired'
                     ? `${RED}08`
-                    : u.status === 'limited'
+                    : compStatus === 'limited'
                       ? `${AMBER}08`
                       : undefined;
+                const isPaused = compStatus === 'limited' || compStatus === 'expired';
                 const otherSquads = u.groupIds.filter(
                   (id) => id !== '00000000-0000-0000-0000-000000000001',
                 );
+                const subUrl = subscriptionUrl(u.subscriptionToken);
 
                 return (
                   <Table.Tr
@@ -499,12 +494,13 @@ export function UsersPage() {
                     <Table.Td>
                       <Group gap="sm" wrap="nowrap">
                         <StatusDot accent={statusAccent} />
-                        <Stack gap={0}>
-                          <Text size="sm" fw={600} style={{ color: SNOW }}>
+                        <Stack gap={2}>
+                          <Text size="sm" fw={500} style={{ color: SNOW }}>
                             {u.username}
                           </Text>
                           <Text size="xs" style={{ ...MONO, color: MIST }}>
                             {u.shortId}
+                            {u.telegramId ? ` · ${u.telegramId.startsWith('@') ? u.telegramId : '@' + u.telegramId}` : ''}
                           </Text>
                         </Stack>
                       </Group>
@@ -521,12 +517,12 @@ export function UsersPage() {
                           letterSpacing: '0.08em',
                         }}
                       >
-                        {u.status}
+                        {t(`userStatus.${compStatus}`)}
                       </Badge>
                     </Table.Td>
                     <Table.Td>
                       <Tooltip
-                        label={u.lastOnlineAt ? new Date(u.lastOnlineAt).toLocaleString() : '—'}
+                        label={u.lastOnlineAt ? new Date(u.lastOnlineAt).toLocaleString() : '-'}
                       >
                         <Text
                           size="sm"
@@ -540,7 +536,7 @@ export function UsersPage() {
                       </Tooltip>
                     </Table.Td>
                     <Table.Td>
-                      <Tooltip label={u.expireAt ? new Date(u.expireAt).toLocaleString() : '—'}>
+                      <Tooltip label={u.expireAt ? new Date(u.expireAt).toLocaleString() : '-'}>
                         <Text
                           size="sm"
                           style={{
@@ -561,28 +557,46 @@ export function UsersPage() {
                     <Table.Td miw={200}>
                       <Stack gap={4}>
                         <Group justify="space-between" gap="xs">
-                          <Text size="xs" style={{ ...MONO, color: SNOW }}>
-                            {formatBytes(u.trafficUsedBytes)}{' '}
-                            <Text span style={{ color: MIST }}>
-                              /{' '}
-                              {u.trafficLimitBytes === null
-                                ? '∞'
-                                : formatBytes(u.trafficLimitBytes)}
+                          {isPaused ? (
+                            <Text size="xs" fw={600} style={{ ...MONO, color: compStatus === 'expired' ? RED : AMBER }}>
+                              {t('usersTable.paused')}
                             </Text>
-                          </Text>
-                          {trafficPct !== null && (
+                          ) : (
+                            <Text size="xs" style={{ ...MONO, color: SNOW }}>
+                              {formatBytes(u.trafficUsedBytes)}{' '}
+                              <Text span style={{ color: MIST }}>
+                                /{' '}
+                                {u.trafficLimitBytes === null
+                                  ? '∞'
+                                  : formatBytes(u.trafficLimitBytes)}
+                              </Text>
+                            </Text>
+                          )}
+                          {isPaused ? (
+                            <Text size="xs" style={{ ...MONO, color: MIST }}>
+                              {compStatus === 'expired'
+                                ? t('usersTable.pausedHintExpired')
+                                : t('usersTable.pausedHintQuota')}
+                            </Text>
+                          ) : trafficPct !== null ? (
                             <Text size="xs" fw={600} style={{ ...MONO, color: trafficColor }}>
                               {trafficPct.toFixed(0)}%
                             </Text>
-                          )}
+                          ) : null}
                         </Group>
                         <Progress
-                          value={trafficPct ?? 0}
+                          value={isPaused ? 100 : trafficPct ?? 0}
                           size="sm"
                           radius="xl"
                           styles={{
                             root: { backgroundColor: HAIRLINE },
-                            section: { backgroundColor: trafficColor },
+                            section: {
+                              backgroundColor: isPaused
+                                ? compStatus === 'expired'
+                                  ? RED
+                                  : AMBER
+                                : trafficColor,
+                            },
                           }}
                         />
                       </Stack>
@@ -625,39 +639,46 @@ export function UsersPage() {
                       )}
                     </Table.Td>
                     <Table.Td>
-                      {u.tag ? (
-                        <Badge
-                          variant="outline"
-                          size="sm"
-                          style={{ borderColor: HAIRLINE, color: MIST, ...MONO }}
-                        >
-                          {u.tag}
-                        </Badge>
-                      ) : (
-                        <Text size="xs" style={{ color: MIST }}>
-                          —
-                        </Text>
-                      )}
+                      <Text size="xs" style={{ ...MONO, color: u.tag ? MIST : MIST }}>
+                        {u.tag ?? '-'}
+                      </Text>
                     </Table.Td>
                     <Table.Td>
-                      <Group gap={2} wrap="nowrap">
-                        <SubscriptionCell url={subscriptionUrl(u.subscriptionToken)} />
-                        <Tooltip label={t('common.edit')}>
-                          <ActionIcon variant="subtle" onClick={() => setEditing(u)} size="sm">
-                            <IconEdit size={14} />
+                      <Menu shadow="md" position="bottom-end" withinPortal>
+                        <Menu.Target>
+                          <ActionIcon variant="subtle" size="sm" style={{ color: MIST }}>
+                            <IconDotsVertical size={14} />
                           </ActionIcon>
-                        </Tooltip>
-                        <Tooltip label={t('common.delete')}>
-                          <ActionIcon
-                            variant="subtle"
-                            color="red"
-                            onClick={() => handleDelete(u)}
-                            size="sm"
+                        </Menu.Target>
+                        <Menu.Dropdown style={{ backgroundColor: CARD, borderColor: HAIRLINE }}>
+                          <Menu.Item
+                            leftSection={<IconCopy size={14} />}
+                            onClick={() => copyToClipboard(subUrl)}
                           >
-                            <IconTrash size={14} />
-                          </ActionIcon>
-                        </Tooltip>
-                      </Group>
+                            {t('usersTable.actionCopySubUrl')}
+                          </Menu.Item>
+                          <Menu.Item
+                            leftSection={<IconExternalLink size={14} />}
+                            component="a"
+                            href={subUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {t('usersTable.actionOpenSub')}
+                          </Menu.Item>
+                          <Menu.Item leftSection={<IconEdit size={14} />} onClick={() => setEditing(u)}>
+                            {t('usersTable.actionEdit')}
+                          </Menu.Item>
+                          <Menu.Divider />
+                          <Menu.Item
+                            color="red"
+                            leftSection={<IconTrash size={14} />}
+                            onClick={() => handleDelete(u)}
+                          >
+                            {t('usersTable.actionDelete')}
+                          </Menu.Item>
+                        </Menu.Dropdown>
+                      </Menu>
                     </Table.Td>
                   </Table.Tr>
                 );
@@ -665,6 +686,58 @@ export function UsersPage() {
             </Table.Tbody>
           </Table>
         </Table.ScrollContainer>
+        {filteredUsers.length > 0 && (
+          <Group
+            justify="flex-end"
+            gap="lg"
+            px="md"
+            py="sm"
+            style={{ borderTop: `1px solid ${HAIRLINE}` }}
+          >
+            <Group gap={8}>
+              <Text style={MONO_LABEL}>{t('usersTable.rowsPerPage')}</Text>
+              <Select
+                size="xs"
+                value={String(rowsPerPage)}
+                onChange={(v) => setRowsPerPage(Number(v) || 25)}
+                data={['10', '25', '50', '100']}
+                allowDeselect={false}
+                w={72}
+                styles={{
+                  input: {
+                    backgroundColor: GROUND,
+                    borderColor: HAIRLINE,
+                    color: SNOW,
+                    ...MONO,
+                  },
+                }}
+              />
+            </Group>
+            <Text style={{ ...MONO_LABEL, color: SNOW }}>
+              {rangeStart}-{rangeEnd} {t('usersTable.of')} {filteredUsers.length}
+            </Text>
+            <Group gap={4}>
+              <ActionIcon
+                variant="subtle"
+                size="sm"
+                disabled={safePage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                style={{ color: safePage <= 1 ? MIST : SNOW }}
+              >
+                <IconChevronLeft size={16} />
+              </ActionIcon>
+              <ActionIcon
+                variant="subtle"
+                size="sm"
+                disabled={safePage >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                style={{ color: safePage >= totalPages ? MIST : SNOW }}
+              >
+                <IconChevronRight size={16} />
+              </ActionIcon>
+            </Group>
+          </Group>
+        )}
       </Card>
 
       <UserFormModal

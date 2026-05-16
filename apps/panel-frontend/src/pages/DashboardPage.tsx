@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Badge,
+  Box,
   Card,
   Group,
   Progress,
@@ -45,7 +46,7 @@ const RED = '#E07A5F';
 const VIOLET = '#A78BFA';
 
 const MONO_LABEL = {
-  fontFamily: "'JetBrains Mono', monospace",
+  fontFamily: "'Geist Mono', monospace",
   fontSize: 10,
   letterSpacing: '0.12em',
   textTransform: 'uppercase' as const,
@@ -130,43 +131,37 @@ interface StatCardProps {
 
 function StatCard({ icon, label, value, unit, hint, hintColor = MIST, accent }: StatCardProps) {
   return (
-    <Card withBorder padding="lg" radius="md" style={cardStyle}>
-      <Group justify="space-between" align="flex-start" wrap="nowrap">
-        <Stack gap={6} style={{ minWidth: 0 }}>
-          <Text style={MONO_LABEL}>{label}</Text>
-          <Group gap={6} align="baseline" wrap="nowrap">
-            <Text
-              style={{ ...DISPLAY, fontSize: 44, fontWeight: 500, color: SNOW, lineHeight: 1.05 }}
-            >
-              {value}
-            </Text>
-            {unit && (
-              <Text
-                style={{ ...DISPLAY, fontSize: 20, fontWeight: 500, color: MIST }}
-              >
-                {unit}
-              </Text>
-            )}
-          </Group>
-          {hint && (
-            <Text size="xs" style={{ color: hintColor }}>
-              {hint}
-            </Text>
-          )}
-        </Stack>
-        <ThemeIcon
-          size={40}
-          radius="md"
-          variant="light"
+    <Card withBorder padding="md" radius="md" style={cardStyle}>
+      <Group justify="space-between" align="flex-start" wrap="nowrap" mb={10}>
+        <Text style={MONO_LABEL}>{label}</Text>
+        <Box style={{ color: accent, display: 'flex', flexShrink: 0 }}>{icon}</Box>
+      </Group>
+      <Group gap={6} align="baseline" wrap="nowrap" mb={hint ? 8 : 0}>
+        <Text
+          style={{ ...DISPLAY, fontSize: 52, fontWeight: 500, color: SNOW, lineHeight: 1 }}
+        >
+          {value}
+        </Text>
+        {unit && (
+          <Text
+            style={{ ...DISPLAY, fontSize: 22, fontWeight: 400, color: MIST, lineHeight: 1 }}
+          >
+            {unit}
+          </Text>
+        )}
+      </Group>
+      {hint && (
+        <Text
           style={{
-            backgroundColor: `${accent}1A`,
-            color: accent,
-            border: `1px solid ${accent}33`,
+            ...MONO_LABEL,
+            fontSize: 9,
+            letterSpacing: '0.14em',
+            color: hintColor,
           }}
         >
-          {icon}
-        </ThemeIcon>
-      </Group>
+          {hint}
+        </Text>
+      )}
     </Card>
   );
 }
@@ -246,17 +241,20 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
   }).toUpperCase();
   const heroHeadline =
     users.onlineNow <= users.total * 0.3
-      ? 'Quiet day on the line.'
+      ? t('pageHero.dashboardHeadlineQuiet')
       : users.onlineNow >= users.total * 0.7
-        ? 'Busy fleet today.'
-        : 'Steady traffic.';
+        ? t('pageHero.dashboardHeadlineBusy')
+        : t('pageHero.dashboardHeadlineSteady');
 
   return (
     <Stack gap="lg">
       <PageHero
-        eyebrow={`LIVE · AUTO-REFRESH 10S · ${timeLabel}`}
+        eyebrow={t('pageHero.dashboardEyebrow', { time: timeLabel })}
         title={heroHeadline}
-        subtitle={`${system.onlineNodeCount} nodes online, ${users.byStatus.active ?? 0} users active. Aggregated traffic and live host telemetry below — pulled fresh every ten seconds.`}
+        subtitle={t('pageHero.dashboardSubtitle', {
+          nodes: system.onlineNodeCount,
+          users: users.byStatus.active ?? 0,
+        })}
       />
 
       {/* Hero row */}
@@ -407,7 +405,7 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
                             {n.countryCode ? `${flagEmoji(n.countryCode)} ` : ''}
                             {n.name}
                           </Text>
-                          <Text size="xs" style={{ color: MIST, fontFamily: "'JetBrains Mono', monospace" }}>
+                          <Text size="xs" style={{ color: MIST, fontFamily: "'Geist Mono', monospace" }}>
                             {n.address}
                           </Text>
                         </Stack>
@@ -454,12 +452,12 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
                         />
                       </Table.Td>
                       <Table.Td ta="right">
-                        <Text size="sm" style={{ color: SNOW, fontFamily: "'JetBrains Mono', monospace" }}>
+                        <Text size="sm" style={{ color: SNOW, fontFamily: "'Geist Mono', monospace" }}>
                           {n.inboundCount}
                         </Text>
                       </Table.Td>
                       <Table.Td ta="right">
-                        <Text size="sm" style={{ color: SNOW, fontFamily: "'JetBrains Mono', monospace" }}>
+                        <Text size="sm" style={{ color: SNOW, fontFamily: "'Geist Mono', monospace" }}>
                           {formatBytes(n.todayBytes)}
                         </Text>
                       </Table.Td>
@@ -515,7 +513,7 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
                       </Text>
                     </Group>
                     <Group gap={4} align="baseline">
-                      <Text size="sm" fw={600} style={{ color: SNOW, fontFamily: "'JetBrains Mono', monospace" }}>
+                      <Text size="sm" fw={600} style={{ color: SNOW, fontFamily: "'Geist Mono', monospace" }}>
                         {p.enabledUserCount}
                       </Text>
                       <Text size="xs" style={{ color: MIST }}>
@@ -571,7 +569,7 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
                     </ThemeIcon>
                     <Text size="sm" style={{ color: SNOW }}>{u.username}</Text>
                   </Group>
-                  <Text size="sm" fw={600} style={{ color: SNOW, fontFamily: "'JetBrains Mono', monospace" }}>
+                  <Text size="sm" fw={600} style={{ color: SNOW, fontFamily: "'Geist Mono', monospace" }}>
                     {formatBytes(u.bytes)}
                   </Text>
                 </Group>
@@ -621,7 +619,7 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
                       </ThemeIcon>
                       <Stack gap={0}>
                         <Text size="sm" style={{ color: SNOW }}>{e.eventType}</Text>
-                        <Text size="xs" style={{ color: MIST, fontFamily: "'JetBrains Mono', monospace" }}>
+                        <Text size="xs" style={{ color: MIST, fontFamily: "'Geist Mono', monospace" }}>
                           {e.username ?? e.userId.slice(0, 8)}
                         </Text>
                       </Stack>
@@ -659,8 +657,13 @@ function DashboardContent({ data }: { data: DashboardOverview }) {
           />
           <Text style={{ ...MONO_LABEL, color: users.neverOnline > 0 ? AMBER : MIST }}>
             {users.neverOnline > 0
-              ? `${users.neverOnline} USER${users.neverOnline === 1 ? '' : 'S'} NEVER ONLINE · REVIEW PROVISIONING`
-              : 'ALL USERS PROVISIONED'}
+              ? t(
+                  users.neverOnline === 1
+                    ? 'pageHero.dashboardFooterNeverOnline'
+                    : 'pageHero.dashboardFooterNeverOnlinePlural',
+                  { count: users.neverOnline },
+                )
+              : t('pageHero.dashboardFooterAllProvisioned')}
           </Text>
         </Group>
         <Text style={{ ...MONO_LABEL }}>
@@ -688,23 +691,29 @@ function SystemHealth({ host }: { host: DashboardOverview['host'] }) {
 
   return (
     <Card withBorder padding="lg" radius="md" style={cardStyle}>
-      <Group gap="xs" mb="md">
-        <ThemeIcon
-          size={28}
-          radius="md"
-          variant="light"
-          style={{ backgroundColor: `${CYAN}1A`, color: CYAN, border: `1px solid ${CYAN}33` }}
-        >
-          <IconDeviceDesktopAnalytics size={16} />
-        </ThemeIcon>
-        <Stack gap={0}>
-          <Text fw={600} style={{ color: SNOW }}>
-            {t('dashboard.health.title')}
+      <Group justify="space-between" align="center" mb="md">
+        <Group gap={10}>
+          <Box style={{ color: CYAN, display: 'flex' }}>
+            <IconDeviceDesktopAnalytics size={18} />
+          </Box>
+          <Text
+            style={{
+              ...DISPLAY,
+              fontSize: 15,
+              fontWeight: 500,
+              color: SNOW,
+            }}
+          >
+            {t('dashboard.health.title')}{' '}
+            <span style={{ color: MIST }}>· {t('pageHero.hostSystemSubtitle')}</span>
           </Text>
-          <Text size="xs" style={{ color: MIST }}>
-            {t('dashboard.health.subtitle', { uptime: formatUptime(host.process.uptimeSeconds) })}
-          </Text>
-        </Stack>
+        </Group>
+        <Text style={{ ...MONO_LABEL, fontSize: 9, letterSpacing: '0.14em' }}>
+          {t('pageHero.uptimeLabel').toUpperCase()}{' '}
+          {formatUptime(host.process.uptimeSeconds).toUpperCase()} ·{' '}
+          {t('pageHero.sampledLabel').toUpperCase()}{' '}
+          {new Date().toLocaleTimeString('en-GB', { hour12: false })}
+        </Text>
       </Group>
 
       <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="md">
@@ -737,7 +746,7 @@ function SystemHealth({ host }: { host: DashboardOverview['host'] }) {
           primary={
             host.disk
               ? `${formatBytes(host.disk.usedBytes)} / ${formatBytes(host.disk.totalBytes)}`
-              : '—'
+              : '-'
           }
           secondary={
             host.disk
@@ -779,41 +788,49 @@ function UsageBar({
   const clamped = Math.min(100, Math.max(0, percent));
   return (
     <Card withBorder p="md" radius="sm" style={{ backgroundColor: '#08101A', borderColor: HAIRLINE }}>
-      <Group justify="space-between" mb="xs">
+      <Group justify="space-between" align="center" mb={10}>
         <Group gap={8}>
-          <ThemeIcon
-            size={22}
-            radius="md"
-            variant="light"
-            style={{ backgroundColor: `${color}1A`, color, border: `1px solid ${color}33` }}
-          >
-            {icon}
-          </ThemeIcon>
+          <Box style={{ color, display: 'flex' }}>{icon}</Box>
           <Text size="sm" fw={500} style={{ color: SNOW }}>
             {label}
           </Text>
         </Group>
-        <Text size="xs" style={{ color: MIST, fontFamily: "'JetBrains Mono', monospace" }}>
+        <Text
+          style={{
+            fontFamily: "'Geist Mono', monospace",
+            fontSize: 11,
+            color,
+            fontWeight: 500,
+          }}
+        >
           {percent.toFixed(0)}%
         </Text>
       </Group>
       <Progress
         value={clamped}
-        size="sm"
-        radius="xl"
+        size="xs"
+        radius="xs"
         styles={{
           root: { backgroundColor: HAIRLINE },
           section: { backgroundColor: color },
         }}
+        mb={10}
       />
-      <Stack gap={0} mt="xs">
-        <Text size="sm" fw={600} style={{ color: SNOW, fontFamily: "'JetBrains Mono', monospace" }}>
-          {primary}
-        </Text>
-        <Text size="xs" style={{ color: MIST }}>
-          {secondary}
-        </Text>
-      </Stack>
+      <Text
+        style={{
+          ...DISPLAY,
+          fontSize: 20,
+          fontWeight: 500,
+          color: SNOW,
+          lineHeight: 1,
+          marginBottom: 4,
+        }}
+      >
+        {primary}
+      </Text>
+      <Text size="xs" style={{ color: MIST, fontFamily: "'Geist Mono', monospace" }}>
+        {secondary}
+      </Text>
     </Card>
   );
 }
@@ -835,7 +852,7 @@ function NodeMiniBar({
   if (percent === null) {
     return (
       <Text size="xs" style={{ color: MIST }}>
-        —
+        -
       </Text>
     );
   }
@@ -852,7 +869,7 @@ function NodeMiniBar({
             section: { backgroundColor: color },
           }}
         />
-        <Text size="xs" style={{ color: MIST, fontFamily: "'JetBrains Mono', monospace" }}>
+        <Text size="xs" style={{ color: MIST, fontFamily: "'Geist Mono', monospace" }}>
           {percent.toFixed(0)}%
         </Text>
       </Stack>
@@ -882,9 +899,9 @@ function StatusDot({ color, label }: { color: string; label: string }) {
 
 function TrafficStat({ label, value }: { label: string; value: string }) {
   return (
-    <Stack gap={0} align="flex-end">
-      <Text style={MONO_LABEL}>{label}</Text>
-      <Text size="sm" fw={600} style={{ color: SNOW, fontFamily: "'JetBrains Mono', monospace" }}>
+    <Stack gap={4} align="flex-end">
+      <Text style={{ ...MONO_LABEL, fontSize: 9, letterSpacing: '0.14em' }}>{label}</Text>
+      <Text style={{ ...DISPLAY, fontSize: 16, fontWeight: 500, color: SNOW, lineHeight: 1 }}>
         {value}
       </Text>
     </Stack>
@@ -893,26 +910,26 @@ function TrafficStat({ label, value }: { label: string; value: string }) {
 
 function StatusChip({ label, value, dot }: { label: string; value: number; dot: string }) {
   return (
-    <Card withBorder p="sm" radius="sm" style={{ backgroundColor: '#08101A', borderColor: HAIRLINE }}>
-      <Stack gap={6}>
-        <Group gap={6}>
-          <span
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              backgroundColor: dot,
-              boxShadow: `0 0 6px ${dot}99`,
-            }}
-          />
-          <Text style={MONO_LABEL}>{label}</Text>
-        </Group>
-        <Text
-          style={{ ...DISPLAY, fontSize: 28, fontWeight: 500, color: SNOW, lineHeight: 1 }}
-        >
-          {value}
-        </Text>
-      </Stack>
+    <Card withBorder p="md" radius="sm" style={{ backgroundColor: '#08101A', borderColor: HAIRLINE }}>
+      <Group justify="space-between" align="flex-start" wrap="nowrap" mb={12}>
+        <Text style={{ ...MONO_LABEL, fontSize: 9, letterSpacing: '0.14em' }}>{label}</Text>
+        <span
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            backgroundColor: dot,
+            boxShadow: `0 0 6px ${dot}99`,
+            marginTop: 4,
+            flexShrink: 0,
+          }}
+        />
+      </Group>
+      <Text
+        style={{ ...DISPLAY, fontSize: 36, fontWeight: 500, color: SNOW, lineHeight: 1 }}
+      >
+        {value}
+      </Text>
     </Card>
   );
 }

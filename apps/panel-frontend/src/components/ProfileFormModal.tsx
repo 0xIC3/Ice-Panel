@@ -4,6 +4,7 @@ import {
   Accordion,
   Alert,
   Button,
+  Card,
   Divider,
   Group,
   Modal,
@@ -18,7 +19,7 @@ import {
   Textarea,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { IconKey } from '@tabler/icons-react';
+import { IconBolt, IconKey } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useMutation } from '@tanstack/react-query';
 import {
@@ -108,18 +109,18 @@ interface FormValues {
 //   - Jc 0..10, Jmin/Jmax 64..1024, S1-S3 0..64, S4 0..32
 //
 // S3 and S4 forced to ZERO due to upstream bug
-// https://github.com/amnezia-vpn/amnezia-client/issues/2582 —
+// https://github.com/amnezia-vpn/amnezia-client/issues/2582 -
 // AmneziaVPN client 4.8.15.x (Android + iOS, awg-go v0.2.16 under
 // the hood) DROPS all transport traffic when server has non-zero
 // S3/S4. Connection reaches "CONNECTED" state but handshake retries
 // forever and zero bytes flow. Bug open since Feb 2026, claimed
 // fixed in 4.8.12.9 but persisted into 4.8.15.5. Reproduced live
-// on iOS 26.4 client cycle #6 2026-05-13 with our awg-VPS — same
+// on iOS 26.4 client cycle #6 2026-05-13 with our awg-VPS - same
 // "Connected, but no traffic, handshake retries every 5s" symptom.
 // Workaround: server must set S3=0 S4=0. Lift these defaults to
 // non-zero again when upstream fixes the client.
 //
-// S1 and S2 stay non-zero — they were in AmneziaWG since v1.5, the
+// S1 and S2 stay non-zero - they were in AmneziaWG since v1.5, the
 // bug only affects the v2.0-added S3+S4 fields. Junk-packet (Jc)
 // obfuscation also remains active.
 const TSPU_PRESET = { jc: 4, jmin: 64, jmax: 128, s1: 32, s2: 56, s3: 0, s4: 0 };
@@ -132,7 +133,7 @@ const MOBILE_PRESET = { jc: 3, jmin: 64, jmax: 100, s1: 32, s2: 56, s3: 0, s4: 0
  *   - random in int32 range so they don't fingerprint Ice-Panel deployments
  *
  * Replaces the previous "run `shuf -i 5-2147483647 -n 4` yourself" admin
- * hint — admin shouldn't need a shell to set up obfuscation.
+ * hint - admin shouldn't need a shell to set up obfuscation.
  */
 function randomAwgHeaders(): { h1: number; h2: number; h3: number; h4: number } {
   const seen = new Set<number>();
@@ -306,11 +307,11 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
     validate: {
       name: (v) => {
         if (v.length < 1) return 'Required';
-        // Mirror backend Zod regex — Letters, digits, dot, underscore, hyphen
+        // Mirror backend Zod regex - Letters, digits, dot, underscore, hyphen
         // (no spaces, no Cyrillic). Catch the violation client-side so the
         // admin doesn't ride a 400 round-trip to find out.
         if (!/^[a-zA-Z0-9._-]+$/.test(v)) {
-          return 'Только латиница, цифры, точка, _ и -. Без пробелов и кириллицы.';
+          return t('profileForm.nameLatinOnly');
         }
         return null;
       },
@@ -323,7 +324,7 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
   }, [opened, profile?.id]);
 
   // Auto-fill the gRPC serviceName placeholder when the admin switches
-  // transport=grpc — the field is `required`, so without a default the
+  // transport=grpc - the field is `required`, so without a default the
   // form refuses to save with a misleading "fill this field" prompt
   // even though we've shown a placeholder hinting at the canonical
   // value. `GunService` is the xtls/xray default; admins who want a
@@ -359,7 +360,7 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
 
   function applyAwgPreset(preset: 'tspu' | 'mobile' | 'custom') {
     form.setFieldValue('awgPreset', preset);
-    // Always re-roll H1-H4 on preset apply — each profile should have unique
+    // Always re-roll H1-H4 on preset apply - each profile should have unique
     // headers so it's not fingerprinted as "another Ice-Panel TSPU node".
     const headers = randomAwgHeaders();
     if (preset === 'tspu') {
@@ -383,7 +384,7 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
         awgH4: headers.h4,
       });
     } else {
-      // custom — only re-roll headers if all 4 are blank, so admin's manual
+      // custom - only re-roll headers if all 4 are blank, so admin's manual
       // tweaks aren't clobbered by accident.
       const allEmpty =
         form.values.awgH1 === '' &&
@@ -511,7 +512,40 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
         form.reset();
         onClose();
       }}
-      title={isEdit ? t('profiles.form.titleEdit', { name: profile.name }) : t('profiles.form.titleCreate')}
+      title={
+        <Group gap="sm" align="center">
+          <Card
+            p={8}
+            radius="md"
+            style={{
+              backgroundColor: '#7DD3FC1A',
+              border: '1px solid #7DD3FC33',
+              color: '#7DD3FC',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <IconBolt size={18} />
+          </Card>
+          <Stack gap={2}>
+            <Text style={{ fontFamily: "'Space Grotesk', Inter, sans-serif", fontWeight: 500, fontSize: 18, color: '#C8D4E3' }}>
+              {isEdit ? profile.name : t('modal.profileNewTitle')}
+            </Text>
+            <Text
+              style={{
+                fontFamily: "'Geist Mono', monospace",
+                fontSize: 9,
+                letterSpacing: '0.16em',
+                textTransform: 'uppercase',
+                color: '#7A8BA3',
+              }}
+            >
+              {isEdit ? t('modal.profileEditSubtitle') : t('modal.profileNewSubtitle')}
+            </Text>
+          </Stack>
+        </Group>
+      }
       size="lg"
     >
       <form onSubmit={form.onSubmit(handleSubmit)}>
@@ -560,7 +594,7 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
               // Apply recipe field overrides first. `apply` may be a plain
               // object (for static recipes) OR a thunk for recipes that
                // need fresh randomness per click (Salamander password, AWG
-              // H1-H4, REALITY+xhttp path) — see Recipe.apply jsdoc. Resolve
+              // H1-H4, REALITY+xhttp path) - see Recipe.apply jsdoc. Resolve
               // the union here so every click yields a new random where
               // applicable, instead of the once-per-page-load value the
               // static-object form would freeze.
@@ -578,7 +612,7 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
                 const updates: Partial<FormValues> = {};
 
                 if (shortIdsEmpty) {
-                  // 6 random 16-hex-char shortIds — clients can pick any of
+                  // 6 random 16-hex-char shortIds - clients can pick any of
                   // them in their URI, REALITY accepts whichever matches.
                   // Multiple shortIds let admin rotate without breaking
                   // existing subscriptions.
@@ -595,7 +629,7 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
                     updates.xrayPrivateKey = kp.privateKey;
                     updates.xrayPublicKey = kp.publicKey;
                   } catch {
-                    // Soft-fail — admin can still hit "Сгенерировать" manually.
+                    // Soft-fail - admin can still hit "Сгенерировать" manually.
                   }
                 }
 
@@ -667,7 +701,7 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
               <Group grow align="flex-end">
                 <NumberInput
                   label="Port range start"
-                  description="Slice 31.5 — UDP port-hopping for RU TSPU. Empty = single port."
+                  description="Slice 31.5 - UDP port-hopping for RU TSPU. Empty = single port."
                   placeholder="20000"
                   min={1024}
                   max={65535}
@@ -809,22 +843,21 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
             <Stack>
               {/* AmneziaWG-specific gotchas in one place. Per upstream
                   amnezia.org docs: (a) pre-4.8.12.9 AmneziaVPN clients
-                  silently don't recognize S3/S4 v2.0 fields — handshake
+                  silently don't recognize S3/S4 v2.0 fields - handshake
                   fails without error. (b) AmneziaWG 1.0 credentials are
-                  not interchangeable with 2.0 — fresh keys required for
-                  every peer when migrating. (c) port choice matters —
+                  not interchangeable with 2.0 - fresh keys required for
+                  every peer when migrating. (c) port choice matters -
                   upstream recommends < 9999 because some ISPs block
                   high UDP ports; 51820 is the well-known WG default
                   and is specifically targeted by DPI. Port is set on
                   the binding (Nodes → Edit), not here. */}
               <Alert color="blue" variant="light" p="xs">
                 <Text size="xs" component="div">
-                  <strong>Что важно знать про AmneziaWG 2.0:</strong>
+                  <strong>{t('profileForm.awgImportantTitle')}</strong>
                   <ul style={{ margin: '4px 0 0 16px', paddingLeft: 0 }}>
-                    <li>Клиент: <strong>AmneziaVPN ≥ 4.8.12.9</strong> или Hiddify Next ≥ 2.4. Старые не подключатся.</li>
-                    <li>Порт выберешь на следующем шаге («Развернуть на нодах»). Рекомендация: <strong>≤ 9999</strong>, например 443 или 1234. Не используй 51820 — известный WG-default, ISP его режут.</li>
-                    <li>При миграции со старого AmneziaWG 1.0 — все ключи peer'ов нужно перегенерить, со старыми не работает.</li>
-                    <li><strong>S3 и S4 оставлены = 0</strong> из-за upstream-бага AmneziaVPN client 4.8.15.x (<a href="https://github.com/amnezia-vpn/amnezia-client/issues/2582" target="_blank" rel="noreferrer">issue #2582</a>): при ненулевых S3/S4 connect показывает «Подключено», но реально трафик не идёт. Вернём дефолты на non-zero когда апстрим починит.</li>
+                    <li>{t('profileForm.awgImportant1')}</li>
+                    <li>{t('profileForm.awgImportant2')}</li>
+                    <li>{t('profileForm.awgImportant3')}</li>
                   </ul>
                 </Text>
               </Alert>
@@ -928,7 +961,7 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
                   Re-roll
                 </Button>
               </Group>
-              {/* I1-I5 mimicry packets — power-user feature, 99% of
+              {/* I1-I5 mimicry packets - power-user feature, 99% of
                   operators don't need them. Hidden behind a collapsible
                   section so the main form stays clean. Standard pattern
                   for "you probably don't want this, but it exists". */}
@@ -942,7 +975,7 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
                   <Accordion.Panel>
                     <Stack gap={6}>
                       <Text size="xs" c="dimmed">
-                        AmneziaWG v2.0 фича — маскирует handshake под другой протокол (QUIC / DNS / STUN). Нужно ТОЛЬКО если стандартный TSPU/Mobile preset не проходит DPI. Пустые поля = выключено, безопасно. Значения hex, до 256 символов каждое, ДОЛЖНЫ совпадать с клиентом.
+                        AmneziaWG v2.0 фича - маскирует handshake под другой протокол (QUIC / DNS / STUN). Нужно ТОЛЬКО если стандартный TSPU/Mobile preset не проходит DPI. Пустые поля = выключено, безопасно. Значения hex, до 256 символов каждое, ДОЛЖНЫ совпадать с клиентом.
                       </Text>
                       <Group grow>
                         <TextInput label="I1" placeholder="hex" {...form.getInputProps('awgI1')} />
@@ -958,7 +991,7 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
                 </Accordion.Item>
               </Accordion>
               {(() => {
-                // Live H-uniqueness validator. Empty values pass — let the
+                // Live H-uniqueness validator. Empty values pass - let the
                 // `required` semantics fire on submit instead.
                 const vals = [
                   form.values.awgH1,
@@ -1054,9 +1087,33 @@ export function ProfileFormModal({ opened, onClose, profile, onSubmit, loading }
             </Stack>
           )}
 
-          <Button type="submit" loading={loading} fullWidth>
-            {isEdit ? t('profiles.form.submitEdit') : t('profiles.form.submitCreate')}
-          </Button>
+          <Divider />
+
+          <Group justify="space-between" gap="sm">
+            <Text
+              style={{
+                fontFamily: "'Geist Mono', monospace",
+                fontSize: 10,
+                letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+                color: '#7A8BA3',
+              }}
+            >
+              {isEdit ? t('modal.shortcutSave') : t('modal.shortcutCreate')}
+            </Text>
+            <Group gap="sm">
+              <Button variant="default" onClick={onClose} disabled={loading}>
+                {t('common.cancel')}
+              </Button>
+              <Button
+                type="submit"
+                loading={loading}
+                style={{ backgroundColor: '#7DD3FC', color: '#08101A', fontWeight: 500 }}
+              >
+                {isEdit ? t('profiles.form.submitEdit') : t('profiles.form.submitCreate')}
+              </Button>
+            </Group>
+          </Group>
         </Stack>
       </form>
     </Modal>

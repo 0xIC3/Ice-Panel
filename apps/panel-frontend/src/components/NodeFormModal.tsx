@@ -5,6 +5,7 @@ import {
   Badge,
   Box,
   Button,
+  Card,
   Checkbox,
   Group,
   Modal,
@@ -48,7 +49,7 @@ const DEFAULT_NODE_PORT = 8443;
 interface FormValues {
   name: string;
   // Address is split in the UI into a host field and a port field
-  // (Remnawave-style — admin sees the port that will actually be used,
+  // (Remnawave-style - admin sees the port that will actually be used,
   // can edit if their install-node ran with a non-default port). At
   // submit time we recombine into the `host:port` string the backend
   // already accepts.
@@ -113,24 +114,24 @@ export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Prop
     validateInputOnBlur: true,
     validate: {
       name: (v) => {
-        const t = v.trim();
-        if (t.length === 0) return 'Имя обязательно';
-        if (!/^[a-zA-Z0-9._-]+$/.test(t))
-          return 'Только латиница, цифры, точка, _ и -';
+        const trimmed = v.trim();
+        if (trimmed.length === 0) return t('validation.nameRequired');
+        if (!/^[a-zA-Z0-9._-]+$/.test(trimmed))
+          return t('validation.nameLatinOnly');
         return null;
       },
       host: (v) => {
-        const t = v.trim();
-        if (t.length === 0) return 'Адрес обязателен';
-        if (!/^[a-zA-Z0-9.-]+$/.test(t))
-          return 'IP или DNS-имя (без http:// и без порта)';
+        const trimmed = v.trim();
+        if (trimmed.length === 0) return t('validation.addressRequired');
+        if (!/^[a-zA-Z0-9.-]+$/.test(trimmed))
+          return 'IP / DNS only (no http://, no port)';
         return null;
       },
       port: (v) => {
-        if (v === '') return 'Порт обязателен';
+        if (v === '') return t('validation.portRequired');
         const n = Number(v);
         if (!Number.isInteger(n) || n < 1 || n > 65535)
-          return 'Порт от 1 до 65535';
+          return t('validation.portRange');
         return null;
       },
     },
@@ -179,7 +180,7 @@ export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Prop
   async function handleFinalSubmit() {
     const values = form.values;
     // Recombine host + port into the address string the backend expects.
-    // Backend Zod accepts `host` or `host:port` — we always send the
+    // Backend Zod accepts `host` or `host:port` - we always send the
     // explicit port form so the cert SAN + cron URL match what the admin
     // saw in the form.
     const portNum =
@@ -219,7 +220,40 @@ export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Prop
     <Modal
       opened={opened}
       onClose={handleClose}
-      title={isEdit ? `${t('common.edit')} ${node.name}` : t('nodes.create')}
+      title={
+        <Group gap="sm" align="center">
+          <Card
+            p={8}
+            radius="md"
+            style={{
+              backgroundColor: '#7DD3FC1A',
+              border: '1px solid #7DD3FC33',
+              color: '#7DD3FC',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <IconServer2 size={18} />
+          </Card>
+          <Stack gap={2}>
+            <Text style={{ fontFamily: "'Space Grotesk', Inter, sans-serif", fontWeight: 500, fontSize: 18, color: '#C8D4E3' }}>
+              {isEdit ? `${t('modal.nodeNewTitle')} · ${form.values.name}` : t('modal.nodeNewTitle')}
+            </Text>
+            <Text
+              style={{
+                fontFamily: "'Geist Mono', monospace",
+                fontSize: 9,
+                letterSpacing: '0.16em',
+                textTransform: 'uppercase',
+                color: '#7A8BA3',
+              }}
+            >
+              {t('modal.nodeNewSubtitle')}
+            </Text>
+          </Stack>
+        </Group>
+      }
       size="lg"
     >
       <Stack>
@@ -316,10 +350,28 @@ export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Prop
               />
             </Group>
             <Group justify="space-between" mt="md">
-              <Button variant="default" onClick={handleClose}>
-                {t('common.cancel')}
-              </Button>
-              <Button onClick={nextStep}>{t('common.next')} →</Button>
+              <Text
+                style={{
+                  fontFamily: "'Geist Mono', monospace",
+                  fontSize: 10,
+                  letterSpacing: '0.14em',
+                  textTransform: 'uppercase',
+                  color: '#7A8BA3',
+                }}
+              >
+                {t('modal.shortcutTabNext')}
+              </Text>
+              <Group gap="sm">
+                <Button variant="default" onClick={handleClose}>
+                  {t('common.cancel')}
+                </Button>
+                <Button
+                  onClick={nextStep}
+                  style={{ backgroundColor: '#7DD3FC', color: '#08101A', fontWeight: 500 }}
+                >
+                  {t('modal.stepNext')}
+                </Button>
+              </Group>
             </Group>
           </Stack>
         )}
@@ -368,16 +420,34 @@ export function NodeFormModal({ opened, onClose, node, onSubmit, loading }: Prop
             )}
 
             <Group justify="space-between" mt="md">
-              <Button variant="default" onClick={() => setStep(0)}>
-                ← {t('common.back')}
-              </Button>
-              <Button onClick={handleFinalSubmit} loading={loading} leftSection={<IconServer2 size={14} />}>
-                {isEdit
-                  ? t('nodes.form.submitEdit')
-                  : selectedProfileIds.length > 0
-                    ? t('nodes.form.submitWithBindings', { count: selectedProfileIds.length })
-                    : t('nodes.form.submitCreate')}
-              </Button>
+              <Text
+                style={{
+                  fontFamily: "'Geist Mono', monospace",
+                  fontSize: 10,
+                  letterSpacing: '0.14em',
+                  textTransform: 'uppercase',
+                  color: '#7A8BA3',
+                }}
+              >
+                {t('modal.shortcutCreateBack')}
+              </Text>
+              <Group gap="sm">
+                <Button variant="default" onClick={() => setStep(0)}>
+                  ← {t('common.back')}
+                </Button>
+                <Button
+                  onClick={handleFinalSubmit}
+                  loading={loading}
+                  leftSection={<IconServer2 size={14} />}
+                  style={{ backgroundColor: '#7DD3FC', color: '#08101A', fontWeight: 500 }}
+                >
+                  {isEdit
+                    ? t('nodes.form.submitEdit')
+                    : selectedProfileIds.length > 0
+                      ? t('nodes.form.submitWithBindings', { count: selectedProfileIds.length })
+                      : t('nodes.form.submitCreate')}
+                </Button>
+              </Group>
             </Group>
           </Stack>
         )}

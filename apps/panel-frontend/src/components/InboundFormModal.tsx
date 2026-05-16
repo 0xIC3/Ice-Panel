@@ -37,7 +37,7 @@ interface FormValues {
   port: number | '';
   enabled: boolean;
 
-  // Slice 25 — public-facing host/port for client URIs. Empty string clears
+  // Slice 25 - public-facing host/port for client URIs. Empty string clears
   // the override and falls back to the node's address.
   publicHost: string;
   publicPort: number | '';
@@ -102,7 +102,7 @@ interface FormValues {
 
 // Bounded by upstream AmneziaWG v2.0 (docs.amnezia.org). S3+S4 set
 // to 0 because AmneziaVPN client 4.8.15.x silently drops traffic
-// when server uses non-zero S3/S4 — upstream bug #2582. See
+// when server uses non-zero S3/S4 - upstream bug #2582. See
 // ProfileFormModal.tsx for full notes.
 const TSPU_PRESET = { jc: 4, jmin: 64, jmax: 128, s1: 32, s2: 56, s3: 0, s4: 0 };
 const MOBILE_PRESET = { jc: 3, jmin: 64, jmax: 100, s1: 32, s2: 56, s3: 0, s4: 0 };
@@ -546,13 +546,13 @@ export function InboundFormModal({ opened, onClose, inbound, nodes, onSubmit, lo
               </Group>
               <TextInput
                 label="REALITY public key"
-                description="Paired with private key — emitted in client URI. Auto-filled by Generate."
+                description="Paired with private key - emitted in client URI. Auto-filled by Generate."
                 required
                 {...form.getInputProps('xrayPublicKey')}
               />
               <Select
                 label="Subprotocol"
-                description="Carried over the same REALITY stack. Trojan reuses user's UUID as password — no extra credential. Vision flow only applies to vless."
+                description="Carried over the same REALITY stack. Trojan reuses user's UUID as password - no extra credential. Vision flow only applies to vless."
                 data={[
                   { value: 'vless', label: 'VLESS (canonical, supports Vision flow)' },
                   { value: 'trojan', label: 'Trojan (password auth, no Vision)' },
@@ -565,7 +565,7 @@ export function InboundFormModal({ opened, onClose, inbound, nodes, onSubmit, lo
                   label="Flow"
                   description={
                     form.values.xraySubprotocol === 'trojan'
-                      ? 'Ignored on Trojan — kept for vless round-trip'
+                      ? 'Ignored on Trojan - kept for vless round-trip'
                       : undefined
                   }
                   data={['xtls-rprx-vision', 'xtls-rprx-vision-udp443', '']}
@@ -586,7 +586,7 @@ export function InboundFormModal({ opened, onClose, inbound, nodes, onSubmit, lo
                   { value: 'ws', label: 'ws (WebSocket)' },
                   { value: 'grpc', label: 'gRPC' },
                   { value: 'httpupgrade', label: 'httpupgrade (CDN-friendly, no WS handshake)' },
-                  { value: 'kcp', label: 'kcp (UDP, lossy networks — port collides with Hysteria)' },
+                  { value: 'kcp', label: 'kcp (UDP, lossy networks - port collides with Hysteria)' },
                 ]}
                 allowDeselect={false}
                 {...form.getInputProps('xrayNetwork')}
@@ -704,7 +704,7 @@ export function InboundFormModal({ opened, onClose, inbound, nodes, onSubmit, lo
               <TextInput
                 label="TLS contact email"
                 placeholder="ops@example.com"
-                description="ACME contact — Let's Encrypt notifies here."
+                description="ACME contact - Let's Encrypt notifies here."
                 required
                 {...form.getInputProps('naiveTlsEmail')}
               />
@@ -735,7 +735,7 @@ export function InboundFormModal({ opened, onClose, inbound, nodes, onSubmit, lo
               />
               <Alert color="blue" variant="light">
                 <Text size="sm">
-                  Per-user password reuses each user's <Code>xrayUuid</Code> — no
+                  Per-user password reuses each user's <Code>xrayUuid</Code> - no
                   separate credential to manage. Make sure SS users have <Code>xray</Code>
                   enabled in their protocol list (the same UUID drives both).
                 </Text>
@@ -755,7 +755,7 @@ export function InboundFormModal({ opened, onClose, inbound, nodes, onSubmit, lo
               <Alert color="yellow" variant="light">
                 <Text size="sm">
                   Changing the domain rotates EVERY user's secret. Their existing
-                  subscription URLs stop working — they need a fresh sub fetch.
+                  subscription URLs stop working - they need a fresh sub fetch.
                   Plan ahead before saving.
                 </Text>
               </Alert>
@@ -763,7 +763,7 @@ export function InboundFormModal({ opened, onClose, inbound, nodes, onSubmit, lo
                 <Text size="sm">
                   MTProto is <b>Telegram-only</b>. Make sure users have <Code>mtproto</Code>
                   in their enabled protocols. Per-user secret derives from each
-                  user's <Code>xrayUuid</Code> — no separate credential.
+                  user's <Code>xrayUuid</Code> - no separate credential.
                 </Text>
               </Alert>
             </Stack>
@@ -786,7 +786,7 @@ export function InboundFormModal({ opened, onClose, inbound, nodes, onSubmit, lo
                   Mieru clients (mieru-cli, GoMieru-Android, mieru-iOS) consume a
                   JSON profile. Subscription endpoint serves this via{' '}
                   <Code>?format=mieru-json</Code>. Per-user creds reuse
-                  username + xrayUuid — no separate password.
+                  username + xrayUuid - no separate password.
                 </Text>
               </Alert>
             </Stack>

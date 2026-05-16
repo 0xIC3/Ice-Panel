@@ -66,13 +66,6 @@ const STRATEGY_VALUES: TrafficLimitStrategy[] = [
   'rolling',
 ];
 
-const STATUS_COLORS: Record<string, string> = {
-  active: 'teal',
-  disabled: 'gray',
-  expired: 'red',
-  limited: 'yellow',
-};
-
 const GiB = 1_073_741_824;
 
 function formatBytes(n: number): string {
@@ -110,11 +103,11 @@ function defaultValues(user: User | null): FormValues {
     email: user?.email ?? '',
     telegramId: user?.telegramId ?? '',
     hwidDeviceLimit: user?.hwidDeviceLimit ?? '',
-    // Empty by default — backend falls back to ALL squad if no squads
+    // Empty by default - backend falls back to ALL squad if no squads
     // picked. Pre-checking ALL here doubles up: admin checks Basic too →
     // form sends [ALL, Basic] → user ends up in BOTH squads, which inflates
     // dashboard per-protocol counters and surprises admins ("я ж только в
-    // Basic положил"). Leave it empty — admin explicitly picks, otherwise
+    // Basic положил"). Leave it empty - admin explicitly picks, otherwise
     // server auto-falls back to ALL.
     groupIds: user?.groupIds ?? [],
   };
@@ -145,11 +138,11 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
     validate: {
       username: (v) => {
         if (isEdit) return null;
-        if (v.length < 3) return 'Минимум 3 символа';
-        if (!/^[a-zA-Z0-9_-]+$/.test(v)) return 'Только буквы, цифры, _ и -';
+        if (v.length < 3) return t('validation.nameMin3');
+        if (!/^[a-zA-Z0-9_-]+$/.test(v)) return t('validation.usernameLatinOnly');
         return null;
       },
-      email: (v) => (v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? 'Некорректный email' : null),
+      email: (v) => (v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? t('validation.emailInvalid') : null),
     },
   });
 
@@ -200,7 +193,7 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
     form.reset();
   }
 
-  // Panel metadata (publicUrl + subscriptionPathPrefix) — drives the
+  // Panel metadata (publicUrl + subscriptionPathPrefix) - drives the
   // copy-paste subscription URL admin sees. Cached app-wide by query key.
   const authStatusQuery = useQuery({
     queryKey: ['auth', 'status'],
@@ -211,7 +204,7 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
     ? subscriptionUrl(user.subscriptionToken, authStatusQuery.data?.panel)
     : '';
 
-  // Per-protocol endpoint URIs for THIS user — fetched only when the
+  // Per-protocol endpoint URIs for THIS user - fetched only when the
   // modal is open AND we have a user (i.e. editing, not creating). Each
   // endpoint exposes a ready-made URI string for client import / copy.
   const endpointsQuery = useQuery({
@@ -229,11 +222,37 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
         onClose();
       }}
       title={
-        <Group gap="sm">
-          <ThemeIcon variant="light" radius="md" size={32}>
+        <Group gap="sm" align="center">
+          <Card
+            p={8}
+            radius="md"
+            style={{
+              backgroundColor: '#7DD3FC1A',
+              border: '1px solid #7DD3FC33',
+              color: '#7DD3FC',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
             <IconUser size={18} />
-          </ThemeIcon>
-          <Text fw={600}>{isEdit ? t('users.form.titleEdit') : t('users.form.titleCreate')}</Text>
+          </Card>
+          <Stack gap={2}>
+            <Text style={{ fontFamily: "'Space Grotesk', Inter, sans-serif", fontWeight: 500, fontSize: 18, color: '#C8D4E3' }}>
+              {isEdit ? user?.username ?? t('users.form.titleEdit') : t('modal.userNewTitle')}
+            </Text>
+            <Text
+              style={{
+                fontFamily: "'Geist Mono', monospace",
+                fontSize: 9,
+                letterSpacing: '0.16em',
+                textTransform: 'uppercase',
+                color: '#7A8BA3',
+              }}
+            >
+              {isEdit ? t('modal.userEditSubtitle') : t('modal.userNewSubtitle')}
+            </Text>
+          </Stack>
         </Group>
       }
       size="xl"
@@ -242,16 +261,16 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
     >
       <form onSubmit={form.onSubmit(handleSubmit)}>
         <Stack gap="md">
-          {/* Profile header — only on edit */}
+          {/* Profile header - only on edit */}
           {isEdit && user && (
             <ProfileHeader user={user} subUrl={subUrl} />
           )}
 
-          {/* Per-protocol direct URIs — only on edit. Each endpoint
+          {/* Per-protocol direct URIs - only on edit. Each endpoint
               (xray vless, hysteria2, ss, etc.) gets its own copy
               button so admin can ship a single-protocol link to a user
               without forcing them through a subscription importer.
-              AWG has no URI scheme — its row offers "copy wgconf URL"
+              AWG has no URI scheme - its row offers "copy wgconf URL"
               instead (subscription URL with ?format=wgconf query). */}
           {isEdit && user && (
             <DirectEndpointsCard
@@ -400,13 +419,33 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
 
           <Divider />
 
-          <Group justify="flex-end" gap="sm">
-            <Button variant="default" onClick={onClose} disabled={loading}>
-              {t('common.cancel')}
-            </Button>
-            <Button type="submit" loading={loading} leftSection={<IconCheck size={16} />}>
-              {isEdit ? t('users.form.submitEdit') : t('users.form.submitCreate')}
-            </Button>
+          <Group justify="space-between" gap="sm">
+            <Group gap={12}>
+              <Text
+                style={{
+                  fontFamily: "'Geist Mono', monospace",
+                  fontSize: 10,
+                  letterSpacing: '0.14em',
+                  textTransform: 'uppercase',
+                  color: '#7A8BA3',
+                }}
+              >
+                {isEdit ? t('modal.shortcutSave') : t('modal.shortcutCreate')}
+              </Text>
+            </Group>
+            <Group gap="sm">
+              <Button variant="default" onClick={onClose} disabled={loading}>
+                {t('common.cancel')}
+              </Button>
+              <Button
+                type="submit"
+                loading={loading}
+                leftSection={<IconCheck size={16} />}
+                style={{ backgroundColor: '#7DD3FC', color: '#08101A', fontWeight: 500 }}
+              >
+                {isEdit ? t('users.form.submitEdit') : t('users.form.submitCreate')}
+              </Button>
+            </Group>
           </Group>
         </Stack>
       </form>
@@ -419,28 +458,65 @@ export function UserFormModal({ opened, onClose, user, onSubmit, loading }: Prop
 function SectionCard({
   icon,
   title,
+  trailing,
   children,
 }: {
   icon: React.ReactNode;
   title: string;
+  trailing?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <Card withBorder padding="md" radius="md">
-      <Group gap="xs" mb="sm">
-        <ThemeIcon variant="light" size={26} radius="md">
-          {icon}
-        </ThemeIcon>
-        <Text fw={600} size="sm">
-          {title}
-        </Text>
+    <Card
+      withBorder
+      padding="md"
+      radius="md"
+      style={{ backgroundColor: '#0F1A28', borderColor: '#1C2A3D' }}
+    >
+      <Group gap={8} mb="sm" justify="space-between" align="center">
+        <Group gap={8}>
+          <span style={{ color: '#7DD3FC', display: 'flex' }}>{icon}</span>
+          <Text
+            style={{
+              fontFamily: "'Geist Mono', monospace",
+              fontSize: 10,
+              letterSpacing: '0.16em',
+              textTransform: 'uppercase',
+              color: '#7A8BA3',
+              fontWeight: 500,
+            }}
+          >
+            {title}
+          </Text>
+        </Group>
+        {trailing && (
+          <Text
+            style={{
+              fontFamily: "'Geist Mono', monospace",
+              fontSize: 10,
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              color: '#7A8BA3',
+            }}
+          >
+            {trailing}
+          </Text>
+        )}
       </Group>
       {children}
     </Card>
   );
 }
 
+const STATUS_COLORS: Record<string, string> = {
+  active: 'teal',
+  disabled: 'gray',
+  expired: 'red',
+  limited: 'yellow',
+};
+
 function ProfileHeader({ user, subUrl }: { user: User; subUrl: string }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   async function handleCopy() {
     try {
@@ -511,7 +587,7 @@ function ProfileHeader({ user, subUrl }: { user: User; subUrl: string }) {
           <Code style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {subUrl}
           </Code>
-          <Tooltip label={copied ? 'Скопировано' : 'Скопировать'}>
+          <Tooltip label={copied ? t('userForm.copiedShort') : t('userForm.copyToClipboard')}>
             <ActionIcon variant="subtle" color={copied ? 'teal' : 'gray'} onClick={handleCopy}>
               {copied ? <IconCheck size={16} /> : <IconCopy size={16} />}
             </ActionIcon>
@@ -537,6 +613,7 @@ function SquadRow({
   disabled?: boolean;
   onToggle: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <Paper
       withBorder
@@ -556,12 +633,12 @@ function SquadRow({
           </Text>
         </Group>
         <Group gap={4}>
-          <Tooltip label="Пользователей">
+          <Tooltip label={t('userForm.tooltipUsers')}>
             <Badge variant="light" color="blue" size="sm">
               {userCount}
             </Badge>
           </Tooltip>
-          <Tooltip label="Профилей">
+          <Tooltip label={t('userForm.tooltipProfiles')}>
             <Badge variant="light" color="indigo" size="sm">
               {profileCount}
             </Badge>
@@ -577,7 +654,7 @@ function SquadRow({
 /**
  * Lists HWID-tracked devices currently registered for this user. Each
  * row shows the hwid (truncated), first-seen / last-seen, and a delete
- * button to revoke the slot — admins use this to clean up after the
+ * button to revoke the slot - admins use this to clean up after the
  * user replaced a phone or laptop.
  *
  * Devices are populated lazily on /sub/:token requests carrying an
@@ -690,7 +767,7 @@ function DeviceRow({
 //
 // Shows a card with one row per enabled endpoint (vless://, hysteria2://,
 // ss://, awg-style identifier, etc) plus a "Copy" button. AWG has no URI
-// scheme upstream — admin gets a placeholder pointing at the wgconf
+// scheme upstream - admin gets a placeholder pointing at the wgconf
 // download link instead. Asked-for in cycle #6 2026-05-13: operators
 // who deal with non-Hiddify clients (raw v2rayN, Shadowrocket) want a
 // single-protocol link without the subscription wrapper.
@@ -705,31 +782,33 @@ function DirectEndpointsCard({
   error: unknown;
   subUrl: string;
 }) {
+  const { t } = useTranslation();
+  const title = t('userForm.directLinksTitle');
   if (loading) {
     return (
-      <SectionCard icon={<IconLink size={16} />} title="Прямые ссылки по протоколам">
-        <Text size="xs" c="dimmed">Загрузка…</Text>
+      <SectionCard icon={<IconLink size={16} />} title={title}>
+        <Text size="xs" c="dimmed">{t('userForm.directLinksLoading')}</Text>
       </SectionCard>
     );
   }
   if (error) {
     return (
-      <SectionCard icon={<IconLink size={16} />} title="Прямые ссылки по протоколам">
+      <SectionCard icon={<IconLink size={16} />} title={title}>
         <Text size="xs" c="red">{error instanceof Error ? error.message : String(error)}</Text>
       </SectionCard>
     );
   }
   if (endpoints.length === 0) {
     return (
-      <SectionCard icon={<IconLink size={16} />} title="Прямые ссылки по протоколам">
+      <SectionCard icon={<IconLink size={16} />} title={title}>
         <Text size="xs" c="dimmed">
-          Нет активных endpoint'ов. Привяжи юзера к squad с inbound'ами и разверни профиль на ноду.
+          {t('userForm.directLinksEmpty')}
         </Text>
       </SectionCard>
     );
   }
   return (
-    <SectionCard icon={<IconLink size={16} />} title="Прямые ссылки по протоколам">
+    <SectionCard icon={<IconLink size={16} />} title={title}>
       <Stack gap={6}>
         {endpoints.map((e, idx) => (
           <DirectEndpointRow
@@ -738,9 +817,6 @@ function DirectEndpointsCard({
             subUrl={subUrl}
           />
         ))}
-        <Text size="xs" c="dimmed">
-          Каждая ссылка — single-protocol импорт для клиентов которые не умеют subscription URL (raw v2rayN / Shadowrocket / Hiddify Manual Add). Для AmneziaWG копируется URL подписки с ?format=wgconf — открывается в AmneziaVPN.
-        </Text>
       </Stack>
     </SectionCard>
   );
@@ -753,9 +829,10 @@ function DirectEndpointRow({
   endpoint: { protocol: string; nodeName: string; host: string; port: number; uri: string };
   subUrl: string;
 }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const hasUri = endpoint.uri.length > 0;
-  // For AWG there's no URI scheme — give admin the subscription URL with
+  // For AWG there's no URI scheme - give admin the subscription URL with
   // ?format=wgconf. Both AmneziaVPN desktop ("File with config") and
   // Hiddify Next accept that URL directly (they fetch+parse).
   const wgconfUrl = !hasUri && subUrl ? `${subUrl}?format=wgconf` : '';
@@ -777,10 +854,10 @@ function DirectEndpointRow({
   }
 
   const tooltipLabel = copied
-    ? 'Copied!'
+    ? t('userForm.copiedShort')
     : hasUri
-      ? 'Скопировать URI'
-      : 'Скопировать wgconf URL (открывается в AmneziaVPN: + → "Файл с настройками подключения" → вставить URL)';
+      ? t('userForm.copyUri')
+      : t('userForm.copyWgconfHint');
 
   return (
     <Paper withBorder p="xs" radius="sm" style={{ overflow: 'hidden' }}>

@@ -151,7 +151,7 @@ export function NodeCard({
                       border: `1px solid ${CYAN}33`,
                       whiteSpace: 'nowrap',
                       flexShrink: 0,
-                      fontFamily: "'JetBrains Mono', monospace",
+                      fontFamily: "'Geist Mono', monospace",
                       letterSpacing: '0.08em',
                     }}
                   >
@@ -162,7 +162,7 @@ export function NodeCard({
               <Text
                 size="xs"
                 truncate
-                style={{ color: MIST, fontFamily: "'JetBrains Mono', monospace" }}
+                style={{ color: MIST, fontFamily: "'Geist Mono', monospace" }}
               >
                 {t('nodes.cardSummary', {
                   count: node.inboundCount,
@@ -180,7 +180,7 @@ export function NodeCard({
                 color: accent,
                 border: `1px solid ${accent}33`,
                 textTransform: 'uppercase',
-                fontFamily: "'JetBrains Mono', monospace",
+                fontFamily: "'Geist Mono', monospace",
                 letterSpacing: '0.08em',
               }}
             >
@@ -245,7 +245,7 @@ export function NodeCard({
             }}
           >
             <Text size="xs" style={{ color: MIST }}>
-              Metrics pending — first poll within 15s
+              Metrics pending - first poll within 15s
             </Text>
           </Box>
         )}
@@ -258,7 +258,7 @@ export function NodeCard({
               </Text>
               <Text
                 size="xs"
-                style={{ color: SNOW, fontFamily: "'JetBrains Mono', monospace" }}
+                style={{ color: SNOW, fontFamily: "'Geist Mono', monospace" }}
               >
                 {node.approxUsers}/{node.maxUsers}
               </Text>
@@ -287,7 +287,7 @@ export function NodeCard({
               <IconDownload size={12} style={{ color: CYAN }} />
               <Text
                 size="xs"
-                style={{ color: SNOW, fontFamily: "'JetBrains Mono', monospace" }}
+                style={{ color: SNOW, fontFamily: "'Geist Mono', monospace" }}
               >
                 {formatBytes(node.todayBytes)}
               </Text>
@@ -298,7 +298,7 @@ export function NodeCard({
               <IconUpload size={12} style={{ color: VIOLET }} />
               <Text
                 size="xs"
-                style={{ color: SNOW, fontFamily: "'JetBrains Mono', monospace" }}
+                style={{ color: SNOW, fontFamily: "'Geist Mono', monospace" }}
               >
                 {node.inboundCount} bindings
               </Text>
@@ -340,7 +340,7 @@ function MetricBar({
             style={{
               flex: 1,
               color: MIST,
-              fontFamily: "'JetBrains Mono', monospace",
+              fontFamily: "'Geist Mono', monospace",
               fontSize: 10,
               letterSpacing: '0.1em',
               textTransform: 'uppercase',
@@ -351,7 +351,7 @@ function MetricBar({
           <Text
             size="xs"
             fw={600}
-            style={{ color: SNOW, fontFamily: "'JetBrains Mono', monospace" }}
+            style={{ color: SNOW, fontFamily: "'Geist Mono', monospace" }}
           >
             {value.toFixed(0)}%
           </Text>
